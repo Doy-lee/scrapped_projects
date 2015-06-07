@@ -12,9 +12,10 @@ package doylee.plsyncer;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileReader;
 import java.io.IOException;
-
+import java.io.InputStreamReader;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.Files;
 import java.nio.file.FileSystems;
@@ -28,7 +29,9 @@ public class PlaylistSyncer {
 			System.out.println("https://github.com/Doy-lee/PlaylistSyncer\n");
 			BufferedReader br = null;
 	        try {
-	            br = new BufferedReader(new FileReader(args[0]));
+	        	//Need to explicitly specify char-encoding for non-default system encoded files
+	        	//Wrapped in InputStreamReader to supply encoding, wrapped in buffered for read line func.
+	        	br = new BufferedReader(new InputStreamReader(new FileInputStream(args[0]), "UTF-8"));
 				String line;
 
 				//Check first line for header
@@ -40,14 +43,12 @@ public class PlaylistSyncer {
 						System.out.println("Normal M3U detected");
 				}
 
-				File destFile = new File(args[1]);
-				System.out.println(destFile.getAbsolutePath());
 				Path to = Paths.get(args[1]);
+				System.out.println("Target Dir: " + to.toAbsolutePath());
 
 				//Read contents out
 				while ((line = br.readLine()) != null) {
 					line.trim();
-					Path path = Paths.get(line); 
 					Path from = Paths.get(line);
 					if (from.toFile().exists()) {
 						if (!from.toFile().canRead()) {
@@ -59,7 +60,7 @@ public class PlaylistSyncer {
 							Files.copy(from, to.resolve(from.getFileName()), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES);  
 						}
 					} else {
-						System.err.println("File not found error: " + from.getFileName());
+						System.err.println("File not found error: " + line);
 					}
 				}
 
