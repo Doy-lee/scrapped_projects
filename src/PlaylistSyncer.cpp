@@ -9,9 +9,10 @@
 
 #define MAX_PATH_SIZE 260
 #define CHAR_SPACE 32
+
 /**
   References: 
-  		FPL Structure: https://github.com/tfriedel/foobar2000-export
+  FPL Structure: https://github.com/tfriedel/foobar2000-export
   
   TODO Add M3U(8), FPL, CUE loading support
   TODO CLI Interface
@@ -20,61 +21,76 @@
  
  */
 
+static void displayHelp();
+
+static void displayHelp() {
+	printf("Usage: PlaylistSyncer <src playlist> <dest dir>\n");
+}
+
+//TODO: Switch to unicode support, only support ANSI. This will require switching to 
+// 		WinAPI and is no longer platform independant
 int main(int argc, char *argv[]) {
+	printf ("Playlist Syncer\n");
+
+	if (argc < 2) {
+		displayHelp();
+		return EXIT_SUCCESS;
+	}
+
 	if (argc >= 2) {
-		uint32_t j = 0;
-		for (j = 1; j < argc-1; j++) {
+		char *target_dir;
+		int8_t num_files = 0;
+		//if last argument is not a openable file, target directory is specified 
+		if (fopen(argv[argc-1], "r") == NULL) {
+			target_dir = argv[argc-1];
+			num_files = argc;
+
+			//Pointer arithmetic to trim leading whitespace
+			while (target_dir[0] == CHAR_SPACE) {
+				target_dir += sizeof(char);
+			}
+
+			//Trim trailing whitespace and append directory '\\' if required
+			int32_t i = (int32_t) ((strlen(target_dir))-1);
+			while (i > 0) {
+				if (target_dir[i] == CHAR_SPACE) {
+					target_dir[i] = '\0';
+				} else if (target_dir[i] != '\0') {
+					if (target_dir[i] != '\\') {
+						strcat(target_dir, "\\");
+						printf("appended directory sign: %s\n", target_dir);
+					}
+					break;
+				}
+				i--;
+			}
+
+			if (_mkdir(target_dir) == -1) printf ("Directory already exists");
+			else printf ("Creating directory ..");
+		} else {
+			target_dir = "";
+			num_files = argc;
+		}
+
+		//num files to cycle through depends on if last argument specified is directory or playlist
+		int32_t j = 1;
+		for (j = 1; j < num_files; j++) {
 			FILE *playlist = fopen(argv[j], "r");
 			fseek(playlist, 0, SEEK_END);
 
 			if (playlist == NULL) {
-				printf("Failed to load .. %s", argv[1]);
+				printf("Failed to load .. %s", argv[j]);
 			} else {
 				uint32_t playlist_size = ftell(playlist);
-				printf("%s .. size: %d\n", argv[1], playlist_size);
+				printf("%s .. size: %d\n", argv[j], playlist_size);
 				//TODO: Change fseek && ftell to use WinAPI for safety see: https://www.securecoding.cert.org/confluence/display/c/FIO19-C.+Do+not+use+fseek()+and+ftell()+to+compute+the+size+of+a+regular+file
 				fseek(playlist, 0, 0);
 
 				char *filename;
 				char src[MAX_PATH_SIZE] = {0};
 
-				char *target_dir;
-				//TODO: handle arguments better
-				//if dest dir not specified, default to current directory
-				if (argc == 2) {
-					target_dir = "";
-				} else {
-					target_dir = argv[(argc-1)];
-				}
-
-				printf("sizeof(target_dir): %d\n", strlen(target_dir));
-				int32_t i = 0;
-
-				//Pointer arithmetic to trim leading whitespace
-				while (target_dir[0] == CHAR_SPACE) {
-					target_dir += sizeof(char);
-				}
-
-				//Trim trailing whitespace and append directory '\\' if required
-				i = (int32_t) ((strlen(target_dir))-1);
-				while (i > 0) {
-					if (target_dir[i] == CHAR_SPACE) {
-						target_dir[i] = '\0';
-					} else if (target_dir[i] != '\0') {
-						if (target_dir[i] != '\\') {
-							strcat(target_dir, "\\");
-							printf("appended directory sign: %s\n", target_dir);
-						}
-						break;
-					}
-					i--;
-				}
-
-				if (_mkdir(target_dir) == -1) printf ("Directory already exists");
-				else printf ("Creating directory ..");
-
 				while (fgets(src, MAX_PATH_SIZE, playlist) != NULL) {
-					i = 0;
+					int8_t i = 0;
 					//TODO: Try change size of src to the size of the actual path to allow strlen to find
 					//      \n character at end of filename 
 					while (i < sizeof(src) || src[i] != '\0') {
@@ -122,8 +138,5 @@ int main(int argc, char *argv[]) {
 			fclose(playlist);
 		}
 		return EXIT_SUCCESS;
-	} else {
-		printf("Usage: PlaylistSyncer <src playlist> <dest dir>\n");
-		return EXIT_FAILURE;
 	}
 }
