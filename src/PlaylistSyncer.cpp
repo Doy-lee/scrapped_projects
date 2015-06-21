@@ -2,10 +2,9 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
-#include <assert.h>
 #include <direct.h>
+
 #include <windows.h>
-#include <Strsafe.h>
 
 #define MAX_PATH_SIZE 260
 #define CHAR_SPACE 32
@@ -27,8 +26,6 @@ static void displayHelp() {
 	printf("Usage: PlaylistSyncer <src playlist> <dest dir>\n");
 }
 
-//TODO: Switch to unicode support, only support ANSI. This will require switching to 
-// 		WinAPI and is no longer platform independant
 int main(int argc, char *argv[]) {
 	printf ("Playlist Syncer\n");
 
@@ -43,7 +40,7 @@ int main(int argc, char *argv[]) {
 		//if last argument is not a openable file, target directory is specified 
 		if (fopen(argv[argc-1], "r") == NULL) {
 			target_dir = argv[argc-1];
-			num_files = argc;
+			num_files = argc-1;
 
 			//Pointer arithmetic to trim leading whitespace
 			while (target_dir[0] == CHAR_SPACE) {
@@ -111,28 +108,10 @@ int main(int argc, char *argv[]) {
 					strcat(dest, target_dir);
 					strcat(dest, filename);
 
-					printf("copying from .. %s\n", src);
-					printf("writing to .. %s\n", dest);
-					CopyFile(src, dest, TRUE);
+					printf("Copying from .. %s\n", src);
+					printf("Writing to .. %s\n", dest);
+					if (CopyFile(src, dest, FALSE) == 0) printf("File could not be copied: %s\n", src);
 
-					//NOTE: This only copies a few bytes of the file before terminating, figure out why!
-					/**
-					  FILE *music_file = fopen(src, "r");
-					  fseek(music_file, 0, 0);
-					  if (music_file != NULL) {
-					  FILE *target_file = fopen(target_dir, "w+");
-					  int byte;
-					  printf("writing to .. %s\n", target_dir);
-					  uint32_t count = 0;
-					  while ((byte = fgetc(music_file)) != EOF) {
-					  fputc(byte, target_file);
-					  byte = fgetc(music_file);
-					  }
-					  fclose(target_file);	
-					  fclose(music_file);
-					  } else {
-					  printf("file not found: %s", src);
-					  }*/
 				}
 			}
 			fclose(playlist);
