@@ -21,6 +21,7 @@
  */
 
 static void displayHelp();
+static void copyFilePrintErrors(char *src, char *dest);
 
 static void displayHelp() {
 	printf("Usage: PlaylistSyncer <src playlist> <dest dir>\n");
@@ -117,6 +118,13 @@ int main(int argc, char *argv[]) {
 					} else {
 						filename = src;
 					}
+					
+					//Check source file exists
+					WIN32_FIND_DATA find_file_result = {0};
+					if (FindFirstFile(src, &find_file_result) == INVALID_HANDLE_VALUE) {
+						printf("File not found, skipping file: %s\n", src);
+						break;
+					}
 
 					char dest[MAX_PATH_SIZE] = {0};
 					strcat(dest, target_dir);
@@ -131,9 +139,7 @@ int main(int argc, char *argv[]) {
 							   NULL);
 					if (dest_file == INVALID_HANDLE_VALUE) {
 						//File doesn't exist yet, copy over
-						printf("Copying from .. %s\n", src);
-						printf("Writing to .. %s\n", dest);
-						if (CopyFile(src, dest, FALSE) == 0) printf("File could not be copied: %s\n", src);		
+						copyFilePrintErrors(src, dest);
 					} else {
 						//Determine if file attribs are different, fallback to byte-to-byte if attribs are equal
 						HANDLE src_file = CreateFile(src,
@@ -149,22 +155,54 @@ int main(int argc, char *argv[]) {
 						GetFileInformationByHandle(dest_file, &dest_file_attrib);
 						GetFileInformationByHandle(src_file, &src_file_attrib);
 
+						_LARGE_INTEGER dest_size = {0};
+						dest_size.u.LowPart = dest_file_attrib.nFileSizeLow;
+						dest_size.u.HighPart = dest_file_attrib.nFileSizeHigh;
+						_LARGE_INTEGER src_size = {0};
+						src_size.u.LowPart = src_file_attrib.nFileSizeLow;
+						src_size.u.HighPart = src_file_attrib.nFileSizeHigh;
+
 						SYSTEMTIME dest_file_write_time = {0};
 						SYSTEMTIME src_file_write_time = {0};
 						FileTimeToSystemTime(&dest_file_attrib.ftLastWriteTime, &dest_file_write_time);	
 						FileTimeToSystemTime(&src_file_attrib.ftLastWriteTime, &src_file_write_time);	
 
-						if (debug) printf("A pre-existing file has been found at the destination\n"); 
-						if (debug) printf("========================================================\n");
-						if (debug) printf("dest file: %s\n", dest); 
-						if (debug) printf("dest file write: %d/%02d/%02d - %02d:%02d:%02d\n",
-							dest_file_write_time.wYear, dest_file_write_time.wMonth, dest_file_write_time.wDay, 
-							dest_file_write_time.wHour, dest_file_write_time.wMinute, dest_file_write_time.wSecond);
-						if (debug) printf("========================================================\n");
-						if (debug) printf("src file: %s\n", src); 
-						if (debug) printf("src file write:  %d/%02d/%02d - %02d:%02d:%02d\n\n", 
-							src_file_write_time.wYear, src_file_write_time.wMonth, src_file_write_time.wDay, 
-							src_file_write_time.wHour, src_file_write_time.wMinute, src_file_write_time.wSecond);
+						if (debug) {
+							printf("A pre-existing file has been found at the destination\n"); 
+							printf("========================================================\n");
+							printf("dest file: %s\n", dest); 
+							printf("dest file size: %d\n", dest_size);
+							printf("dest file write: %d/%02d/%02d - %02d:%02d:%02d\n",
+									dest_file_write_time.wYear, dest_file_write_time.wMonth, dest_file_write_time.wDay, 
+									dest_file_write_time.wHour, dest_file_write_time.wMinute, dest_file_write_time.wSecond);
+							printf("========================================================\n");
+							printf("src file: %s\n", src); 
+							printf("src file size: %d\n", src_size);
+							printf("src file write:  %d/%02d/%02d - %02d:%02d:%02d\n", 
+									src_file_write_time.wYear, src_file_write_time.wMonth, src_file_write_time.wDay, 
+									src_file_write_time.wHour, src_file_write_time.wMinute, src_file_write_time.wSecond);
+						}
+
+						if (dest_size.u.LowPart == src_size.u.LowPart && dest_size.u.HighPart == src_size.u.HighPart) {
+							if (debug) printf("========================================================\n");
+							if (debug) printf("File sizes are equal\n");
+							if (src_file_write_time.wYear == dest_file_write_time.wYear &&
+								src_file_write_time.wMonth == dest_file_write_time.wMonth &&
+								src_file_write_time.wDay == dest_file_write_time.wDay &&
+								src_file_write_time.wHour == dest_file_write_time.wHour &&
+								src_file_write_time.wMinute == dest_file_write_time.wMinute &&
+								src_file_write_time.wSecond == dest_file_write_time.wSecond) {
+									if (debug) printf("Last file write timestamps are equal\n");
+									printf("Pre-existing file is a duplicate, skip copy\n\n");
+							} else {
+								printf("Pre-existing does not match source file, overwriting ..\n\n");
+								copyFilePrintErrors(src, dest);
+							}
+						} else {
+							printf("Pre-existing does not match source file, overwriting ..\n\n");
+							copyFilePrintErrors(src, dest);
+						}
+
 					}
 
 				}
@@ -172,5 +210,25 @@ int main(int argc, char *argv[]) {
 			fclose(playlist);
 		}
 		return EXIT_SUCCESS;
+	}
+}
+
+static void copyFilePrintErrors(char *src, char *dest) {
+	printf("\nCopying from .. %s\n", src);
+	printf("Writing to .. %s\n", dest);
+	if (CopyFile(src, dest, FALSE) == 0) {
+		DWORD error_code = GetLastError();
+		printf("File could not be copied: %s\n", src);		
+		char *format_error_string;
+		va_list args = NULL;
+		FormatMessage(
+				FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
+				0,
+				error_code,	
+				0,
+				(LPTSTR) &format_error_string,
+				0,
+				&args);
+		printf("Error: %s\n", format_error_string);
 	}
 }
