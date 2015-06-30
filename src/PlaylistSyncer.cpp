@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <direct.h>
+#include <assert.h>
 
 #include <windows.h>
 
@@ -47,6 +48,12 @@ int main(int argc, char *argv[]) {
 			printf("\n\n");
 		}
 
+		//NOTE: Enumerate list of files in target directory for checking what files to sync
+		uint64_t filelist_size = 16;
+		char (*target_dir_files)[MAX_PATH_SIZE];
+		target_dir_files = (char(*)[MAX_PATH_SIZE]) malloc(sizeof(*target_dir_files)*filelist_size);
+		assert(target_dir_files != NULL);
+		
 		char *target_dir;
 		int8_t num_files = 0;
 		//if last argument is not a openable file, target directory is specified 
@@ -74,8 +81,47 @@ int main(int argc, char *argv[]) {
 				i--;
 			}
 
-			if (_mkdir(target_dir) == -1) if (debug) printf ("Target directory already exists .. %s\n", target_dir);
-			else if (debug) printf ("Creating directory .. %s\n", target_dir);
+			if (_mkdir(target_dir) == -1) {
+				if (debug) printf ("Target directory already exists .. %s\n", target_dir);
+
+				WIN32_FIND_DATA find_data = {};
+				HANDLE find_handle;
+				uint64_t file_index = 0;
+				char target_dir_query[MAX_PATH_SIZE] = {0};
+				strcat(target_dir_query, target_dir);
+				strcat(target_dir_query, "*.*");
+
+				if ((find_handle = FindFirstFile(target_dir_query, &find_data)) != INVALID_HANDLE_VALUE) {
+					do { 
+						if (strcmp(find_data.cFileName, ".") == 0) {}
+						else if (strcmp(find_data.cFileName, "..") == 0) {}
+						else {
+							if (find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+								if (debug) printf("Dir : %s\n", find_data.cFileName);
+							} else {
+								if (file_index >= filelist_size) {
+									filelist_size++;
+									assert(filelist_size > 0);
+									char (*temp)[MAX_PATH_SIZE] = NULL;
+									temp = (char (*)[MAX_PATH_SIZE]) realloc(target_dir_files, sizeof(*target_dir_files)*filelist_size);
+									if (temp != NULL) {
+										target_dir_files = temp;
+									} else {
+										printf("Error: Could not allocate enough space for directory listing\n");
+										free(target_dir_files);
+										return EXIT_FAILURE;
+									}
+								}
+								strcpy(target_dir_files[file_index++], find_data.cFileName);
+							}
+						}
+					} while (FindNextFile(find_handle, &find_data) != 0);
+				}
+				FindClose(find_handle);
+				for (uint64_t i = 0; i < filelist_size; i++) {
+					printf("File: %s\n", target_dir_files[i]);
+				}
+			}
 		} else {
 			target_dir = "";
 			num_files = argc;
@@ -139,9 +185,10 @@ int main(int argc, char *argv[]) {
 							   NULL);
 					if (dest_file == INVALID_HANDLE_VALUE) {
 						//File doesn't exist yet, copy over
+						CloseHandle(dest_file);
 						copyFilePrintErrors(src, dest);
 					} else {
-						//Determine if file attribs are different, fallback to byte-to-byte if attribs are equal
+						//Determine if preexisting file is the same as the file we're going to copy
 						HANDLE src_file = CreateFile(src,
 													 GENERIC_READ | GENERIC_WRITE,
 													 0,
@@ -154,6 +201,8 @@ int main(int argc, char *argv[]) {
 						BY_HANDLE_FILE_INFORMATION src_file_attrib = {0};
 						GetFileInformationByHandle(dest_file, &dest_file_attrib);
 						GetFileInformationByHandle(src_file, &src_file_attrib);
+						CloseHandle(src_file);
+						CloseHandle(dest_file);
 
 						_LARGE_INTEGER dest_size = {0};
 						dest_size.u.LowPart = dest_file_attrib.nFileSizeLow;
@@ -184,6 +233,8 @@ int main(int argc, char *argv[]) {
 						}
 
 						if (dest_size.u.LowPart == src_size.u.LowPart && dest_size.u.HighPart == src_size.u.HighPart) {
+							//TODO: We only check file attribs for equality, maybe add byte-to-byte check
+							// is it worth the overhead?
 							if (debug) printf("========================================================\n");
 							if (debug) printf("File sizes are equal\n");
 							if (src_file_write_time.wYear == dest_file_write_time.wYear &&
@@ -195,11 +246,11 @@ int main(int argc, char *argv[]) {
 									if (debug) printf("Last file write timestamps are equal\n");
 									printf("Pre-existing file is a duplicate, skip copy\n\n");
 							} else {
-								printf("Pre-existing does not match source file, overwriting ..\n\n");
+								printf("Pre-existing does not match source file, overwriting ..\n");
 								copyFilePrintErrors(src, dest);
 							}
 						} else {
-							printf("Pre-existing does not match source file, overwriting ..\n\n");
+							printf("Pre-existing does not match source file, overwriting ..\n");
 							copyFilePrintErrors(src, dest);
 						}
 
@@ -214,7 +265,7 @@ int main(int argc, char *argv[]) {
 }
 
 static void copyFilePrintErrors(char *src, char *dest) {
-	printf("\nCopying from .. %s\n", src);
+	printf("Copying from .. %s\n", src);
 	printf("Writing to .. %s\n", dest);
 	if (CopyFile(src, dest, FALSE) == 0) {
 		DWORD error_code = GetLastError();
@@ -231,4 +282,5 @@ static void copyFilePrintErrors(char *src, char *dest) {
 				&args);
 		printf("Error: %s\n", format_error_string);
 	}
+	printf("\n");
 }
