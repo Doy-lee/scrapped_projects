@@ -6,9 +6,12 @@
 #include <assert.h>
 
 #include <windows.h>
+#include <Shlwapi.h>
 
 #define MAX_PATH_SIZE 260
 #define CHAR_SPACE 32
+
+#define ArrayCount(Array) (sizeof(Array) / sizeof(Array[0]))
 
 /**
   References: 
@@ -47,6 +50,10 @@ int main(int argc, char *argv[]) {
 			}
 			printf("\n\n");
 		}
+		char *audio_sync_list[3];
+		audio_sync_list[0] = "mp3";
+		audio_sync_list[1] = "m4a";
+		audio_sync_list[2] = "flac";
 
 		//NOTE: Enumerate list of files in target directory for checking what files to sync
 		uint64_t filelist_size = 16;
@@ -83,6 +90,10 @@ int main(int argc, char *argv[]) {
 
 			if (_mkdir(target_dir) == -1) {
 				if (debug) printf ("Target directory already exists .. %s\n", target_dir);
+
+				/** TODO: Move this to where the file gets copied
+					We need to store a list of the files we copy over, then iterate over directory to find
+					all AUDIO FILES that weren't just copied over and delete them
 
 				WIN32_FIND_DATA find_data = {};
 				HANDLE find_handle;
@@ -121,6 +132,7 @@ int main(int argc, char *argv[]) {
 				for (uint64_t i = 0; i < filelist_size; i++) {
 					printf("File: %s\n", target_dir_files[i]);
 				}
+				**/
 			}
 		} else {
 			target_dir = "";
@@ -136,6 +148,48 @@ int main(int argc, char *argv[]) {
 			if (playlist == NULL) {
 				printf("Failed to load .. %s\n", argv[j]);
 			} else {
+
+				//TODO: Remove this and add cleaner sync!!
+				//dirty syncing, delete all pre-existing audio files then copy over
+				WIN32_FIND_DATA find_data = {};
+				HANDLE find_handle;
+				uint64_t file_index = 0;
+				char target_dir_query[MAX_PATH_SIZE] = {0};
+				strcat(target_dir_query, target_dir);
+				strcat(target_dir_query, "*.*");
+
+				if ((find_handle = FindFirstFile(target_dir_query, &find_data)) != INVALID_HANDLE_VALUE) {
+					do { 
+						if (strcmp(find_data.cFileName, ".") == 0) {}
+						else if (strcmp(find_data.cFileName, "..") == 0) {}
+						else {
+							if (find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+								if (debug) printf("Dir : %s\n", find_data.cFileName);
+							} else {
+								//PathFindExtension returns pointer to the preceding '.' char of extension
+								char *file_extension = PathFindExtension(find_data.cFileName);
+								file_extension += sizeof(char); //offset to actual extension
+
+								bool isAudio = false;
+								for (uint8_t i = 0; i < ArrayCount(audio_sync_list); i++) {
+									if (strcmp(file_extension, audio_sync_list[i]) == 0) {
+										isAudio = true;
+										break;
+									}
+								}
+								if (isAudio) {
+									//Found audio file in target directory, remove it for syncing purposes
+									char audio_file_remove[MAX_PATH_SIZE] = {0};
+									strcat(audio_file_remove, target_dir);
+									strcat(audio_file_remove, find_data.cFileName);
+									DeleteFile(audio_file_remove);
+								}
+							}
+						}
+					} while (FindNextFile(find_handle, &find_data) != 0);
+				}
+				FindClose(find_handle);
+
 				uint32_t playlist_size = ftell(playlist);
 				if (debug) printf("Loaded playlist %s .. size: %d\n\n", argv[j], playlist_size);
 				//TODO: Change fseek && ftell to use WinAPI for safety see: https://www.securecoding.cert.org/confluence/display/c/FIO19-C.+Do+not+use+fseek()+and+ftell()+to+compute+the+size+of+a+regular+file
@@ -143,6 +197,7 @@ int main(int argc, char *argv[]) {
 
 				char *filename;
 				char src[MAX_PATH_SIZE] = {0};
+
 				while (fgets(src, MAX_PATH_SIZE, playlist) != NULL) {
 
 					//Get rid of \n appended at end of line
@@ -169,13 +224,15 @@ int main(int argc, char *argv[]) {
 					WIN32_FIND_DATA find_file_result = {0};
 					if (FindFirstFile(src, &find_file_result) == INVALID_HANDLE_VALUE) {
 						printf("File not found, skipping file: %s\n", src);
-						break;
+					} else {
+						char dest[MAX_PATH_SIZE] = {0};
+						strcat(dest, target_dir);
+						strcat(dest, filename);
+
+						copyFilePrintErrors(src, dest);
 					}
 
-					char dest[MAX_PATH_SIZE] = {0};
-					strcat(dest, target_dir);
-					strcat(dest, filename);
-
+					/** Proper file check
 					HANDLE dest_file = CreateFile(dest,
 							   GENERIC_READ | GENERIC_WRITE,
 							   0,
@@ -234,7 +291,6 @@ int main(int argc, char *argv[]) {
 
 						if (dest_size.u.LowPart == src_size.u.LowPart && dest_size.u.HighPart == src_size.u.HighPart) {
 							//TODO: We only check file attribs for equality, maybe add byte-to-byte check
-							// is it worth the overhead?
 							if (debug) printf("========================================================\n");
 							if (debug) printf("File sizes are equal\n");
 							if (src_file_write_time.wYear == dest_file_write_time.wYear &&
@@ -253,8 +309,7 @@ int main(int argc, char *argv[]) {
 							printf("Pre-existing does not match source file, overwriting ..\n");
 							copyFilePrintErrors(src, dest);
 						}
-
-					}
+						**/
 
 				}
 			}
