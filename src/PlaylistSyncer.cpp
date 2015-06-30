@@ -50,10 +50,17 @@ int main(int argc, char *argv[]) {
 			}
 			printf("\n\n");
 		}
-		char *audio_sync_list[3];
+		char *audio_sync_list[10];
 		audio_sync_list[0] = "mp3";
 		audio_sync_list[1] = "m4a";
 		audio_sync_list[2] = "flac";
+		audio_sync_list[3] = "ape";
+		audio_sync_list[4] = "opus";
+		audio_sync_list[5] = "ogg";
+		audio_sync_list[6] = "oga";
+		audio_sync_list[7] = "tta";
+		audio_sync_list[8] = "wav";
+		audio_sync_list[9] = "wma";
 
 		//NOTE: Enumerate list of files in target directory for checking what files to sync
 		uint64_t filelist_size = 16;
