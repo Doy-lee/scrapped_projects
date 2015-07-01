@@ -48,7 +48,7 @@ int main(int argc, char *argv[]) {
 			for (uint16_t k = 0; k < argc; k++) {
 				printf(" 	%s\n", argv[k]);	
 			}
-			printf("\n\n");
+			printf("\n");
 		}
 		char *audio_sync_list[10];
 		audio_sync_list[0] = "mp3";
@@ -101,6 +101,14 @@ int main(int argc, char *argv[]) {
 
 		//num files to cycle through depends on if last argument specified is directory or playlist
 		int32_t j = 1;
+		
+		//NOTE: Enumerate list of files in target directory for checking what files to sync
+		uint64_t filelist_size = 1;
+		uint64_t file_index = 0;
+		char (*target_dir_files)[MAX_PATH_SIZE];
+		target_dir_files = (char(*)[MAX_PATH_SIZE]) malloc(sizeof(*target_dir_files)*filelist_size);
+		assert(target_dir_files != NULL);
+
 		for (j = 1; j < num_files; j++) {
 			FILE *playlist = fopen(argv[j], "r");
 			fseek(playlist, 0, SEEK_END);
@@ -108,32 +116,6 @@ int main(int argc, char *argv[]) {
 			if (playlist == NULL) {
 				printf("Failed to load .. %s\n", argv[j]);
 			} else {
-
-				//TODO: Remove this and add cleaner sync!!
-				//dirty syncing, delete all pre-existing audio files then copy over
-				/**
-				WIN32_FIND_DATA find_data = {};
-				HANDLE find_handle;
-				uint64_t file_index = 0;
-				char target_dir_query[MAX_PATH_SIZE] = {0};
-				strcat(target_dir_query, target_dir);
-				strcat(target_dir_query, "*.*");
-
-				if ((find_handle = FindFirstFile(target_dir_query, &find_data)) != INVALID_HANDLE_VALUE) {
-					do { 
-						if (strcmp(find_data.cFileName, ".") == 0) {}
-						else if (strcmp(find_data.cFileName, "..") == 0) {}
-						else {
-							if (find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
-								if (debug) printf("Dir : %s\n", find_data.cFileName);
-							} else {
-							}
-						}
-					} while (FindNextFile(find_handle, &find_data) != 0);
-				}
-				FindClose(find_handle);
-				**/
-
 				uint32_t playlist_size = ftell(playlist);
 				if (debug) printf("Loaded playlist %s .. size: %d\n\n", argv[j], playlist_size);
 				//TODO: Change fseek && ftell to use WinAPI for safety see: https://www.securecoding.cert.org/confluence/display/c/FIO19-C.+Do+not+use+fseek()+and+ftell()+to+compute+the+size+of+a+regular+file
@@ -141,13 +123,6 @@ int main(int argc, char *argv[]) {
 
 				char *filename;
 				char src[MAX_PATH_SIZE] = {0};
-				uint64_t file_index = 0;
-
-				//NOTE: Enumerate list of files in target directory for checking what files to sync
-				uint64_t filelist_size = 1;
-				char (*target_dir_files)[MAX_PATH_SIZE];
-				target_dir_files = (char(*)[MAX_PATH_SIZE]) malloc(sizeof(*target_dir_files)*filelist_size);
-				assert(target_dir_files != NULL);
 
 				while (fgets(src, MAX_PATH_SIZE, playlist) != NULL) {
 
@@ -277,62 +252,61 @@ int main(int argc, char *argv[]) {
 					}
 				}
 				fclose(playlist);
+			}
+		}
+		WIN32_FIND_DATA find_data = {};
+		HANDLE find_handle;
+		char target_dir_query[MAX_PATH_SIZE] = {0};
+		strcat(target_dir_query, target_dir);
+		strcat(target_dir_query, "*.*");
 
-				WIN32_FIND_DATA find_data = {};
-				HANDLE find_handle;
-				char target_dir_query[MAX_PATH_SIZE] = {0};
-				strcat(target_dir_query, target_dir);
-				strcat(target_dir_query, "*.*");
+		if ((find_handle = FindFirstFile(target_dir_query, &find_data)) != INVALID_HANDLE_VALUE) {
+			do { 
+				if (strcmp(find_data.cFileName, ".") == 0) {}
+				else if (strcmp(find_data.cFileName, "..") == 0) {}
+				else {
+					if (find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+						if (debug) printf("Dir : %s\n", find_data.cFileName);
+					} else {
+						//PathFindExtension returns pointer to the preceding '.' char of extension
+						char *file_extension = PathFindExtension(find_data.cFileName);
+						file_extension += sizeof(char); //offset to actual extension
 
-				if ((find_handle = FindFirstFile(target_dir_query, &find_data)) != INVALID_HANDLE_VALUE) {
-					do { 
-						if (strcmp(find_data.cFileName, ".") == 0) {}
-						else if (strcmp(find_data.cFileName, "..") == 0) {}
-						else {
-							if (find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
-								if (debug) printf("Dir : %s\n", find_data.cFileName);
-							} else {
-								//PathFindExtension returns pointer to the preceding '.' char of extension
-								char *file_extension = PathFindExtension(find_data.cFileName);
-								file_extension += sizeof(char); //offset to actual extension
-
-								bool isAudio = false;
-								for (uint8_t i = 0; i < ArrayCount(audio_sync_list); i++) {
-									if (strcmp(file_extension, audio_sync_list[i]) == 0) {
-										isAudio = true;
-										break;
-									}
-								}
-								if (isAudio) {
-									//Found audio file in target directory, remove it for syncing purposes
-
-									bool synced_file = false;
-									for (uint64_t i = 0; i < filelist_size; i++) {
-										if (strcmp(target_dir_files[i], find_data.cFileName) == 0) {
-											synced_file = true;
-											break;
-										}
-									}
-
-									if (!synced_file) {
-										char audio_file_remove[MAX_PATH_SIZE] = {0};
-										strcat(audio_file_remove, target_dir);
-										strcat(audio_file_remove, find_data.cFileName);
-										DeleteFile(audio_file_remove);
-										printf("Removed file .. %s\n", find_data.cFileName);
-									}
-								}
+						bool isAudio = false;
+						for (uint8_t i = 0; i < ArrayCount(audio_sync_list); i++) {
+							if (strcmp(file_extension, audio_sync_list[i]) == 0) {
+								isAudio = true;
+								break;
 							}
 						}
-					} while (FindNextFile(find_handle, &find_data) != 0);
+						if (isAudio) {
+							//Found audio file in target directory, remove it for syncing purposes
+
+							bool synced_file = false;
+							for (uint64_t i = 0; i < filelist_size; i++) {
+								if (strcmp(target_dir_files[i], find_data.cFileName) == 0) {
+									synced_file = true;
+									break;
+								}
+							}
+
+							if (!synced_file) {
+								char audio_file_remove[MAX_PATH_SIZE] = {0};
+								strcat(audio_file_remove, target_dir);
+								strcat(audio_file_remove, find_data.cFileName);
+								DeleteFile(audio_file_remove);
+								printf("Removed file .. %s\n", find_data.cFileName);
+							}
+						}
+					}
 				}
-				FindClose(find_handle);
-				for (uint64_t i = 0; i < filelist_size; i++) {
-					printf("File: %s\n", target_dir_files[i]);
-				}
-			}
-			return EXIT_SUCCESS;
+			} while (FindNextFile(find_handle, &find_data) != 0);
 		}
+		FindClose(find_handle);
+		for (uint64_t i = 0; i < filelist_size; i++) {
+			printf("File: %s\n", target_dir_files[i]);
+		}
+		return EXIT_SUCCESS;
 	}
 }
 static void copyFilePrintErrors(char *src, char *dest) {
