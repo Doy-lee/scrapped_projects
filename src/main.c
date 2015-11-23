@@ -41,8 +41,13 @@ internal void DrawRectangle (rect_t rect, u32 pixel_color, u32 *screen_pixels) {
 	}
 }
 
+typedef struct {
+	u32 header;
+} png_header;
 
-internal file_read_result platformLoadFile (char *filePath) {
+
+internal file_read_result platformLoadFileToMemory (char *filePath,
+	                                                void *memory) {
 	file_read_result result = {0};
 
 	HANDLE fileHandle = CreateFile(filePath,
@@ -50,7 +55,7 @@ internal file_read_result platformLoadFile (char *filePath) {
 	                               0,
 	                               NULL,
 	                               OPEN_EXISTING,
-	                               FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED,
+	                               FILE_ATTRIBUTE_NORMAL,
 	                               NULL);
 
 	// TODO: Read file is not workgin!
@@ -65,15 +70,17 @@ internal file_read_result platformLoadFile (char *filePath) {
 
 		u32 bytesRead = 0;
 		ReadFile(fileHandle,
-		         buffer,
+		         memory,
 		         result.size,
 		         &bytesRead,
 		         NULL);
 
 		if (bytesRead != result.size) {
 			//TODO: Error handling
+		} else {
+			result.contents = memory;
 		}
-
+		
 	} else {
 		// TODO: Error handling
 	}
@@ -121,7 +128,9 @@ int main(int argc, char* argv[]) {
 	u32 pixel_color =  SDL_MapRGB(format, 0, 0, 255);
 	DrawRectangle(square, 255, screen_pixels);
 
-	file_read_result file = platformLoadFile("content/cla_font.png");
+	// TODO: File reads only read into the base address of our program memory
+	file_read_result file = platformLoadFileToMemory("../content/cla_font.png",
+	                                                 programMemory);
 
 	while (!done) {
 
