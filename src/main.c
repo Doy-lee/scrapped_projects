@@ -3,7 +3,6 @@
 #include <SDL.h>
 #include <windows.h>
 
-#define bool u32
 #define TRUE 1
 #define FALSE 0
 
@@ -16,9 +15,12 @@
 #define Terabytes(Value) (Gigabytes(Value)*1024LL)
 
 #define internal static
+#define inline __inline
 
+typedef uint64_t u64;
 typedef uint32_t u32;
 typedef int32_t i32;
+typedef i32 b32;
 
 typedef struct {
 	int x;
@@ -32,6 +34,23 @@ typedef struct {
 	u32 size;
 } file_read_result;
 
+typedef struct {
+	u32 dataLength;
+	u32 type;
+	byte *data;
+	u32 crc;
+} pngChunk;
+
+typedef struct {
+	u32 width;        /* Width of image in pixels */
+	u32 height;       /* Height of image in pixels */
+	BYTE bitDepth;      /* Bits per pixel or per sample */
+	BYTE colorType;     /* Color interpretation indicator */
+	BYTE compression;   /* Compression type indicator */
+	BYTE filter;        /* Filter type indicator */
+	BYTE interlace;     /* Type of interlacing scheme used */
+} ihdrChunk;
+
 internal void DrawRectangle (rect_t rect, u32 pixel_color, u32 *screen_pixels) {
 	assert(screen_pixels);
 	for (int x = 0; x < rect.h; x++) {
@@ -40,11 +59,6 @@ internal void DrawRectangle (rect_t rect, u32 pixel_color, u32 *screen_pixels) {
 		}
 	}
 }
-
-typedef struct {
-	u32 header;
-} png_header;
-
 
 internal file_read_result platformLoadFileToMemory (char *filePath,
 	                                                void *memory) {
@@ -90,6 +104,32 @@ internal file_read_result platformLoadFileToMemory (char *filePath,
 	return result;
 }
 
+internal pngChunk extractPngChunk (u32 *pngBufferPointer) {
+	pngChunk result = {0};
+	result.dataLength = reverse32BitEndianess(*pngBufferPointer++);
+	result.type = reverse32BitEndianess(*pngBufferPointer++);
+
+	// TODO: Use our program allocated memory! not the heap
+	byte *chunkData = (byte *) malloc(sizeof(byte) * result.dataLength);
+	for (int i = 0; i < result.dataLength; i++) {
+		chunkData[i] = *((byte *) pngBufferPointer);
+		((byte *) pngBufferPointer)++;
+	}
+
+	result.data = chunkData;
+	result.crc = *(pngBufferPointer++);
+
+	return result;
+}
+
+internal inline u32 reverse32BitEndianess (u32 data) {
+	u32 result = ((((data >> 24) & 0xFF) << 0 )|
+	              (((data >> 16) & 0xFF) << 8 )|
+	              (((data >> 8 ) & 0xFF) << 16)|
+	              (((data >> 0 ) & 0xFF) << 24));
+	return result;
+}
+
 int main(int argc, char* argv[]) {
 	SDL_Init(SDL_INIT_VIDEO);
 
@@ -110,12 +150,12 @@ int main(int argc, char* argv[]) {
 	                                    sizeof(u32));
 	assert(screen_pixels);
 
-	bool done = FALSE;
+	b32 done = FALSE;
 
-	bool pressed_up = FALSE;
-	bool pressed_down = FALSE;
-	bool pressed_left = FALSE;
-	bool pressed_right = FALSE;
+	b32 pressed_up = FALSE;
+	b32 pressed_down = FALSE;
+	b32 pressed_left = FALSE;
+	b32 pressed_right = FALSE;
 
 	// 1 megabyte
 	u32 programMemorySize = Megabytes(8);
@@ -131,6 +171,33 @@ int main(int argc, char* argv[]) {
 	// TODO: File reads only read into the base address of our program memory
 	file_read_result file = platformLoadFileToMemory("../content/cla_font.png",
 	                                                 programMemory);
+
+	u32 *pngScanner = file.contents;
+	u64 pngHeader = *((u64 *)(pngScanner))++;
+
+
+	// TODO: Skip palette chunk for now assuming that user has a truecolour
+	// display i.e. no need to have an indexed palette for image recreation
+
+	// Parse IHDR data
+	pngChunk ihdrHeader = extractPngChunk(pngScanner);
+	u32 *ihdrPointer = (u32 *) ihdrHeader.data;
+	ihdrChunk ihdrData = {0};
+	ihdrData.width = reverse32BitEndianess(*ihdrPointer++);
+	ihdrData.height = reverse32BitEndianess(*ihdrPointer++);
+	ihdrData.bitDepth = *((byte *) ihdrPointer)++;
+	ihdrData.colorType = *((byte *) ihdrPointer)++;
+	ihdrData.compression = *((byte *) ihdrPointer)++;
+	ihdrData.filter = *((byte *) ihdrPointer)++;
+	ihdrData.interlace = *((byte *) ihdrPointer)++;
+
+	// NOTE: Move png buffer pointer ahead data length bytes and move the
+	// pointer 3, 32 bit integer times to advance to next chunk, where 3 is the
+	// datalength, type, crc fields.
+	pngScanner = (u32 *) (((byte *)(pngScanner)) + ihdrHeader.dataLength);
+	pngScanner += 3;
+
+	pngChunk nextHeader = extractPngChunk(pngScanner);
 
 	while (!done) {
 
@@ -199,5 +266,7 @@ int main(int argc, char* argv[]) {
 		SDL_RenderPresent(renderer);
 		SDL_Delay(50);
 	}
+
+	free(ihdrHeader.data);
 	return 1;
 }
