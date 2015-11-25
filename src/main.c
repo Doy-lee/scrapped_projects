@@ -1,13 +1,9 @@
 #include <stdio.h>
 #include <assert.h>
 #include <SDL.h>
-#include <windows.h>
 
 #define TRUE 1
 #define FALSE 0
-
-#define SCREEN_WIDTH 1024
-#define SCREEN_HEIGHT 768
 
 #define Kilobytes(Value) ((Value)*1024LL)
 #define Megabytes(Value) (Kilobytes(Value)*1024LL)
@@ -17,10 +13,19 @@
 #define internal static
 #define inline __inline
 
-typedef uint64_t u64;
-typedef uint32_t u32;
+typedef int8_t i8;
+typedef int16_t i16;
 typedef int32_t i32;
+typedef int64_t i64;
 typedef i32 b32;
+
+typedef uint8_t u8;
+typedef uint16_t u16;
+typedef uint32_t u32;
+typedef uint64_t u64;
+
+typedef float r32;
+typedef double r64;
 
 typedef struct {
 	int x;
@@ -35,128 +40,99 @@ typedef struct {
 } file_read_result;
 
 typedef struct {
-	u32 dataLength;
-	u32 type;
-	byte *data;
-	u32 crc;
-} pngChunk;
+	u32 *backBuffer;
+	u32 width;
+	u32 height;
+} textScreenData;
 
 typedef struct {
-	u32 width;        /* Width of image in pixels */
-	u32 height;       /* Height of image in pixels */
-	BYTE bitDepth;      /* Bits per pixel or per sample */
-	BYTE colorType;     /* Color interpretation indicator */
-	BYTE compression;   /* Compression type indicator */
-	BYTE filter;        /* Filter type indicator */
-	BYTE interlace;     /* Type of interlacing scheme used */
-} ihdrChunk;
+	u32 columns;
+	u32 rows;
+} textBuffer;
 
-internal void DrawRectangle (rect_t rect, u32 pixel_color, u32 *screen_pixels) {
-	assert(screen_pixels);
-	for (int x = 0; x < rect.h; x++) {
-		for (int y = 0; y < rect.w; y++) {
-			screen_pixels[(y + rect.y)*SCREEN_WIDTH + x + rect.x] = pixel_color;
+typedef struct {
+	rect_t dimensions;
+	i32 colX;
+	i32 colY;
+} textCaret;
+
+typedef union {
+	SDL_KeyboardEvent keys[5];
+	struct {
+		SDL_KeyboardEvent escape;
+		SDL_KeyboardEvent arrowUp;
+		SDL_KeyboardEvent arrowDown;
+		SDL_KeyboardEvent arrowLeft;
+		SDL_KeyboardEvent arrowRight;
+		SDL_MouseButtonEvent mouse;
+	};
+} input;
+
+
+internal void DrawRectangle (rect_t rect, u32 pixel_color,
+                             textScreenData *screen) {
+	assert(screen);
+
+	if (rect.x < 0) {
+		rect.x = 0;
+	} else if (rect.x > screen->width) {
+		rect.x = screen->width;
+	}
+
+	if (rect.y < 0) {
+		rect.y = 0;
+	} else if (rect.y > screen->height) {
+		rect.y = screen->height;
+	}
+
+	for (int x = 0; x < rect.w; x++) {
+		for (int y = 0; y < rect.h; y++) {
+			screen->backBuffer[(y + rect.y)*screen->width + x + rect.x]
+				= pixel_color;
 		}
 	}
-}
-
-internal file_read_result platformLoadFileToMemory (char *filePath,
-	                                                void *memory) {
-	file_read_result result = {0};
-
-	HANDLE fileHandle = CreateFile(filePath,
-	                               GENERIC_READ,
-	                               0,
-	                               NULL,
-	                               OPEN_EXISTING,
-	                               FILE_ATTRIBUTE_NORMAL,
-	                               NULL);
-
-	// TODO: Read file is not workgin!
-	if (fileHandle != INVALID_HANDLE_VALUE)  {
-		LARGE_INTEGER size;
-		GetFileSizeEx(fileHandle, &size);
-
-		// TODO: Only reads in 32-bit size files e.g. < 4gb
-		result.size = (u32) size.QuadPart;
-		
-		void *buffer = malloc(result.size);
-
-		u32 bytesRead = 0;
-		ReadFile(fileHandle,
-		         memory,
-		         result.size,
-		         &bytesRead,
-		         NULL);
-
-		if (bytesRead != result.size) {
-			//TODO: Error handling
-		} else {
-			result.contents = memory;
-		}
-		
-	} else {
-		// TODO: Error handling
-	}
-
-	CloseHandle(fileHandle);
-
-	return result;
-}
-
-internal pngChunk extractPngChunk (u32 *pngBufferPointer) {
-	pngChunk result = {0};
-	result.dataLength = reverse32BitEndianess(*pngBufferPointer++);
-	result.type = reverse32BitEndianess(*pngBufferPointer++);
-
-	// TODO: Use our program allocated memory! not the heap
-	byte *chunkData = (byte *) malloc(sizeof(byte) * result.dataLength);
-	for (int i = 0; i < result.dataLength; i++) {
-		chunkData[i] = *((byte *) pngBufferPointer);
-		((byte *) pngBufferPointer)++;
-	}
-
-	result.data = chunkData;
-	result.crc = *(pngBufferPointer++);
-
-	return result;
-}
-
-internal inline u32 reverse32BitEndianess (u32 data) {
-	u32 result = ((((data >> 24) & 0xFF) << 0 )|
-	              (((data >> 16) & 0xFF) << 8 )|
-	              (((data >> 8 ) & 0xFF) << 16)|
-	              (((data >> 0 ) & 0xFF) << 24));
-	return result;
 }
 
 int main(int argc, char* argv[]) {
 	SDL_Init(SDL_INIT_VIDEO);
 
+
+	textScreenData screen = {0};
+	screen.width = 1000;
+	screen.height = 750;
+	screen.backBuffer = (u32 *) calloc(screen.width * screen.height,
+	                                   sizeof(u32));
+	assert(screen.backBuffer);
+
+	u32 glyphWidth = 30;
+	u32 glyphHeight = 50;
+
+	textCaret caret = {0};
+	caret.dimensions.w = glyphWidth/2;
+	caret.dimensions.h = glyphHeight;
+
+	textBuffer textBuffer = {0};
+
+	textBuffer.columns = (screen.width/glyphWidth)- 1;
+	textBuffer.rows = (screen.height/glyphHeight) - 1;
+
 	SDL_Window *win = SDL_CreateWindow("Text Editor", SDL_WINDOWPOS_UNDEFINED,
-	                                   SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH,
-	                                   SCREEN_HEIGHT, 0);
+	                                   SDL_WINDOWPOS_UNDEFINED, screen.width,
+	                                   screen.height, 0);
 	assert(win);
 	SDL_Renderer *renderer = SDL_CreateRenderer(win, 0, SDL_RENDERER_SOFTWARE);
 	assert(renderer);
 
 	SDL_PixelFormat *format = SDL_AllocFormat(SDL_PIXELFORMAT_RGB888);
-	SDL_Texture *screen = SDL_CreateTexture(renderer, format->format,
-	                                        SDL_TEXTUREACCESS_STREAMING,
-	                                        SCREEN_WIDTH, SCREEN_HEIGHT);
-	assert(screen);
+	SDL_Texture *screenTex = SDL_CreateTexture(renderer, format->format,
+	                                           SDL_TEXTUREACCESS_STREAMING,
+	                                           screen.width, screen.height);
+	assert(screenTex);
 
-	u32 *screen_pixels = (u32 *) calloc(SCREEN_WIDTH * SCREEN_HEIGHT,
-	                                    sizeof(u32));
-	assert(screen_pixels);
 
-	b32 done = FALSE;
+	b32 globalRunning = TRUE;
 
-	b32 pressed_up = FALSE;
-	b32 pressed_down = FALSE;
-	b32 pressed_left = FALSE;
-	b32 pressed_right = FALSE;
-
+	// TODO: We don't use this yet!
 	// 1 megabyte
 	u32 programMemorySize = Megabytes(8);
 	u32 *programMemory = VirtualAlloc(NULL,
@@ -164,74 +140,76 @@ int main(int argc, char* argv[]) {
 	                                  MEM_COMMIT | MEM_RESERVE,
 	                                  PAGE_READWRITE);
 
-	rect_t square = {0, 0, 30, 30};
-	u32 pixel_color =  SDL_MapRGB(format, 0, 0, 255);
-	DrawRectangle(square, 255, screen_pixels);
+	u32 pixelColor =  SDL_MapRGB(format, 0, 0, 255);
+	DrawRectangle(caret.dimensions, pixelColor, &screen);
 
-	// TODO: File reads only read into the base address of our program memory
-	file_read_result file = platformLoadFileToMemory("../content/cla_font.png",
-	                                                 programMemory);
+	input input = {0};
 
-	u32 *pngScanner = file.contents;
-	u64 pngHeader = *((u64 *)(pngScanner))++;
+	// 1000ms in 1s. To target 120 fps we need to display a frame every 8.3ms
+	u32 targetFramesPerSecond = 120;
+	u32 timingTargetMS = (u32) 1000.0f / targetFramesPerSecond;
+	u32 lastUpdateTimeMS = SDL_GetTicks();
+	u32 inputParsingMSCounter = 0;
+	while (globalRunning) {
 
-
-	// TODO: Skip palette chunk for now assuming that user has a truecolour
-	// display i.e. no need to have an indexed palette for image recreation
-
-	// Parse IHDR data
-	pngChunk ihdrHeader = extractPngChunk(pngScanner);
-	u32 *ihdrPointer = (u32 *) ihdrHeader.data;
-	ihdrChunk ihdrData = {0};
-	ihdrData.width = reverse32BitEndianess(*ihdrPointer++);
-	ihdrData.height = reverse32BitEndianess(*ihdrPointer++);
-	ihdrData.bitDepth = *((byte *) ihdrPointer)++;
-	ihdrData.colorType = *((byte *) ihdrPointer)++;
-	ihdrData.compression = *((byte *) ihdrPointer)++;
-	ihdrData.filter = *((byte *) ihdrPointer)++;
-	ihdrData.interlace = *((byte *) ihdrPointer)++;
-
-	// NOTE: Move png buffer pointer ahead data length bytes and move the
-	// pointer 3, 32 bit integer times to advance to next chunk, where 3 is the
-	// datalength, type, crc fields.
-	pngScanner = (u32 *) (((byte *)(pngScanner)) + ihdrHeader.dataLength);
-	pngScanner += 3;
-
-	pngChunk nextHeader = extractPngChunk(pngScanner);
-
-	while (!done) {
-
+		// Clear screen
+		memset(screen.backBuffer, 0,
+		       screen.width * screen.height * sizeof(u32));
 		SDL_Event event;
 		while (SDL_PollEvent(&event)) {
 			if (event.type == SDL_QUIT) {
-				done = TRUE;
+				globalRunning = TRUE;
 				break;
 			}
 
-			if (event.type != SDL_KEYDOWN && event.type != SDL_KEYUP) {
+			// Early exit by ignoring events we don't care about
+			if (event.type != SDL_KEYDOWN &&
+			    event.type != SDL_KEYUP &&
+			    event.type != SDL_MOUSEBUTTONDOWN &&
+			    event.type != SDL_MOUSEBUTTONUP) {
 				break;
 			}
 
+			if (event.type == SDL_MOUSEBUTTONDOWN) {
+				input.mouse = event.button;
+				caret.colX = (input.mouse.x / glyphWidth);
+				caret.colY = (input.mouse.y / glyphHeight);
+			}
+
+			// Extract key state
 			SDL_Keycode code = event.key.keysym.sym;
 			switch (code) {
 				case SDLK_ESCAPE:
-					done = (event.type == SDL_KEYDOWN);
+					input.escape = event.key;
+					globalRunning = (event.type == SDL_KEYDOWN);
 				break;
 
 				case SDLK_UP:
-					pressed_up = (event.type == SDL_KEYDOWN);
+					input.arrowUp = event.key;
+					if (input.arrowUp.type == SDL_KEYDOWN) {
+						caret.colY -= 1;
+					}
 				break;
 
 				case SDLK_DOWN:
-					pressed_down = (event.type == SDL_KEYDOWN);
+					input.arrowDown = event.key;
+					if (input.arrowDown.type == SDL_KEYDOWN) {
+						caret.colY += 1;
+					}
 				break;
 				
 				case SDLK_LEFT:
-					pressed_left = (event.type == SDL_KEYDOWN);
+					input.arrowLeft = event.key;
+					if (input.arrowLeft.type == SDL_KEYDOWN) {
+						caret.colX -= 1;
+					}
 				break;
 
 				case SDLK_RIGHT:
-					pressed_right = (event.type == SDL_KEYDOWN);
+					input.arrowRight = event.key;
+					if (input.arrowRight.type == SDL_KEYDOWN) {
+						caret.colX += 1;
+					}
 				break;
 
 				default:
@@ -239,34 +217,67 @@ int main(int argc, char* argv[]) {
 			}
 		}
 
-		memset(screen_pixels, 0, SCREEN_WIDTH * SCREEN_HEIGHT * sizeof(u32));
-
-		if (pressed_up) {
-			square.y -= 1;
+		// Bounds checking for caret
+		if (caret.colX < 0) {
+			if (caret.colY == 0) {
+				caret.colX = 0;
+			} else {
+				caret.colX = textBuffer.columns;
+			}
+			caret.colY--;
+		} else if (caret.colX >= textBuffer.columns &&
+		           caret.colY >= textBuffer.rows) {
+			caret.colX = textBuffer.columns;
+			caret.colY = textBuffer.rows;
+		} else if (caret.colX > textBuffer.columns) {
+			caret.colX = 0;
+			caret.colY++;
 		}
 
-		if (pressed_down) {
-			square.y += 1;
+		if (caret.colY < 0) {
+			caret.colY = 0;
+		} else if (caret.colY > textBuffer.rows) {
+			caret.colY = textBuffer.rows;
 		}
 
-		if (pressed_left) {
-			square.x -= 1;
+		// Map screen columns/rows to pixels on screen
+		caret.dimensions.x = caret.colX * glyphWidth;
+		caret.dimensions.y = caret.colY * glyphHeight;
+
+		// Draw grid line
+		u32 lineThickness = 1;
+		u32 gridColour =  SDL_MapRGB(format, 0, 255, 0);
+		for (int x = 0; x < textBuffer.columns+1; x++) {
+			rect_t verticalLine = {x * glyphWidth, 0, lineThickness,
+			                       screen.height};
+			DrawRectangle(verticalLine, gridColour, &screen);
 		}
 
-		if (pressed_right) {
-			square.x += 1;
+		for (int y = 0; y < textBuffer.rows+1; y++) {
+			rect_t horizontalLine = {0, y * glyphHeight,
+			                         screen.width, lineThickness};
+			DrawRectangle(horizontalLine, gridColour, &screen);
 		}
 
-		DrawRectangle(square, 255, screen_pixels);
+		DrawRectangle(caret.dimensions, 255, &screen);
 
-		SDL_UpdateTexture(screen, NULL, screen_pixels,
-		                  SCREEN_WIDTH*sizeof(u32));
+		SDL_UpdateTexture(screenTex, NULL, screen.backBuffer,
+		                  screen.width*sizeof(u32));
 		SDL_RenderClear(renderer);
-		SDL_RenderCopy(renderer, screen, NULL, NULL);
-		SDL_RenderPresent(renderer);
-		SDL_Delay(50);
-	}
+		SDL_RenderCopy(renderer, screenTex, NULL, NULL);
 
-	free(ihdrHeader.data);
+		u32 currentTimeMS = SDL_GetTicks();
+		u32 elapsedTimeMS = currentTimeMS - lastUpdateTimeMS;
+		if (elapsedTimeMS <= timingTargetMS) {
+			// NOTE: SDL Delay has a granularity of at least 10ms meaning we
+			// will most definitely miss a frame if our timing target is 8ms
+			SDL_Delay(timingTargetMS - elapsedTimeMS);
+		}
+
+		SDL_RenderPresent(renderer);
+
+		lastUpdateTimeMS = SDL_GetTicks();
+
+	}
 	return 1;
 }
