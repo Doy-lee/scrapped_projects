@@ -70,30 +70,6 @@ typedef union {
 } input;
 
 
-internal void DrawRectangle (rect_t rect, u32 pixel_color,
-                             textScreenData *screen) {
-	assert(screen);
-
-	if (rect.x < 0) {
-		rect.x = 0;
-	} else if (rect.x > screen->width) {
-		rect.x = screen->width;
-	}
-
-	if (rect.y < 0) {
-		rect.y = 0;
-	} else if (rect.y > screen->height) {
-		rect.y = screen->height;
-	}
-
-	for (int x = 0; x < rect.w; x++) {
-		for (int y = 0; y < rect.h; y++) {
-			screen->backBuffer[(y + rect.y)*screen->width + x + rect.x]
-				= pixel_color;
-		}
-	}
-}
-
 #pragma pack(push)
 #pragma pack(2)
 typedef struct bmpFileHeader {
@@ -125,6 +101,111 @@ typedef struct bmpBitfieldMasks {
 } bmpBitfieldMasks;
 #pragma pack(pop)
 
+internal void DrawRectangle (rect_t rect, u32 pixel_color,
+                             textScreenData *screen) {
+	assert(screen);
+
+	if (rect.x < 0) {
+		rect.x = 0;
+	} else if (rect.x > screen->width) {
+		rect.x = screen->width;
+	}
+
+	if (rect.y < 0) {
+		rect.y = 0;
+	} else if (rect.y > screen->height) {
+		rect.y = screen->height;
+	}
+
+	for (int x = 0; x < rect.w; x++) {
+		for (int y = 0; y < rect.h; y++) {
+			screen->backBuffer[(y + rect.y)*screen->width + x + rect.x]
+				= pixel_color;
+		}
+	}
+}
+
+internal void drawBitmap(rect_t srcRect, rect_t destRect, u32 *bmpFile, bmpFileHeader fileHeader, bmpBitmapHeader fileBitmapHeader, textScreenData *screen, SDL_PixelFormat *format) {
+
+	// TODO: Use array notation for pointers 
+	(u8 *) bmpFile += (u8) fileHeader.bitmapOffset;
+	u32 bytesPerPixel = fileBitmapHeader.bitsPerPixel / 8;
+
+	// NOTE: Offset pointer to the dest rectangle in BMP data
+	u32 numBytesInScanLine = fileBitmapHeader.width * bytesPerPixel;
+	// 4 byte boundary padding for each scan line
+	numBytesInScanLine += (fileBitmapHeader.width % 4);
+
+	for (int y = srcRect.h; y >= 0; y--) {
+		for (int x = 0; x < srcRect.w; x++) {
+			// NOTE: BMP is stored from left to right, bottom to top
+			//       BB GG RR | 24 bits per pixel
+
+			// TODO: Determine the bit-shift amount to create a mask at
+			// runtime. Only applicable for 16bit/32bit BMPS
+			//u8 red = (*bmpScanner & fileBitfieldMasks.redMask) >> 24;
+			//u8 green = (*bmpScanner & fileBitfieldMasks.greenMask) >> 16;
+			//u8 blue = (*bmpScanner & fileBitfieldMasks.blueMask) >> 8;
+			
+			// Find the position in BMP data where our source rect begins
+			// As BMP stores bottom to top and rects are supplied in top-bottom
+			// we need to convert from one coordinate system to another
+			u32 yRectToBMP = ((fileBitmapHeader.height - srcRect.y - y) *
+			            numBytesInScanLine);
+			u32 xRectToBMP = (srcRect.x + x) * bytesPerPixel;
+
+			u32 pos = yRectToBMP + xRectToBMP;
+
+			u8 blue = ((u8 *) bmpFile)[pos];
+			u8 green = ((u8 *) bmpFile)[pos+1];
+			u8 red = ((u8 *) bmpFile)[pos+2];
+
+			// NOTE: Magic colour to simulate transparency is purple!
+			if (red == 255 && green == 0 && blue == 255) {
+				red = 0;
+				blue = 0;
+			}
+
+			// TODO: Transparency! Alpha blending!
+			u32 pixelColor = SDL_MapRGB(format, red, green, blue);
+			screen->backBuffer[((y + destRect.y)*screen->width) + (x + destRect.x)] = pixelColor;
+		}
+	}
+}
+
+internal u32 *loadBmpFile(char *filePath, u32 *buffer) {
+	HANDLE fileHandle =
+		CreateFile(filePath, // lpFileName
+		           GENERIC_READ,           // dwDesiredAccess
+		           0,                      // dwShareMode
+		           NULL,                   // lpSecurityAttributes,
+		           OPEN_EXISTING,          // dwCreationDisposition,
+		           FILE_ATTRIBUTE_NORMAL,  // dwFlagsAndAttributes,
+		           NULL                    // hTemplateFile
+		           );
+
+	if (fileHandle != INVALID_HANDLE_VALUE) {
+		LARGE_INTEGER fileSize = {0};
+
+		if (GetFileSizeEx(fileHandle, &fileSize)) {
+			u32 fileSize32bit = fileSize.QuadPart;
+			u32 numBytesRead = 0;
+
+			if (ReadFile(fileHandle, buffer, fileSize32bit, &numBytesRead,
+						NULL) && numBytesRead == fileSize32bit) {
+				return buffer;
+			} else {
+				// TODO: Error handling, read failed
+			}
+		} else {
+			// TODO: Error handling, get file size failed
+		}
+	} else {
+		// TODO: Error handling, file handle could not be created
+	}
+	return NULL;
+}
+
 int main(int argc, char* argv[]) {
 	SDL_Init(SDL_INIT_VIDEO);
 
@@ -136,8 +217,8 @@ int main(int argc, char* argv[]) {
 	                                   sizeof(u32));
 	assert(screen.backBuffer);
 
-	u32 glyphWidth = 30;
-	u32 glyphHeight = 50;
+	u32 glyphWidth = 18;
+	u32 glyphHeight = 18;
 
 	textCaret caret = {0};
 	caret.dimensions.w = glyphWidth/2;
@@ -170,50 +251,21 @@ int main(int argc, char* argv[]) {
 	                                           screen.width, screen.height);
 	assert(screenTex);
 
-	HANDLE fileHandle =
-		CreateFile("../content/test.bmp", // lpFileName
-		           GENERIC_READ,           // dwDesiredAccess
-		           0,                      // dwShareMode
-		           NULL,                   // lpSecurityAttributes,
-		           OPEN_EXISTING,          // dwCreationDisposition,
-		           FILE_ATTRIBUTE_NORMAL,  // dwFlagsAndAttributes,
-		           NULL                    // hTemplateFile
-		           );
+	char *filePath = "../content/cla_font.bmp";
+	u32 *bmpFile = loadBmpFile(filePath, programMemory);
+	u32 *bmpScanner = bmpFile;
 
 	bmpFileHeader fileHeader = {0};
 	bmpBitmapHeader fileBitmapHeader = {0};
 	bmpBitfieldMasks fileBitfieldMasks = {0};
-	u32 *bmpScanner = programMemory;
-	
-	if (fileHandle != INVALID_HANDLE_VALUE) {
-		LARGE_INTEGER fileSize = {0};
 
-		if (GetFileSizeEx(fileHandle, &fileSize)) {
-			u32 fileSize32bit = fileSize.QuadPart;
-			u32 numBytesRead = 0;
+	fileHeader = *((bmpFileHeader *) bmpScanner)++;
+	// NOTE: If bmpBitmapHeader.size is 40 then we have a BMP v3.x
+	// http://www.fileformat.info/format/bmp/egff.htm
+	fileBitmapHeader = *((bmpBitmapHeader *) bmpScanner)++;
+	fileBitfieldMasks = *((bmpBitfieldMasks *) bmpScanner);
 
-			if (ReadFile(fileHandle, programMemory, fileSize32bit, &numBytesRead,
-						NULL) && numBytesRead == fileSize32bit) {
-
-				fileHeader = *((bmpFileHeader *) bmpScanner)++;
-				// NOTE: If bmpBitmapHeader.size is 40 then we have a BMP v3.x
-				// http://www.fileformat.info/format/bmp/egff.htm
-				fileBitmapHeader = *((bmpBitmapHeader *) bmpScanner)++;
-				fileBitfieldMasks = *((bmpBitfieldMasks *) bmpScanner);
-
-			} else {
-				// TODO: Error handling, read failed
-			}
-		} else {
-			// TODO: Error handling, get file size failed
-		}
-	} else {
-		// TODO: Error handling, file handle could not be created
-	}
-
-	
 	b32 globalRunning = TRUE;
-
 
 	u32 pixelColor =  SDL_MapRGB(format, 0, 0, 255);
 	DrawRectangle(caret.dimensions, pixelColor, &screen);
@@ -228,35 +280,6 @@ int main(int argc, char* argv[]) {
 		// Clear screen
 		memset(screen.backBuffer, 0,
 		       screen.width * screen.height * sizeof(u32));
-
-		bmpScanner = programMemory;
-		(u8 *) bmpScanner += (u8) fileHeader.bitmapOffset;
-		for (int y = fileBitmapHeader.height; y >= 0; y--) {
-			for (int x = 0; x < fileBitmapHeader.width; x++) {
-				// NOTE: BMP is stored from left to right, bottom to top
-				//       BB GG RR | 24 bits per pixel
-
-				// TODO: Determine the bit-shift amount to create a mask at
-				// runtime. Only applicable for 16bit/32bit BMPS
-				//u8 red = (*bmpScanner & fileBitfieldMasks.redMask) >> 24;
-				//u8 green = (*bmpScanner & fileBitfieldMasks.greenMask) >> 16;
-				//u8 blue = (*bmpScanner & fileBitfieldMasks.blueMask) >> 8;
-				//((u8 *) bmpScanner) += 3;
-
-				u8 blue = *((u8 *) bmpScanner)++;
-				u8 green = *((u8 *) bmpScanner)++;
-				u8 red = *((u8 *) bmpScanner)++;
-
-				u32 pixelColor = SDL_MapRGB(format, red, green, blue);
-				screen.backBuffer[(y * screen.width) + x] = pixelColor;
-			}
-
-			// NOTE: BMPs may have padding for each scan-line to ensure a 4 byte
-			// boundary.
-			if (fileBitmapHeader.width % 4 != 0) {
-				((u8 *)bmpScanner) += (fileBitmapHeader.width % 4);
-			}
-		}
 
 		SDL_Event event;
 		while (SDL_PollEvent(&event)) {
@@ -348,7 +371,6 @@ int main(int argc, char* argv[]) {
 		caret.dimensions.y = caret.colY * glyphHeight;
 
 		// Draw grid line
-		/*
 		u32 lineThickness = 1;
 		u32 gridColour =  SDL_MapRGB(format, 0, 255, 0);
 		for (int x = 0; x < textBuffer.columns+1; x++) {
@@ -362,8 +384,22 @@ int main(int argc, char* argv[]) {
 			                         screen.width, lineThickness};
 			DrawRectangle(horizontalLine, gridColour, &screen);
 		}
-		*/
 
+		// BMP drawing
+		rect_t srcBmpRect = {0};
+		srcBmpRect.x = 18;
+		srcBmpRect.y = 0;
+		// NOTE: glyph on bmp is 18x18
+		srcBmpRect.w = 18;
+		srcBmpRect.h = 18;
+
+		rect_t destBmpRect = {0};
+		destBmpRect.x = caret.dimensions.x;
+		destBmpRect.y = caret.dimensions.y;
+		destBmpRect.w = srcBmpRect.w;
+		destBmpRect.h = srcBmpRect.h;
+
+		//drawBitmap(srcBmpRect, destBmpRect, bmpFile, fileHeader, fileBitmapHeader, &screen, format);
 
 		// Draw to screen
 		DrawRectangle(caret.dimensions, 255, &screen);
