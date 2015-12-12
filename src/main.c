@@ -275,6 +275,16 @@ int main(int argc, char* argv[]) {
 	u32 timingTargetMS = (u32) 1000.0f / targetFramesPerSecond;
 	u32 lastUpdateTimeMS = SDL_GetTicks();
 	u32 inputParsingMSCounter = 0;
+
+	// Glyph information
+	u32 firstUpperAlphabetCharX = 1;
+	u32 firstUpperAlphabetCharY = 4;
+	u32 firstLowerAlphabetCharX = 1;
+	u32 firstLowerAlphabetCharY = 6;
+	u32 bmpCharX = 1;
+	u32 bmpCharY = 4;
+	u32 bmpFontGlyphSize = 18;
+
 	while (globalRunning) {
 
 		// Clear screen
@@ -339,6 +349,28 @@ int main(int argc, char* argv[]) {
 				break;
 
 				default:
+					if (code >= 'a' && code <= 'z') {
+						u32 deltaFromInitialChar = code - 'a';
+						bmpCharX = firstUpperAlphabetCharX + deltaFromInitialChar;
+						bmpCharY = firstUpperAlphabetCharY;
+
+						// Check if all the characters are located in one row or
+						// not otherwise we'll need some wrapping logic to move
+						// the bmp character selector down a row
+						u32 numGlyphsPerRow =
+						    fileBitmapHeader.width/bmpFontGlyphSize;
+
+						u32 numAlphabetCharsInRow =
+						    numGlyphsPerRow - firstLowerAlphabetCharX;
+
+						if (numAlphabetCharsInRow < 26) {
+							if (bmpCharX >= 16) {
+								bmpCharY++;
+								bmpCharX = bmpCharX % 16;
+							}
+						}
+						caret.colX++;
+					}
 				break;
 			}
 		}
@@ -387,11 +419,11 @@ int main(int argc, char* argv[]) {
 
 		// BMP drawing
 		rect_t srcBmpRect = {0};
-		srcBmpRect.x = 18;
-		srcBmpRect.y = 0;
+		srcBmpRect.x = bmpFontGlyphSize * bmpCharX;
+		srcBmpRect.y = bmpFontGlyphSize * bmpCharY;
 		// NOTE: glyph on bmp is 18x18
-		srcBmpRect.w = 18;
-		srcBmpRect.h = 18;
+		srcBmpRect.w = bmpFontGlyphSize;
+		srcBmpRect.h = bmpFontGlyphSize;
 
 		rect_t destBmpRect = {0};
 		destBmpRect.x = caret.dimensions.x;
@@ -399,10 +431,10 @@ int main(int argc, char* argv[]) {
 		destBmpRect.w = srcBmpRect.w;
 		destBmpRect.h = srcBmpRect.h;
 
-		//drawBitmap(srcBmpRect, destBmpRect, bmpFile, fileHeader, fileBitmapHeader, &screen, format);
+		drawBitmap(srcBmpRect, destBmpRect, bmpFile, fileHeader, fileBitmapHeader, &screen, format);
 
 		// Draw to screen
-		DrawRectangle(caret.dimensions, 255, &screen);
+		//DrawRectangle(caret.dimensions, 255, &screen);
 
 		SDL_UpdateTexture(screenTex, NULL, screen.backBuffer,
 		                  screen.width*sizeof(u32));
