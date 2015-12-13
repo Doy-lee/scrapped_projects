@@ -14,6 +14,8 @@
 #define internal static
 #define inline __inline
 
+// TODO: Split into platform layer and independant layer
+
 typedef int8_t i8;
 typedef int16_t i16;
 typedef int32_t i32;
@@ -58,13 +60,14 @@ typedef struct {
 } textCaret;
 
 typedef union {
-	SDL_KeyboardEvent keys[5];
+	SDL_KeyboardEvent keys[7];
 	struct {
 		SDL_KeyboardEvent escape;
 		SDL_KeyboardEvent arrowUp;
 		SDL_KeyboardEvent arrowDown;
 		SDL_KeyboardEvent arrowLeft;
 		SDL_KeyboardEvent arrowRight;
+		SDL_KeyboardEvent alphabetKey;
 		SDL_MouseButtonEvent mouse;
 	};
 } input;
@@ -101,6 +104,28 @@ typedef struct bmpBitfieldMasks {
 } bmpBitfieldMasks;
 #pragma pack(pop)
 
+typedef struct {
+	u32 size;
+	u8 *base;
+	u32 used;
+} memoryArena;
+
+internal void initialiseArena(memoryArena *arena, u32 size, u8 *base) {
+	arena->size = size;
+	arena->base = base;
+	arena->used = 0;
+}
+
+#define pushStruct(arena, type) (type *)pushSize(arena, sizeof(type))
+#define pushArray(arena, count, type) (type *)pushSize(arena, (count)*sizeof(type))
+void *pushSize(memoryArena *arena, u32 size) {
+	assert((arena->used + size) <= arena->size);
+	void *result = arena->base + arena->used;
+	arena->used += size;
+
+	return(result);
+}
+
 internal void DrawRectangle (rect_t rect, u32 pixel_color,
                              textScreenData *screen) {
 	assert(screen);
@@ -125,9 +150,9 @@ internal void DrawRectangle (rect_t rect, u32 pixel_color,
 	}
 }
 
+// TODO: Clean up parameters
 internal void drawBitmap(rect_t srcRect, rect_t destRect, u32 *bmpFile, bmpFileHeader fileHeader, bmpBitmapHeader fileBitmapHeader, textScreenData *screen, SDL_PixelFormat *format) {
 
-	// TODO: Use array notation for pointers 
 	(u8 *) bmpFile += (u8) fileHeader.bitmapOffset;
 	u32 bytesPerPixel = fileBitmapHeader.bitsPerPixel / 8;
 
@@ -230,13 +255,15 @@ int main(int argc, char* argv[]) {
 
 	input input = {0};
 
-	// TODO: We don't use this yet!
-	// 1 megabyte
+	// TODO: Maintain some persistent program state?
 	u32 programMemorySize = Megabytes(8);
 	u32 *programMemory = VirtualAlloc(NULL,
 	                                  programMemorySize,
 	                                  MEM_COMMIT | MEM_RESERVE,
 	                                  PAGE_READWRITE);
+	memoryArena programArena;
+	initialiseArena(&programArena, programMemorySize, (u8 *)programMemory);
+
 	// SDL Initialisation
 	SDL_Window *win = SDL_CreateWindow("Text Editor", SDL_WINDOWPOS_UNDEFINED,
 	                                   SDL_WINDOWPOS_UNDEFINED, screen.width,
@@ -252,23 +279,27 @@ int main(int argc, char* argv[]) {
 	assert(screenTex);
 
 	char *filePath = "../content/cla_font.bmp";
+
+	// TODO: Possible buffer overflow check!
 	u32 *bmpFile = loadBmpFile(filePath, programMemory);
 	u32 *bmpScanner = bmpFile;
 
 	bmpFileHeader fileHeader = {0};
 	bmpBitmapHeader fileBitmapHeader = {0};
 	bmpBitfieldMasks fileBitfieldMasks = {0};
-
 	fileHeader = *((bmpFileHeader *) bmpScanner)++;
 	// NOTE: If bmpBitmapHeader.size is 40 then we have a BMP v3.x
 	// http://www.fileformat.info/format/bmp/egff.htm
 	fileBitmapHeader = *((bmpBitmapHeader *) bmpScanner)++;
 	fileBitfieldMasks = *((bmpBitfieldMasks *) bmpScanner);
 
+	// Update arena manually because size of BMP is determined post file load
+	u32 *temp = pushSize(&programArena, fileHeader.fileSize);
+
 	b32 globalRunning = TRUE;
 
 	u32 pixelColor =  SDL_MapRGB(format, 0, 0, 255);
-	DrawRectangle(caret.dimensions, pixelColor, &screen);
+	//DrawRectangle(caret.dimensions, pixelColor, &screen);
 
 	// 1000ms in 1s. To target 120 fps we need to display a frame every 8.3ms
 	u32 targetFramesPerSecond = 120;
@@ -350,28 +381,36 @@ int main(int argc, char* argv[]) {
 
 				default:
 					if (code >= 'a' && code <= 'z') {
-						u32 deltaFromInitialChar = code - 'a';
-						bmpCharX = firstUpperAlphabetCharX + deltaFromInitialChar;
-						bmpCharY = firstUpperAlphabetCharY;
-
-						// Check if all the characters are located in one row or
-						// not otherwise we'll need some wrapping logic to move
-						// the bmp character selector down a row
-						u32 numGlyphsPerRow =
-						    fileBitmapHeader.width/bmpFontGlyphSize;
-
-						u32 numAlphabetCharsInRow =
-						    numGlyphsPerRow - firstLowerAlphabetCharX;
-
-						if (numAlphabetCharsInRow < 26) {
-							if (bmpCharX >= 16) {
-								bmpCharY++;
-								bmpCharX = bmpCharX % 16;
-							}
+						input.alphabetKey = event.key;
+						if (input.alphabetKey.type == SDL_KEYDOWN) {
+							caret.colX += 1;
 						}
-						caret.colX++;
 					}
 				break;
+			}
+		}
+
+		// TODO: Input has lag
+		if (input.alphabetKey.type == SDL_KEYDOWN) {
+			u32 deltaFromInitialChar = input.alphabetKey.keysym.sym - 'a';
+
+			bmpCharX = firstUpperAlphabetCharX + deltaFromInitialChar;
+			bmpCharY = firstUpperAlphabetCharY;
+
+			// Check if all the characters are located in one row or
+			// not otherwise we'll need some wrapping logic to move
+			// the bmp character selector down a row
+			u32 numGlyphsPerRow =
+				fileBitmapHeader.width/bmpFontGlyphSize;
+
+			u32 numAlphabetCharsInRow =
+				numGlyphsPerRow - firstLowerAlphabetCharX;
+
+			if (numAlphabetCharsInRow < 26) {
+				if (bmpCharX >= 16) {
+					bmpCharY++;
+					bmpCharX = bmpCharX % 16;
+				}
 			}
 		}
 
