@@ -379,6 +379,7 @@ int main(int argc, char* argv[]) {
 				break;
 			}
 
+			// TODO: Do we really care about mouse/key up at this point?
 			// Early exit by ignoring events we don't care about
 			if (event.type != SDL_KEYDOWN &&
 			    event.type != SDL_KEYUP &&
@@ -429,9 +430,21 @@ int main(int argc, char* argv[]) {
 					}
 				break;
 
+				case SDLK_BACKSPACE:
+					if (event.key.type == SDL_KEYDOWN) {
+						caret->pos.x--;
+						if (caret->pos.x < 0) {
+							caret->pos.x = 0;
+						}
+						state->textBuffer[(u32)caret->pos.x + ((u32)caret->pos.y * state->columns)] = 0;
+					}
+				break;
+
 				case SDLK_SPACE:
-					//state->textBuffer[caret->pos.x + (caret->pos.y * state->columns)] = SDLK_SPACE;
-					//caret->pos.x++;
+					if (event.key.type == SDL_KEYDOWN) {
+						state->textBuffer[(u32)caret->pos.x + ((u32)caret->pos.y * state->columns)] = SDLK_SPACE;
+						caret->pos.x++;
+					}
 				break;
 
 				default:
@@ -492,14 +505,6 @@ int main(int argc, char* argv[]) {
 			caret->pos.y = lastCharPos.y;
 		}
 
-		//if (caret->pos.x > lastCharPos.x) {
-		//	caret->pos.x = 0;
-		//	caret->pos.y++;
-		//} else if (caret->pos.x >= lastCharPos.x && caret->pos.y >= lastCharPos.y) {
-		//	caret->pos.x = lastCharPos.x;
-		//	caret->pos.y = lastCharPos.y;
-		//}
-
 		// Map screen columns/rows to pixels on screen
 		caret->rect.pos.x = caret->pos.x * rasterFont.size.w;
 		caret->rect.pos.y = caret->pos.y * rasterFont.size.h;
@@ -553,8 +558,8 @@ int main(int argc, char* argv[]) {
 				destBmpRect.pos = mulV2(textBufferPos, rasterFont.size);
 				destBmpRect.size = srcBmpRect.size;
 				drawBitmap(srcBmpRect, destBmpRect, bmpFile, fileHeader, fileBitmapHeader, screen, format);
-				textBufferPos.x++;
 			}
+			textBufferPos.x++;
 		}
 
 		// Draw screen caret
