@@ -31,11 +31,42 @@ typedef float r32;
 typedef double r64;
 
 typedef struct {
-	int x;
-	int y;
-	int w;
-	int h;
+	union {
+		r32 x;
+		r32 w;
+	};
+	union {
+		r32 y;
+		r32 h;
+	};
+} v2;
+
+typedef struct {
+	v2 pos;
+	v2 size;
 } Rect;
+
+
+inline internal v2 addV2(v2 a, v2 b) {
+	v2 result;
+	result.x = a.x + b.x;
+	result.y = a.y + b.y;
+	return result;
+}
+
+inline internal v2 subV2(v2 a, v2 b) {
+	v2 result;
+	result.x = a.x - b.x;
+	result.y = a.y - b.y;
+	return result;
+}
+
+inline internal v2 mulV2(v2 a, v2 b) {
+	v2 result;
+	result.x = a.x * b.x;
+	result.y = a.y * b.y;
+	return result;
+}
 
 typedef struct {
 	void *contents;
@@ -44,15 +75,13 @@ typedef struct {
 
 typedef struct {
 	u32 *backBuffer;
-	u32 width;
-	u32 height;
+	v2 size;
 	u32 bytesPerPixel;
 } ScreenData;
 
 typedef struct {
-	Rect dimensions;
-	i32 colX;
-	i32 colY;
+	Rect rect;
+	v2 pos;
 } TextCaret;
 
 typedef union {
@@ -69,12 +98,9 @@ typedef union {
 } Input;
 
 typedef struct {
-	u32 firstUpperAlphaCharX;
-	u32 firstUpperAlphaCharY;
-	u32 firstLowerAlphaCharX;
-	u32 firstLowerAlphaCharY;
-	u32 glyphSizeH;
-	u32 glyphSizeW;
+	v2 firstUpperAlphaChar;
+	v2 firstLowerAlphaChar;
+	v2 size;
 } RasterFontData;
 
 typedef struct {
@@ -87,6 +113,10 @@ typedef struct {
 	ScreenData *screen;
 	MemoryArena arena;
 	Input input;
+
+	char *textBuffer;
+	u32 textBufferPos;
+	u32 textBufferSize;
 
 	TextCaret caret;
 	u32 columns;
@@ -150,21 +180,21 @@ internal void DrawRectangle (Rect rect, u32 pixel_color,
                              ScreenData *screen) {
 	assert(screen);
 
-	if (rect.x < 0) {
-		rect.x = 0;
-	} else if (rect.x > screen->width) {
-		rect.x = screen->width;
+	if (rect.pos.x < 0) {
+		rect.pos.x = 0;
+	} else if (rect.pos.x > screen->size.w) {
+		rect.pos.x = screen->size.w;
 	}
 
-	if (rect.y < 0) {
-		rect.y = 0;
-	} else if (rect.y > screen->height) {
-		rect.y = screen->height;
+	if (rect.pos.y < 0) {
+		rect.pos.y = 0;
+	} else if (rect.pos.y > screen->size.h) {
+		rect.pos.y = screen->size.h;
 	}
 
-	for (int x = 0; x < rect.w; x++) {
-		for (int y = 0; y < rect.h; y++) {
-			screen->backBuffer[(y + rect.y)*screen->width + x + rect.x]
+	for (u32 x = 0; x < rect.size.w; x++) {
+		for (u32 y = 0; y < rect.size.h; y++) {
+			screen->backBuffer[(y + (u32)rect.pos.y)*(u32)screen->size.w + x + (u32)rect.pos.x]
 				= pixel_color;
 		}
 	}
@@ -181,8 +211,8 @@ internal void drawBitmap(Rect srcRect, Rect destRect, u32 *bmpFile, BmpFileHeade
 	// 4 byte boundary padding for each scan line
 	numBytesInScanLine += (fileBitmapHeader.width % 4);
 
-	for (int y = srcRect.h; y >= 0; y--) {
-		for (int x = 0; x < srcRect.w; x++) {
+	for (int y = srcRect.size.h; y >= 0; y--) {
+		for (int x = 0; x < srcRect.size.w; x++) {
 			// NOTE: BMP is stored from left to right, bottom to top
 			//       BB GG RR | 24 bits per pixel
 
@@ -195,9 +225,9 @@ internal void drawBitmap(Rect srcRect, Rect destRect, u32 *bmpFile, BmpFileHeade
 			// Find the position in BMP data where our source rect begins
 			// As BMP stores bottom to top and rects are supplied in top-bottom
 			// we need to convert from one coordinate system to another
-			u32 yRectToBMP = ((fileBitmapHeader.height - srcRect.y - y) *
+			u32 yRectToBMP = ((fileBitmapHeader.height - srcRect.pos.y - y) *
 			            numBytesInScanLine);
-			u32 xRectToBMP = (srcRect.x + x) * bytesPerPixel;
+			u32 xRectToBMP = (srcRect.pos.x + x) * bytesPerPixel;
 
 			u32 pos = yRectToBMP + xRectToBMP;
 
@@ -212,8 +242,8 @@ internal void drawBitmap(Rect srcRect, Rect destRect, u32 *bmpFile, BmpFileHeade
 			}
 
 			// TODO: Transparency! Alpha blending!
-			u32 pixelColor = SDL_MapRGB(format, red, green, blue);
-			screen->backBuffer[((y + destRect.y)*screen->width) + (x + destRect.x)] = pixelColor;
+			u32 pixelColor = SDL_MapRGBA(format, red, green, blue, 255);
+			screen->backBuffer[((y + (u32)destRect.pos.y)*(u32)screen->size.w) + (x + (u32)destRect.pos.x)] = pixelColor;
 		}
 	}
 }
@@ -283,53 +313,53 @@ int main(int argc, char* argv[]) {
 	fileBitfieldMasks = *((BmpBitfieldMasks *) bmpScanner);
 
 	// Update arena manually because size of BMP is determined post file load
-	u32 *temp = pushSize(&state->arena, fileHeader.fileSize);
+	pushSize(&state->arena, fileHeader.fileSize);
 
 	RasterFontData rasterFont = {0};
-	rasterFont.firstUpperAlphaCharX = 1;
-	rasterFont.firstUpperAlphaCharY = 4;
-	rasterFont.firstLowerAlphaCharX = 1;
-	rasterFont.firstLowerAlphaCharY = 6;
-	rasterFont.glyphSizeH = 18;
-	rasterFont.glyphSizeW = 18;
+	rasterFont.firstUpperAlphaChar = (v2) {1, 4};
+	rasterFont.firstLowerAlphaChar = (v2) {1, 6};
+	rasterFont.size = (v2) {18, 18};
 
 	// Initialise screen
 	state->screen = pushStruct(&state->arena, ScreenData);
 	ScreenData *screen = state->screen;
-	screen->width = 1000;
-	screen->height = 750;
+	screen->size = (v2) {1000, 750};
 	screen->bytesPerPixel = 4;
 	// Allocate size for screen backbuffer
 	screen->backBuffer =
 		pushSize(&state->arena,
-				 screen->width * screen->height * screen->bytesPerPixel);
+				 screen->size.w * screen->size.h * screen->bytesPerPixel);
 
-	state->columns = (screen->width/rasterFont.glyphSizeW) - 1;
-	state->rows = (screen->height/rasterFont.glyphSizeH) - 1;
+	state->columns = (screen->size.w/rasterFont.size.w);
+	state->rows = (screen->size.h/rasterFont.size.h);
 
 	// Initialise caret
 	TextCaret *caret = &state->caret;
-	caret->dimensions.w = rasterFont.glyphSizeW/2;
-	caret->dimensions.h = rasterFont.glyphSizeH;
+	caret->rect.size.w = rasterFont.size.w/2;
+	caret->rect.size.h = rasterFont.size.h;
 	Input input = {0};
+
+	// Use remaining space for text buffer
+	state->textBufferSize = state->arena.size - state->arena.used;
+	state->textBuffer = pushSize(&state->arena, state->textBufferSize);
 
 	b32 globalRunning = TRUE;
 
 	// SDL Initialisation
 	SDL_Window *win = SDL_CreateWindow("Text Editor", SDL_WINDOWPOS_UNDEFINED,
-	                                   SDL_WINDOWPOS_UNDEFINED, screen->width,
-	                                   screen->height, 0);
+	                                   SDL_WINDOWPOS_UNDEFINED, screen->size.w,
+	                                   screen->size.h, 0);
 	assert(win);
 	SDL_Renderer *renderer = SDL_CreateRenderer(win, 0, SDL_RENDERER_SOFTWARE);
 	assert(renderer);
 
-	SDL_PixelFormat *format = SDL_AllocFormat(SDL_PIXELFORMAT_RGB888);
+	SDL_PixelFormat *format = SDL_AllocFormat(SDL_PIXELFORMAT_RGBA8888);
 	SDL_Texture *screenTex = SDL_CreateTexture(renderer, format->format,
 	                                           SDL_TEXTUREACCESS_STREAMING,
-	                                           screen->width, screen->height);
+	                                           screen->size.w, screen->size.h);
 	assert(screenTex);
 
-	u32 pixelColor =  SDL_MapRGB(format, 0, 0, 255);
+	u32 pixelColor =  SDL_MapRGBA(format, 0, 0, 255, 255);
 	// 1000ms in 1s. To target 120 fps we need to display a frame every 8.3ms
 	u32 targetFramesPerSecond = 120;
 	u32 timingTargetMS = (u32) 1000.0f / targetFramesPerSecond;
@@ -340,7 +370,7 @@ int main(int argc, char* argv[]) {
 
 		// Clear screen
 		memset(screen->backBuffer, 0,
-		       screen->width * screen->height * screen->bytesPerPixel);
+		       screen->size.w * screen->size.h * screen->bytesPerPixel);
 
 		SDL_Event event;
 		while (SDL_PollEvent(&event)) {
@@ -359,8 +389,8 @@ int main(int argc, char* argv[]) {
 
 			if (event.type == SDL_MOUSEBUTTONDOWN) {
 				input.mouse = event.button;
-				caret->colX = (input.mouse.x / rasterFont.glyphSizeW);
-				caret->colY = (input.mouse.y / rasterFont.glyphSizeH);
+				caret->pos.x = (u32)(input.mouse.x / rasterFont.size.w);
+				caret->pos.y = (u32)(input.mouse.y / rasterFont.size.h);
 			}
 
 			// Extract key state
@@ -374,133 +404,181 @@ int main(int argc, char* argv[]) {
 				case SDLK_UP:
 					input.arrowUp = event.key;
 					if (input.arrowUp.type == SDL_KEYDOWN) {
-						caret->colY -= 1;
+						caret->pos.y -= 1;
 					}
 				break;
 
 				case SDLK_DOWN:
 					input.arrowDown = event.key;
 					if (input.arrowDown.type == SDL_KEYDOWN) {
-						caret->colY += 1;
+						caret->pos.y += 1;
 					}
 				break;
 				
 				case SDLK_LEFT:
 					input.arrowLeft = event.key;
 					if (input.arrowLeft.type == SDL_KEYDOWN) {
-						caret->colX -= 1;
+						caret->pos.x -= 1;
 					}
 				break;
 
 				case SDLK_RIGHT:
 					input.arrowRight = event.key;
 					if (input.arrowRight.type == SDL_KEYDOWN) {
-						caret->colX += 1;
+						caret->pos.x += 1;
 					}
 				break;
 
+				case SDLK_SPACE:
+					//state->textBuffer[caret->pos.x + (caret->pos.y * state->columns)] = SDLK_SPACE;
+					//caret->pos.x++;
+				break;
+
 				default:
+					printf("Key code: %d\n", input.alphabetKey.keysym.sym);
 					if (code >= 'a' && code <= 'z') {
 						input.alphabetKey = event.key;
 						if (input.alphabetKey.type == SDL_KEYDOWN) {
-							caret->colX += 1;
+							state->textBuffer[(u32)caret->pos.x + ((u32)caret->pos.y * state->columns)] = input.alphabetKey.keysym.sym;
+							caret->pos.x += 1;
 						}
 					}
 				break;
 			}
 		}
 
-		// Bounds checking for caret
-		if (caret->colX < 0) {
-			if (caret->colY == 0) {
-				caret->colX = 0;
-			} else {
-				caret->colX = state->columns;
+		u32 lastCharInBuffer = 0;
+		for (int i = 0; i < state->textBufferSize; i++) {
+			if (state->textBuffer[i] == 0) {
+				lastCharInBuffer = i;
+				break;
 			}
-			caret->colY--;
-		} else if (caret->colX >= state->columns &&
-		           caret->colY >= state->rows) {
-			caret->colX = state->columns;
-			caret->colY = state->rows;
-		} else if (caret->colX > state->columns) {
-			caret->colX = 0;
-			caret->colY++;
 		}
 
-		if (caret->colY < 0) {
-			caret->colY = 0;
-		} else if (caret->colY > state->rows) {
-			caret->colY = state->rows;
+		// Prevent the caret from going past the last text char
+		// Convert last char in displayable buffer to onscreen x,y coords.
+		v2 lastCharPos = {0};
+		if (lastCharInBuffer >= state->columns) {
+			lastCharPos.x = lastCharInBuffer % state->columns;
+			lastCharPos.y = lastCharInBuffer / state->columns;
+			if (lastCharPos.x >= state->rows) {
+				lastCharPos.y = state->rows;
+			}
+		} else {
+			lastCharPos.x = lastCharInBuffer;
 		}
+
+		// Bounds checking for caret
+		if (caret->pos.x < 0) {
+			if (caret->pos.y == 0) {
+				caret->pos.x = 0;
+			} else {
+				caret->pos.x = state->columns;
+			}
+			caret->pos.y--;
+		} else if (caret->pos.x >= lastCharPos.x &&
+		           caret->pos.y >= lastCharPos.y) {
+			caret->pos.x = lastCharPos.x;
+			caret->pos.y = lastCharPos.y;
+		} else if (caret->pos.x > state->columns) {
+			caret->pos.x = 0;
+			caret->pos.y++;
+		}
+
+		if (caret->pos.y < 0) {
+			caret->pos.y = 0;
+		} else if (caret->pos.y > lastCharPos.y) {
+			caret->pos.x = lastCharPos.x;
+			caret->pos.y = lastCharPos.y;
+		}
+
+		//if (caret->pos.x > lastCharPos.x) {
+		//	caret->pos.x = 0;
+		//	caret->pos.y++;
+		//} else if (caret->pos.x >= lastCharPos.x && caret->pos.y >= lastCharPos.y) {
+		//	caret->pos.x = lastCharPos.x;
+		//	caret->pos.y = lastCharPos.y;
+		//}
 
 		// Map screen columns/rows to pixels on screen
-		caret->dimensions.x = caret->colX * rasterFont.glyphSizeW;
-		caret->dimensions.y = caret->colY * rasterFont.glyphSizeH;
+		caret->rect.pos.x = caret->pos.x * rasterFont.size.w;
+		caret->rect.pos.y = caret->pos.y * rasterFont.size.h;
 
 		// TODO: Input has lag
-		if (input.alphabetKey.type == SDL_KEYDOWN) {
-			u32 deltaFromInitialChar = input.alphabetKey.keysym.sym - 'a';
+		v2 textBufferPos = {0};
+		for (int i = 0; i < state->textBufferSize; i++) {
+			u32 textChar = state->textBuffer[i];
+			if (textChar >= 'a' && textChar <= 'z') {
+				u32 deltaFromInitialChar = textChar - 'a';
 
-			// Font Image -> Character selector
-			u32 fontCharX =
-			    rasterFont.firstUpperAlphaCharX + deltaFromInitialChar;
-			u32 fontCharY =
-			    rasterFont.firstUpperAlphaCharY;
+				// Font Image -> Character selector
+				v2 fontChar = rasterFont.firstUpperAlphaChar;
+				fontChar.x += deltaFromInitialChar;
 
-			// Check if all the characters are located in one row or
-			// not otherwise we'll need some wrapping logic to move
-			// the bmp character selector down a row
-			u32 numGlyphsPerRow =
-				fileBitmapHeader.width/rasterFont.glyphSizeW;
+				// Check if all the characters are located in one row or
+				// not otherwise we'll need some wrapping logic to move
+				// the bmp character selector down a row
+				u32 numGlyphsPerRow =
+					fileBitmapHeader.width/rasterFont.size.w;
 
-			u32 numAlphaCharsInRow =
-				numGlyphsPerRow - rasterFont.firstLowerAlphaCharX;
+				u32 numAlphaCharsInRow =
+					numGlyphsPerRow - rasterFont.firstLowerAlphaChar.x;
 
-			if (numAlphaCharsInRow < 26) {
-				if (fontCharX >= 16) {
-					fontCharY++;
-					fontCharX = fontCharX % 16;
+				if (numAlphaCharsInRow < 26) {
+					if (fontChar.x >= 16) {
+						fontChar.y++;
+						fontChar.x = (u32)fontChar.x % 16;
+					}
 				}
+
+				// BMP drawing
+				Rect srcBmpRect = {0};
+				srcBmpRect.pos = mulV2(rasterFont.size, fontChar);
+				srcBmpRect.size = rasterFont.size;
+
+				if (textBufferPos.x >= state->columns &&
+					textBufferPos.y >= state->rows) {
+					// Stop printing out chars, can't display anymore in buffer
+					break;
+				} else if (textBufferPos.x >= state->columns) {
+					textBufferPos.x = 0;
+					textBufferPos.y++;
+				}
+
+				if (textBufferPos.y > state->rows) {
+					break;
+				}
+
+				Rect destBmpRect = {0};
+				destBmpRect.pos = mulV2(textBufferPos, rasterFont.size);
+				destBmpRect.size = srcBmpRect.size;
+				drawBitmap(srcBmpRect, destBmpRect, bmpFile, fileHeader, fileBitmapHeader, screen, format);
+				textBufferPos.x++;
 			}
-
-			// BMP drawing
-			Rect srcBmpRect = {0};
-			srcBmpRect.x = rasterFont.glyphSizeW * fontCharX;
-			srcBmpRect.y = rasterFont.glyphSizeH * fontCharY;
-			// NOTE: glyph on bmp is 18x18
-			srcBmpRect.w = rasterFont.glyphSizeW;
-			srcBmpRect.h = rasterFont.glyphSizeH;
-
-			Rect destBmpRect = {0};
-			destBmpRect.x = caret->dimensions.x;
-			destBmpRect.y = caret->dimensions.y;
-			destBmpRect.w = srcBmpRect.w;
-			destBmpRect.h = srcBmpRect.h;
-
-			drawBitmap(srcBmpRect, destBmpRect, bmpFile, fileHeader, fileBitmapHeader, screen, format);
-		} else {
-			// Draw screen caret
-			DrawRectangle(caret->dimensions, 255, screen);
 		}
+
+		// Draw screen caret
+		u32 caretColor = SDL_MapRGBA(format, 255, 0, 0, 255);
+		DrawRectangle(caret->rect, caretColor, screen);
 
 		// Draw grid line
 		u32 lineThickness = 1;
-		u32 gridColour =  SDL_MapRGB(format, 0, 255, 0);
+		u32 gridColour =  SDL_MapRGBA(format, 0, 255, 0, 255);
 		for (int x = 0; x < state->columns+1; x++) {
-			Rect verticalLine = {x * rasterFont.glyphSizeW, 0, lineThickness,
-			                     screen->height};
+			Rect verticalLine = {x * rasterFont.size.w, 0, lineThickness,
+			                     screen->size.h};
 			DrawRectangle(verticalLine, gridColour, screen);
 		}
 
 		for (int y = 0; y < state->rows+1; y++) {
-			Rect horizontalLine = {0, y * rasterFont.glyphSizeH,
-			                       screen->width, lineThickness};
+			Rect horizontalLine = {0, y * rasterFont.size.h,
+			                       screen->size.w, lineThickness};
 			DrawRectangle(horizontalLine, gridColour, screen);
 		}
 
 
 		SDL_UpdateTexture(screenTex, NULL, screen->backBuffer,
-		                  screen->width*sizeof(u32));
+		                  screen->size.w*sizeof(u32));
 		SDL_RenderClear(renderer);
 		SDL_RenderCopy(renderer, screenTex, NULL, NULL);
 
