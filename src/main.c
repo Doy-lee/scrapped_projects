@@ -35,29 +35,25 @@ typedef struct {
 	int y;
 	int w;
 	int h;
-} rect_t;
+} Rect;
 
 typedef struct {
 	void *contents;
 	u32 size;
-} file_read_result;
+} FileReadResult;
 
 typedef struct {
 	u32 *backBuffer;
 	u32 width;
 	u32 height;
-} textScreenData;
+	u32 bytesPerPixel;
+} ScreenData;
 
 typedef struct {
-	u32 columns;
-	u32 rows;
-} textBuffer;
-
-typedef struct {
-	rect_t dimensions;
+	Rect dimensions;
 	i32 colX;
 	i32 colY;
-} textCaret;
+} TextCaret;
 
 typedef union {
 	SDL_KeyboardEvent keys[7];
@@ -70,18 +66,48 @@ typedef union {
 		SDL_KeyboardEvent alphabetKey;
 		SDL_MouseButtonEvent mouse;
 	};
-} input;
+} Input;
 
+typedef struct {
+	u32 firstUpperAlphaCharX;
+	u32 firstUpperAlphaCharY;
+	u32 firstLowerAlphaCharX;
+	u32 firstLowerAlphaCharY;
+	u32 glyphSizeH;
+	u32 glyphSizeW;
+} RasterFontData;
+
+typedef struct {
+	u32 size;
+	u8 *base;
+	u32 used;
+} MemoryArena;
+
+typedef struct {
+	ScreenData *screen;
+	MemoryArena arena;
+	Input input;
+
+	TextCaret caret;
+	u32 columns;
+	u32 rows;
+} ProgramState;
+
+typedef struct {
+	void *block;
+	u32 size;
+	b32 initialised;
+} ProgramMemory;
 
 #pragma pack(push)
 #pragma pack(2)
-typedef struct bmpFileHeader {
+typedef struct {
 	u16 fileType;     /* File type, always 4D42h ("BM") */
 	u32 fileSize;     /* Size of the file in bytes */
 	u16 reserved1;    /* Always 0 */
 	u16 reserved2;    /* Always 0 */
 	u32 bitmapOffset; /* Starting position of image data in bytes */
-} bmpFileHeader;
+} BmpFileHeader;
 
 typedef struct bmpBitmapHeader {
 	u32 size;            /* Size of this header in bytes */
@@ -95,22 +121,16 @@ typedef struct bmpBitmapHeader {
 	i32 vertResolution;  /* Vertical resolution in pixels per meter */
 	u16 colorsUsed;      /* Number of colors in the image */
 	u32 colorsImportant; /* Minimum number of important colors */
-} bmpBitmapHeader;
+} BmpBitmapHeader;
 
 typedef struct bmpBitfieldMasks {
 	u32 redMask;         /* Mask identifying bits of red component */
 	u32 greenMask;       /* Mask identifying bits of green component */
 	u32 blueMask;        /* Mask identifying bits of blue component */
-} bmpBitfieldMasks;
+} BmpBitfieldMasks;
 #pragma pack(pop)
 
-typedef struct {
-	u32 size;
-	u8 *base;
-	u32 used;
-} memoryArena;
-
-internal void initialiseArena(memoryArena *arena, u32 size, u8 *base) {
+internal void initialiseArena(MemoryArena *arena, u32 size, u8 *base) {
 	arena->size = size;
 	arena->base = base;
 	arena->used = 0;
@@ -118,7 +138,7 @@ internal void initialiseArena(memoryArena *arena, u32 size, u8 *base) {
 
 #define pushStruct(arena, type) (type *)pushSize(arena, sizeof(type))
 #define pushArray(arena, count, type) (type *)pushSize(arena, (count)*sizeof(type))
-void *pushSize(memoryArena *arena, u32 size) {
+void *pushSize(MemoryArena *arena, u32 size) {
 	assert((arena->used + size) <= arena->size);
 	void *result = arena->base + arena->used;
 	arena->used += size;
@@ -126,8 +146,8 @@ void *pushSize(memoryArena *arena, u32 size) {
 	return(result);
 }
 
-internal void DrawRectangle (rect_t rect, u32 pixel_color,
-                             textScreenData *screen) {
+internal void DrawRectangle (Rect rect, u32 pixel_color,
+                             ScreenData *screen) {
 	assert(screen);
 
 	if (rect.x < 0) {
@@ -151,7 +171,7 @@ internal void DrawRectangle (rect_t rect, u32 pixel_color,
 }
 
 // TODO: Clean up parameters
-internal void drawBitmap(rect_t srcRect, rect_t destRect, u32 *bmpFile, bmpFileHeader fileHeader, bmpBitmapHeader fileBitmapHeader, textScreenData *screen, SDL_PixelFormat *format) {
+internal void drawBitmap(Rect srcRect, Rect destRect, u32 *bmpFile, BmpFileHeader fileHeader, BmpBitmapHeader fileBitmapHeader, ScreenData *screen, SDL_PixelFormat *format) {
 
 	(u8 *) bmpFile += (u8) fileHeader.bitmapOffset;
 	u32 bytesPerPixel = fileBitmapHeader.bitsPerPixel / 8;
@@ -231,43 +251,74 @@ internal u32 *loadBmpFile(char *filePath, u32 *buffer) {
 	return NULL;
 }
 
+
 int main(int argc, char* argv[]) {
 	SDL_Init(SDL_INIT_VIDEO);
 
 	// Program initialisation
-	textScreenData screen = {0};
-	screen.width = 1000;
-	screen.height = 750;
-	screen.backBuffer = (u32 *) calloc(screen.width * screen.height,
-	                                   sizeof(u32));
-	assert(screen.backBuffer);
+	ProgramMemory memory = {0};
+	memory.size = Megabytes(8);
+	memory.block = VirtualAlloc(NULL,
+	                            memory.size,
+	                            MEM_COMMIT | MEM_RESERVE,
+	                            PAGE_READWRITE);
 
-	u32 glyphWidth = 18;
-	u32 glyphHeight = 18;
+	// Assign program state to designated memory block
+	ProgramState *state = (ProgramState *)memory.block;
+	initialiseArena(&state->arena, memory.size - sizeof(ProgramState),
+	                (u8 *)memory.block + sizeof(ProgramState));
 
-	textCaret caret = {0};
-	caret.dimensions.w = glyphWidth/2;
-	caret.dimensions.h = glyphHeight;
+	// Load BMP
+	char *filePath = "../content/cla_font.bmp";
+	u32 *bmpFile = loadBmpFile(filePath, (u32 *)(state->arena.base + state->arena.used));
+	u32 *bmpScanner = bmpFile;
 
-	textBuffer textBuffer = {0};
-	textBuffer.columns = (screen.width/glyphWidth)- 1;
-	textBuffer.rows = (screen.height/glyphHeight) - 1;
+	BmpFileHeader fileHeader = {0};
+	BmpBitmapHeader fileBitmapHeader = {0};
+	BmpBitfieldMasks fileBitfieldMasks = {0};
+	fileHeader = *((BmpFileHeader *) bmpScanner)++;
+	// NOTE: If bmpBitmapHeader.size is 40 then we have a BMP v3.x
+	// http://www.fileformat.info/format/bmp/egff.htm
+	fileBitmapHeader = *((BmpBitmapHeader *) bmpScanner)++;
+	fileBitfieldMasks = *((BmpBitfieldMasks *) bmpScanner);
 
-	input input = {0};
+	// Update arena manually because size of BMP is determined post file load
+	u32 *temp = pushSize(&state->arena, fileHeader.fileSize);
 
-	// TODO: Maintain some persistent program state?
-	u32 programMemorySize = Megabytes(8);
-	u32 *programMemory = VirtualAlloc(NULL,
-	                                  programMemorySize,
-	                                  MEM_COMMIT | MEM_RESERVE,
-	                                  PAGE_READWRITE);
-	memoryArena programArena;
-	initialiseArena(&programArena, programMemorySize, (u8 *)programMemory);
+	RasterFontData rasterFont = {0};
+	rasterFont.firstUpperAlphaCharX = 1;
+	rasterFont.firstUpperAlphaCharY = 4;
+	rasterFont.firstLowerAlphaCharX = 1;
+	rasterFont.firstLowerAlphaCharY = 6;
+	rasterFont.glyphSizeH = 18;
+	rasterFont.glyphSizeW = 18;
+
+	// Initialise screen
+	state->screen = pushStruct(&state->arena, ScreenData);
+	ScreenData *screen = state->screen;
+	screen->width = 1000;
+	screen->height = 750;
+	screen->bytesPerPixel = 4;
+	// Allocate size for screen backbuffer
+	screen->backBuffer =
+		pushSize(&state->arena,
+				 screen->width * screen->height * screen->bytesPerPixel);
+
+	state->columns = (screen->width/rasterFont.glyphSizeW) - 1;
+	state->rows = (screen->height/rasterFont.glyphSizeH) - 1;
+
+	// Initialise caret
+	TextCaret *caret = &state->caret;
+	caret->dimensions.w = rasterFont.glyphSizeW/2;
+	caret->dimensions.h = rasterFont.glyphSizeH;
+	Input input = {0};
+
+	b32 globalRunning = TRUE;
 
 	// SDL Initialisation
 	SDL_Window *win = SDL_CreateWindow("Text Editor", SDL_WINDOWPOS_UNDEFINED,
-	                                   SDL_WINDOWPOS_UNDEFINED, screen.width,
-	                                   screen.height, 0);
+	                                   SDL_WINDOWPOS_UNDEFINED, screen->width,
+	                                   screen->height, 0);
 	assert(win);
 	SDL_Renderer *renderer = SDL_CreateRenderer(win, 0, SDL_RENDERER_SOFTWARE);
 	assert(renderer);
@@ -275,52 +326,21 @@ int main(int argc, char* argv[]) {
 	SDL_PixelFormat *format = SDL_AllocFormat(SDL_PIXELFORMAT_RGB888);
 	SDL_Texture *screenTex = SDL_CreateTexture(renderer, format->format,
 	                                           SDL_TEXTUREACCESS_STREAMING,
-	                                           screen.width, screen.height);
+	                                           screen->width, screen->height);
 	assert(screenTex);
 
-	char *filePath = "../content/cla_font.bmp";
-
-	// TODO: Possible buffer overflow check!
-	u32 *bmpFile = loadBmpFile(filePath, programMemory);
-	u32 *bmpScanner = bmpFile;
-
-	bmpFileHeader fileHeader = {0};
-	bmpBitmapHeader fileBitmapHeader = {0};
-	bmpBitfieldMasks fileBitfieldMasks = {0};
-	fileHeader = *((bmpFileHeader *) bmpScanner)++;
-	// NOTE: If bmpBitmapHeader.size is 40 then we have a BMP v3.x
-	// http://www.fileformat.info/format/bmp/egff.htm
-	fileBitmapHeader = *((bmpBitmapHeader *) bmpScanner)++;
-	fileBitfieldMasks = *((bmpBitfieldMasks *) bmpScanner);
-
-	// Update arena manually because size of BMP is determined post file load
-	u32 *temp = pushSize(&programArena, fileHeader.fileSize);
-
-	b32 globalRunning = TRUE;
-
 	u32 pixelColor =  SDL_MapRGB(format, 0, 0, 255);
-	//DrawRectangle(caret.dimensions, pixelColor, &screen);
-
 	// 1000ms in 1s. To target 120 fps we need to display a frame every 8.3ms
 	u32 targetFramesPerSecond = 120;
 	u32 timingTargetMS = (u32) 1000.0f / targetFramesPerSecond;
 	u32 lastUpdateTimeMS = SDL_GetTicks();
 	u32 inputParsingMSCounter = 0;
 
-	// Glyph information
-	u32 firstUpperAlphabetCharX = 1;
-	u32 firstUpperAlphabetCharY = 4;
-	u32 firstLowerAlphabetCharX = 1;
-	u32 firstLowerAlphabetCharY = 6;
-	u32 bmpCharX = 1;
-	u32 bmpCharY = 4;
-	u32 bmpFontGlyphSize = 18;
-
 	while (globalRunning) {
 
 		// Clear screen
-		memset(screen.backBuffer, 0,
-		       screen.width * screen.height * sizeof(u32));
+		memset(screen->backBuffer, 0,
+		       screen->width * screen->height * screen->bytesPerPixel);
 
 		SDL_Event event;
 		while (SDL_PollEvent(&event)) {
@@ -339,8 +359,8 @@ int main(int argc, char* argv[]) {
 
 			if (event.type == SDL_MOUSEBUTTONDOWN) {
 				input.mouse = event.button;
-				caret.colX = (input.mouse.x / glyphWidth);
-				caret.colY = (input.mouse.y / glyphHeight);
+				caret->colX = (input.mouse.x / rasterFont.glyphSizeW);
+				caret->colY = (input.mouse.y / rasterFont.glyphSizeH);
 			}
 
 			// Extract key state
@@ -354,28 +374,28 @@ int main(int argc, char* argv[]) {
 				case SDLK_UP:
 					input.arrowUp = event.key;
 					if (input.arrowUp.type == SDL_KEYDOWN) {
-						caret.colY -= 1;
+						caret->colY -= 1;
 					}
 				break;
 
 				case SDLK_DOWN:
 					input.arrowDown = event.key;
 					if (input.arrowDown.type == SDL_KEYDOWN) {
-						caret.colY += 1;
+						caret->colY += 1;
 					}
 				break;
 				
 				case SDLK_LEFT:
 					input.arrowLeft = event.key;
 					if (input.arrowLeft.type == SDL_KEYDOWN) {
-						caret.colX -= 1;
+						caret->colX -= 1;
 					}
 				break;
 
 				case SDLK_RIGHT:
 					input.arrowRight = event.key;
 					if (input.arrowRight.type == SDL_KEYDOWN) {
-						caret.colX += 1;
+						caret->colX += 1;
 					}
 				break;
 
@@ -383,100 +403,104 @@ int main(int argc, char* argv[]) {
 					if (code >= 'a' && code <= 'z') {
 						input.alphabetKey = event.key;
 						if (input.alphabetKey.type == SDL_KEYDOWN) {
-							caret.colX += 1;
+							caret->colX += 1;
 						}
 					}
 				break;
 			}
 		}
 
+		// Bounds checking for caret
+		if (caret->colX < 0) {
+			if (caret->colY == 0) {
+				caret->colX = 0;
+			} else {
+				caret->colX = state->columns;
+			}
+			caret->colY--;
+		} else if (caret->colX >= state->columns &&
+		           caret->colY >= state->rows) {
+			caret->colX = state->columns;
+			caret->colY = state->rows;
+		} else if (caret->colX > state->columns) {
+			caret->colX = 0;
+			caret->colY++;
+		}
+
+		if (caret->colY < 0) {
+			caret->colY = 0;
+		} else if (caret->colY > state->rows) {
+			caret->colY = state->rows;
+		}
+
+		// Map screen columns/rows to pixels on screen
+		caret->dimensions.x = caret->colX * rasterFont.glyphSizeW;
+		caret->dimensions.y = caret->colY * rasterFont.glyphSizeH;
+
 		// TODO: Input has lag
 		if (input.alphabetKey.type == SDL_KEYDOWN) {
 			u32 deltaFromInitialChar = input.alphabetKey.keysym.sym - 'a';
 
-			bmpCharX = firstUpperAlphabetCharX + deltaFromInitialChar;
-			bmpCharY = firstUpperAlphabetCharY;
+			// Font Image -> Character selector
+			u32 fontCharX =
+			    rasterFont.firstUpperAlphaCharX + deltaFromInitialChar;
+			u32 fontCharY =
+			    rasterFont.firstUpperAlphaCharY;
 
 			// Check if all the characters are located in one row or
 			// not otherwise we'll need some wrapping logic to move
 			// the bmp character selector down a row
 			u32 numGlyphsPerRow =
-				fileBitmapHeader.width/bmpFontGlyphSize;
+				fileBitmapHeader.width/rasterFont.glyphSizeW;
 
-			u32 numAlphabetCharsInRow =
-				numGlyphsPerRow - firstLowerAlphabetCharX;
+			u32 numAlphaCharsInRow =
+				numGlyphsPerRow - rasterFont.firstLowerAlphaCharX;
 
-			if (numAlphabetCharsInRow < 26) {
-				if (bmpCharX >= 16) {
-					bmpCharY++;
-					bmpCharX = bmpCharX % 16;
+			if (numAlphaCharsInRow < 26) {
+				if (fontCharX >= 16) {
+					fontCharY++;
+					fontCharX = fontCharX % 16;
 				}
 			}
-		}
 
-		// Bounds checking for caret
-		if (caret.colX < 0) {
-			if (caret.colY == 0) {
-				caret.colX = 0;
-			} else {
-				caret.colX = textBuffer.columns;
-			}
-			caret.colY--;
-		} else if (caret.colX >= textBuffer.columns &&
-		           caret.colY >= textBuffer.rows) {
-			caret.colX = textBuffer.columns;
-			caret.colY = textBuffer.rows;
-		} else if (caret.colX > textBuffer.columns) {
-			caret.colX = 0;
-			caret.colY++;
-		}
+			// BMP drawing
+			Rect srcBmpRect = {0};
+			srcBmpRect.x = rasterFont.glyphSizeW * fontCharX;
+			srcBmpRect.y = rasterFont.glyphSizeH * fontCharY;
+			// NOTE: glyph on bmp is 18x18
+			srcBmpRect.w = rasterFont.glyphSizeW;
+			srcBmpRect.h = rasterFont.glyphSizeH;
 
-		if (caret.colY < 0) {
-			caret.colY = 0;
-		} else if (caret.colY > textBuffer.rows) {
-			caret.colY = textBuffer.rows;
-		}
+			Rect destBmpRect = {0};
+			destBmpRect.x = caret->dimensions.x;
+			destBmpRect.y = caret->dimensions.y;
+			destBmpRect.w = srcBmpRect.w;
+			destBmpRect.h = srcBmpRect.h;
 
-		// Map screen columns/rows to pixels on screen
-		caret.dimensions.x = caret.colX * glyphWidth;
-		caret.dimensions.y = caret.colY * glyphHeight;
+			drawBitmap(srcBmpRect, destBmpRect, bmpFile, fileHeader, fileBitmapHeader, screen, format);
+		} else {
+			// Draw screen caret
+			DrawRectangle(caret->dimensions, 255, screen);
+		}
 
 		// Draw grid line
 		u32 lineThickness = 1;
 		u32 gridColour =  SDL_MapRGB(format, 0, 255, 0);
-		for (int x = 0; x < textBuffer.columns+1; x++) {
-			rect_t verticalLine = {x * glyphWidth, 0, lineThickness,
-			                       screen.height};
-			DrawRectangle(verticalLine, gridColour, &screen);
+		for (int x = 0; x < state->columns+1; x++) {
+			Rect verticalLine = {x * rasterFont.glyphSizeW, 0, lineThickness,
+			                     screen->height};
+			DrawRectangle(verticalLine, gridColour, screen);
 		}
 
-		for (int y = 0; y < textBuffer.rows+1; y++) {
-			rect_t horizontalLine = {0, y * glyphHeight,
-			                         screen.width, lineThickness};
-			DrawRectangle(horizontalLine, gridColour, &screen);
+		for (int y = 0; y < state->rows+1; y++) {
+			Rect horizontalLine = {0, y * rasterFont.glyphSizeH,
+			                       screen->width, lineThickness};
+			DrawRectangle(horizontalLine, gridColour, screen);
 		}
 
-		// BMP drawing
-		rect_t srcBmpRect = {0};
-		srcBmpRect.x = bmpFontGlyphSize * bmpCharX;
-		srcBmpRect.y = bmpFontGlyphSize * bmpCharY;
-		// NOTE: glyph on bmp is 18x18
-		srcBmpRect.w = bmpFontGlyphSize;
-		srcBmpRect.h = bmpFontGlyphSize;
 
-		rect_t destBmpRect = {0};
-		destBmpRect.x = caret.dimensions.x;
-		destBmpRect.y = caret.dimensions.y;
-		destBmpRect.w = srcBmpRect.w;
-		destBmpRect.h = srcBmpRect.h;
-
-		drawBitmap(srcBmpRect, destBmpRect, bmpFile, fileHeader, fileBitmapHeader, &screen, format);
-
-		// Draw to screen
-		//DrawRectangle(caret.dimensions, 255, &screen);
-
-		SDL_UpdateTexture(screenTex, NULL, screen.backBuffer,
-		                  screen.width*sizeof(u32));
+		SDL_UpdateTexture(screenTex, NULL, screen->backBuffer,
+		                  screen->width*sizeof(u32));
 		SDL_RenderClear(renderer);
 		SDL_RenderCopy(renderer, screenTex, NULL, NULL);
 
