@@ -340,9 +340,11 @@ int main(int argc, char* argv[]) {
 	Input input = {0};
 
 	// Use remaining space for text buffer
-	state->textBufferSize = state->arena.size - state->arena.used;
-	state->textBuffer = pushSize(&state->arena, state->textBufferSize);
+	//state->textBufferSize = state->arena.size - state->arena.used;
+	//state->textBuffer = pushSize(&state->arena, state->textBufferSize);
 
+	state->textBufferSize = state->columns * state->rows;
+	state->textBuffer = pushSize(&state->arena, state->textBufferSize);
 	b32 globalRunning = TRUE;
 
 	// SDL Initialisation
@@ -430,29 +432,39 @@ int main(int argc, char* argv[]) {
 					}
 				break;
 
-				case SDLK_BACKSPACE:
-					if (event.key.type == SDL_KEYDOWN) {
-						caret->pos.x--;
-						if (caret->pos.x < 0) {
-							caret->pos.x = 0;
-						}
-						state->textBuffer[(u32)caret->pos.x + ((u32)caret->pos.y * state->columns)] = 0;
-					}
-				break;
-
-				case SDLK_SPACE:
-					if (event.key.type == SDL_KEYDOWN) {
-						state->textBuffer[(u32)caret->pos.x + ((u32)caret->pos.y * state->columns)] = SDLK_SPACE;
-						caret->pos.x++;
-					}
-				break;
-
 				default:
-					printf("Key code: %d\n", input.alphabetKey.keysym.sym);
-					if (code >= 'a' && code <= 'z') {
-						input.alphabetKey = event.key;
-						if (input.alphabetKey.type == SDL_KEYDOWN) {
-							state->textBuffer[(u32)caret->pos.x + ((u32)caret->pos.y * state->columns)] = input.alphabetKey.keysym.sym;
+					printf("Key code: %d\n", code);
+					if (event.key.type == SDL_KEYDOWN) {
+						u32 bufferPos = (u32)caret->pos.x + ((u32)caret->pos.y * state->columns);
+						if (code == SDLK_BACKSPACE) {
+							caret->pos.x--;
+							if (caret->pos.x < 0) {
+								caret->pos.x = 0;
+							}
+							state->textBuffer[bufferPos] = 0;
+						} else if (code == SDLK_SPACE) {
+
+							// Bruteforce shift all array elements after out
+							// current caret pos by 1
+							if (state->textBuffer[bufferPos] != 0) {
+								for (int i = state->textBufferSize-1; i > bufferPos; i--) {
+									state->textBuffer[i] = state->textBuffer[i-1];
+								}
+							}
+
+							state->textBuffer[bufferPos] = code;
+							caret->pos.x++;
+						} else if (code >= 'a' && code <= 'z') {
+							input.alphabetKey = event.key;
+
+							// Bruteforce shift all array elements after out
+							// current caret pos by 1
+							if (state->textBuffer[bufferPos] != 0) {
+								for (int i = state->textBufferSize-1; i > bufferPos; i--) {
+									state->textBuffer[i] = state->textBuffer[i-1];
+								}
+							}
+							state->textBuffer[bufferPos] = code;
 							caret->pos.x += 1;
 						}
 					}
@@ -461,10 +473,9 @@ int main(int argc, char* argv[]) {
 		}
 
 		u32 lastCharInBuffer = 0;
-		for (int i = 0; i < state->textBufferSize; i++) {
-			if (state->textBuffer[i] == 0) {
+		for (int i = 0; i < state->textBufferSize-1; i++) {
+			if (state->textBuffer[i] == 0 && state->textBuffer[i-1] != 0) {
 				lastCharInBuffer = i;
-				break;
 			}
 		}
 
@@ -474,7 +485,7 @@ int main(int argc, char* argv[]) {
 		if (lastCharInBuffer >= state->columns) {
 			lastCharPos.x = lastCharInBuffer % state->columns;
 			lastCharPos.y = lastCharInBuffer / state->columns;
-			if (lastCharPos.x >= state->rows) {
+			if (lastCharPos.y >= state->rows) {
 				lastCharPos.y = state->rows;
 			}
 		} else {
@@ -486,14 +497,14 @@ int main(int argc, char* argv[]) {
 			if (caret->pos.y == 0) {
 				caret->pos.x = 0;
 			} else {
-				caret->pos.x = state->columns;
+				caret->pos.x = (state->columns-1);
 			}
 			caret->pos.y--;
 		} else if (caret->pos.x >= lastCharPos.x &&
 		           caret->pos.y >= lastCharPos.y) {
 			caret->pos.x = lastCharPos.x;
 			caret->pos.y = lastCharPos.y;
-		} else if (caret->pos.x > state->columns) {
+		} else if (caret->pos.x >= state->columns) {
 			caret->pos.x = 0;
 			caret->pos.y++;
 		}
