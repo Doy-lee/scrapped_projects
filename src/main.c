@@ -92,7 +92,7 @@ typedef union {
 		SDL_KeyboardEvent arrowDown;
 		SDL_KeyboardEvent arrowLeft;
 		SDL_KeyboardEvent arrowRight;
-		SDL_KeyboardEvent alphabetKey;
+		SDL_KeyboardEvent key;
 		SDL_MouseButtonEvent mouse;
 	};
 } Input;
@@ -281,6 +281,58 @@ internal u32 *loadBmpFile(char *filePath, u32 *buffer) {
 	return NULL;
 }
 
+internal inline v2 getLastCharPos(ProgramState *state) {
+	// Prevent the caret from going past the last text char
+	// Convert last char in displayable buffer to onscreen x,y coords.
+	u32 lastCharInBuffer = 0;
+	for (int i = 0; i < state->textBufferSize-1; i++) {
+		if (state->textBuffer[i] == 0 && state->textBuffer[i-1] != 0) {
+			lastCharInBuffer = i;
+		}
+	}
+
+	v2 result = {0};
+	if (lastCharInBuffer >= state->columns) {
+		result.x = lastCharInBuffer % state->columns;
+		result.y = lastCharInBuffer / state->columns;
+		if (result.y >= state->rows) {
+			result.y = state->rows;
+		}
+	} else {
+		result.x = lastCharInBuffer;
+	}
+
+	return result;
+}
+
+internal inline void normaliseCaretPosition(ProgramState *state, v2 lastCharPos) {
+	TextCaret *caret = &state->caret;
+	// Bounds checking for caret
+	if (caret->pos.x < 0) {
+		if (caret->pos.y == 0) {
+			caret->pos.x = 0;
+		} else {
+			caret->pos.x = (state->columns-1);
+		}
+		caret->pos.y--;
+	} else if (caret->pos.x >= lastCharPos.x &&
+			caret->pos.y >= lastCharPos.y) {
+		caret->pos.x = lastCharPos.x;
+		caret->pos.y = lastCharPos.y;
+	} else if (caret->pos.x >= state->columns) {
+		caret->pos.x = 0;
+		caret->pos.y++;
+	}
+
+	if (caret->pos.y < 0) {
+		caret->pos.y = 0;
+	} else if (caret->pos.y > lastCharPos.y) {
+		caret->pos.x = lastCharPos.x;
+		caret->pos.y = lastCharPos.y;
+	}
+
+}
+
 int main(int argc, char* argv[]) {
 	SDL_Init(SDL_INIT_VIDEO);
 
@@ -433,13 +485,13 @@ int main(int argc, char* argv[]) {
 
 				default:
 					printf("Key code: %d\n", code);
+					input.key = event.key;
 					if (event.key.type == SDL_KEYDOWN) {
 						u32 bufferPos = (u32)caret->pos.x + ((u32)caret->pos.y * state->columns);
 						if (code == SDLK_BACKSPACE) {
 							caret->pos.x--;
-							if (caret->pos.x < 0) {
-								caret->pos.x = 0;
-							}
+							v2 lastCharPos = getLastCharPos(state);
+							normaliseCaretPosition(state, lastCharPos);
 
 							bufferPos = (u32)caret->pos.x + ((u32)caret->pos.y * state->columns);
 							state->textBuffer[bufferPos] = 0;
@@ -459,7 +511,7 @@ int main(int argc, char* argv[]) {
 							state->textBuffer[bufferPos] = code;
 							caret->pos.x++;
 						} else if (code >= 'a' && code <= 'z') {
-							input.alphabetKey = event.key;
+							input.key = event.key;
 
 							// Bruteforce shift all array elements after out
 							// current caret pos by 1
@@ -469,56 +521,15 @@ int main(int argc, char* argv[]) {
 								}
 							}
 							state->textBuffer[bufferPos] = code;
-							caret->pos.x += 1;
+							caret->pos.x++;
 						}
 					}
 				break;
 			}
 		}
 
-		u32 lastCharInBuffer = 0;
-		for (int i = 0; i < state->textBufferSize-1; i++) {
-			if (state->textBuffer[i] == 0 && state->textBuffer[i-1] != 0) {
-				lastCharInBuffer = i;
-			}
-		}
-
-		// Prevent the caret from going past the last text char
-		// Convert last char in displayable buffer to onscreen x,y coords.
-		v2 lastCharPos = {0};
-		if (lastCharInBuffer >= state->columns) {
-			lastCharPos.x = lastCharInBuffer % state->columns;
-			lastCharPos.y = lastCharInBuffer / state->columns;
-			if (lastCharPos.y >= state->rows) {
-				lastCharPos.y = state->rows;
-			}
-		} else {
-			lastCharPos.x = lastCharInBuffer;
-		}
-
-		// Bounds checking for caret
-		if (caret->pos.x < 0) {
-			if (caret->pos.y == 0) {
-				caret->pos.x = 0;
-			} else {
-				caret->pos.x = (state->columns-1);
-			}
-			caret->pos.y--;
-		} else if (caret->pos.x >= lastCharPos.x &&
-		           caret->pos.y >= lastCharPos.y) {
-			caret->pos.x = lastCharPos.x;
-			caret->pos.y = lastCharPos.y;
-		} else if (caret->pos.x >= state->columns) {
-			caret->pos.x = 0;
-			caret->pos.y++;
-		}
-
-		if (caret->pos.y < 0) {
-			caret->pos.y = 0;
-		} else if (caret->pos.y > lastCharPos.y) {
-			caret->pos.x = lastCharPos.x;
-			caret->pos.y = lastCharPos.y;
-		}
+		v2 lastCharPos = getLastCharPos(state);
+		normaliseCaretPosition(state, lastCharPos);
 
 		// Map screen columns/rows to pixels on screen
 		caret->rect.pos.x = caret->pos.x * rasterFont.size.w;
