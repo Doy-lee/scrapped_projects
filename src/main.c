@@ -281,7 +281,6 @@ internal u32 *loadBmpFile(char *filePath, u32 *buffer) {
 	return NULL;
 }
 
-
 int main(int argc, char* argv[]) {
 	SDL_Init(SDL_INIT_VIDEO);
 
@@ -441,7 +440,12 @@ int main(int argc, char* argv[]) {
 							if (caret->pos.x < 0) {
 								caret->pos.x = 0;
 							}
+
+							bufferPos = (u32)caret->pos.x + ((u32)caret->pos.y * state->columns);
 							state->textBuffer[bufferPos] = 0;
+							for (int i = bufferPos; i < state->textBufferSize; i++) {
+								state->textBuffer[i] = state->textBuffer[i+1];
+							}
 						} else if (code == SDLK_SPACE) {
 
 							// Bruteforce shift all array elements after out
