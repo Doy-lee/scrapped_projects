@@ -110,24 +110,29 @@ typedef struct {
 } MemoryArena;
 
 typedef struct {
-	ScreenData *screen;
-	MemoryArena arena;
-	Input input;
-
-	char *textBuffer;
-	u32 textBufferPos;
-	u32 textBufferSize;
-
-	TextCaret caret;
-	u32 columns;
-	u32 rows;
-} ProgramState;
+	char *memory;
+	u32 position;
+	u32 size;
+	u32 lastCharPos;
+} TextBuffer;
 
 typedef struct {
 	void *block;
 	u32 size;
 	b32 initialised;
 } ProgramMemory;
+
+typedef struct {
+	ScreenData *screen;
+	MemoryArena arena;
+	Input input;
+
+	TextBuffer *buffer;
+
+	TextCaret caret;
+	u32 columns;
+	u32 rows;
+} ProgramState;
 
 #pragma pack(push)
 #pragma pack(2)
@@ -281,12 +286,13 @@ internal u32 *loadBmpFile(char *filePath, u32 *buffer) {
 	return NULL;
 }
 
+// Prevent the caret from going past the last text char
+// Convert last char in displayable buffer to onscreen x,y coords.
 internal inline v2 getLastCharPos(ProgramState *state) {
-	// Prevent the caret from going past the last text char
-	// Convert last char in displayable buffer to onscreen x,y coords.
+	TextBuffer *buffer = state->buffer;
 	u32 lastCharInBuffer = 0;
-	for (int i = 0; i < state->textBufferSize-1; i++) {
-		if (state->textBuffer[i] == 0 && state->textBuffer[i-1] != 0) {
+	for (int i = 0; i < buffer->size-1; i++) {
+		if (buffer->memory[i] == 0 && buffer->memory[i-1] != 0) {
 			lastCharInBuffer = i;
 		}
 	}
@@ -305,8 +311,9 @@ internal inline v2 getLastCharPos(ProgramState *state) {
 	return result;
 }
 
-internal inline void normaliseCaretPosition(ProgramState *state, v2 lastCharPos) {
+internal inline void normaliseCaretPosition(ProgramState *state) {
 	TextCaret *caret = &state->caret;
+	v2 lastCharPos = getLastCharPos(state);
 	// Bounds checking for caret
 	if (caret->pos.x < 0) {
 		if (caret->pos.y == 0) {
@@ -351,7 +358,8 @@ int main(int argc, char* argv[]) {
 
 	// Load BMP
 	char *filePath = "../content/cla_font.bmp";
-	u32 *bmpFile = loadBmpFile(filePath, (u32 *)(state->arena.base + state->arena.used));
+	u32 *bmpFile = loadBmpFile(filePath,
+	                           (u32 *)(state->arena.base + state->arena.used));
 	u32 *bmpScanner = bmpFile;
 
 	BmpFileHeader fileHeader = {0};
@@ -393,9 +401,11 @@ int main(int argc, char* argv[]) {
 	// Use remaining space for text buffer
 	//state->textBufferSize = state->arena.size - state->arena.used;
 	//state->textBuffer = pushSize(&state->arena, state->textBufferSize);
+	state->buffer = pushStruct(&state->arena, TextBuffer);
+	TextBuffer *textBuffer = state->buffer;
+	textBuffer->size = state->columns * state->rows;
+	textBuffer->memory = pushSize(&state->arena, textBuffer->size);
 
-	state->textBufferSize = state->columns * state->rows;
-	state->textBuffer = pushSize(&state->arena, state->textBufferSize);
 	b32 globalRunning = TRUE;
 
 	// SDL Initialisation
@@ -420,11 +430,11 @@ int main(int argc, char* argv[]) {
 	u32 inputParsingMSCounter = 0;
 
 	while (globalRunning) {
-
 		// Clear screen
 		memset(screen->backBuffer, 0,
 		       screen->size.w * screen->size.h * screen->bytesPerPixel);
 
+		u32 bufferPos = (u32)caret->pos.x + ((u32)caret->pos.y * state->columns);
 		SDL_Event event;
 		while (SDL_PollEvent(&event)) {
 			if (event.type == SDL_QUIT) {
@@ -487,49 +497,35 @@ int main(int argc, char* argv[]) {
 					printf("Key code: %d\n", code);
 					input.key = event.key;
 					if (event.key.type == SDL_KEYDOWN) {
-						u32 bufferPos = (u32)caret->pos.x + ((u32)caret->pos.y * state->columns);
 						if (code == SDLK_BACKSPACE) {
 							caret->pos.x--;
-							v2 lastCharPos = getLastCharPos(state);
-							normaliseCaretPosition(state, lastCharPos);
+							normaliseCaretPosition(state);
 
 							bufferPos = (u32)caret->pos.x + ((u32)caret->pos.y * state->columns);
-							state->textBuffer[bufferPos] = 0;
-							for (int i = bufferPos; i < state->textBufferSize; i++) {
-								state->textBuffer[i] = state->textBuffer[i+1];
+							textBuffer->memory[bufferPos] = 0;
+							for (int i = bufferPos; i < textBuffer->size; i++) {
+								textBuffer->memory[i] = textBuffer->memory[i+1];
 							}
-						} else if (code == SDLK_SPACE) {
-
+						} else if (code == SDLK_SPACE ||
+						           (code >= 'a' && code <= 'z')) {
 							// Bruteforce shift all array elements after out
 							// current caret pos by 1
-							if (state->textBuffer[bufferPos] != 0) {
-								for (int i = state->textBufferSize-1; i > bufferPos; i--) {
-									state->textBuffer[i] = state->textBuffer[i-1];
+							if (textBuffer->memory[bufferPos] != 0) {
+								for (int i = textBuffer->size-1; i > bufferPos; i--) {
+									textBuffer->memory[i] = textBuffer->memory[i-1];
 								}
 							}
 
-							state->textBuffer[bufferPos] = code;
+							textBuffer->memory[bufferPos] = code;
 							caret->pos.x++;
-						} else if (code >= 'a' && code <= 'z') {
-							input.key = event.key;
 
-							// Bruteforce shift all array elements after out
-							// current caret pos by 1
-							if (state->textBuffer[bufferPos] != 0) {
-								for (int i = state->textBufferSize-1; i > bufferPos; i--) {
-									state->textBuffer[i] = state->textBuffer[i-1];
-								}
-							}
-							state->textBuffer[bufferPos] = code;
-							caret->pos.x++;
+							normaliseCaretPosition(state);
 						}
 					}
 				break;
 			}
 		}
 
-		v2 lastCharPos = getLastCharPos(state);
-		normaliseCaretPosition(state, lastCharPos);
 
 		// Map screen columns/rows to pixels on screen
 		caret->rect.pos.x = caret->pos.x * rasterFont.size.w;
@@ -537,8 +533,8 @@ int main(int argc, char* argv[]) {
 
 		// TODO: Input has lag
 		v2 textBufferPos = {0};
-		for (int i = 0; i < state->textBufferSize; i++) {
-			u32 textChar = state->textBuffer[i];
+		for (int i = 0; i < textBuffer->size; i++) {
+			u32 textChar = textBuffer->memory[i];
 			if (textChar >= 'a' && textChar <= 'z') {
 				u32 deltaFromInitialChar = textChar - 'a';
 
@@ -583,7 +579,8 @@ int main(int argc, char* argv[]) {
 				Rect destBmpRect = {0};
 				destBmpRect.pos = mulV2(textBufferPos, rasterFont.size);
 				destBmpRect.size = srcBmpRect.size;
-				drawBitmap(srcBmpRect, destBmpRect, bmpFile, fileHeader, fileBitmapHeader, screen, format);
+				drawBitmap(srcBmpRect, destBmpRect, bmpFile, fileHeader,
+				           fileBitmapHeader, screen, format);
 			}
 			textBufferPos.x++;
 		}
