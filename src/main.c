@@ -101,6 +101,7 @@ typedef struct {
 	v2 firstUpperAlphaChar;
 	v2 firstLowerAlphaChar;
 	v2 size;
+	u32 glyphsPerRow;
 } RasterFontData;
 
 typedef struct {
@@ -378,6 +379,7 @@ int main(int argc, char* argv[]) {
 	rasterFont.firstUpperAlphaChar = (v2) {1, 4};
 	rasterFont.firstLowerAlphaChar = (v2) {1, 6};
 	rasterFont.size = (v2) {18, 18};
+	rasterFont.glyphsPerRow = fileBitmapHeader.width/rasterFont.size.w;
 
 	// Initialise screen
 	state->screen = pushStruct(&state->arena, ScreenData);
@@ -507,7 +509,8 @@ int main(int argc, char* argv[]) {
 								textBuffer->memory[i] = textBuffer->memory[i+1];
 							}
 						} else if (code == SDLK_SPACE ||
-						           (code >= 'a' && code <= 'z')) {
+						           (code >= 'a' && code <= 'z') ||
+								   (code >= '0' && code <= '9')) {
 							// Bruteforce shift all array elements after out
 							// current caret pos by 1
 							if (textBuffer->memory[bufferPos] != 0) {
@@ -545,16 +548,58 @@ int main(int argc, char* argv[]) {
 				// Check if all the characters are located in one row or
 				// not otherwise we'll need some wrapping logic to move
 				// the bmp character selector down a row
-				u32 numGlyphsPerRow =
-					fileBitmapHeader.width/rasterFont.size.w;
-
 				u32 numAlphaCharsInRow =
-					numGlyphsPerRow - rasterFont.firstLowerAlphaChar.x;
+					rasterFont.glyphsPerRow - rasterFont.firstLowerAlphaChar.x;
 
-				if (numAlphaCharsInRow < 26) {
-					if (fontChar.x >= 16) {
+				u32 lengthOfSeries = 26;
+				if (numAlphaCharsInRow < lengthOfSeries) {
+					if (fontChar.x >= rasterFont.glyphsPerRow) {
 						fontChar.y++;
-						fontChar.x = (u32)fontChar.x % 16;
+						fontChar.x = (u32)fontChar.x % rasterFont.glyphsPerRow;
+					}
+				}
+
+				// BMP drawing
+				Rect srcBmpRect = {0};
+				srcBmpRect.pos = mulV2(rasterFont.size, fontChar);
+				srcBmpRect.size = rasterFont.size;
+
+				if (textBufferPos.x >= state->columns &&
+					textBufferPos.y >= state->rows) {
+					// Stop printing out chars, can't display anymore in buffer
+					break;
+				} else if (textBufferPos.x >= state->columns) {
+					textBufferPos.x = 0;
+					textBufferPos.y++;
+				}
+
+				if (textBufferPos.y > state->rows) {
+					break;
+				}
+
+				Rect destBmpRect = {0};
+				destBmpRect.pos = mulV2(textBufferPos, rasterFont.size);
+				destBmpRect.size = srcBmpRect.size;
+				drawBitmap(srcBmpRect, destBmpRect, bmpFile, fileHeader,
+				           fileBitmapHeader, screen, format);
+			} else if (textChar >= '0' && textChar <= '9') {
+				u32 deltaFromInitialChar = textChar - '0';
+
+				// Font Image -> Character selector
+				v2 fontChar = (v2) {0, 3};
+				fontChar.x += deltaFromInitialChar;
+
+				// Check if all the characters are located in one row or
+				// not otherwise we'll need some wrapping logic to move
+				// the bmp character selector down a row
+				u32 numAlphaCharsInRow =
+					rasterFont.glyphsPerRow - 0;
+
+				u32 lengthOfSeries = 10;
+				if (numAlphaCharsInRow < lengthOfSeries) {
+					if (fontChar.x >= lengthOfSeries) {
+						fontChar.y++;
+						fontChar.x = (u32)fontChar.x % rasterFont.glyphsPerRow;
 					}
 				}
 
