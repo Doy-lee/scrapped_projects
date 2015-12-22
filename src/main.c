@@ -314,7 +314,6 @@ internal inline v2 getLastCharPos(ProgramState *state) {
 
 internal inline void normaliseCaretPosition(ProgramState *state) {
 	TextCaret *caret = &state->caret;
-	v2 lastCharPos = getLastCharPos(state);
 	// Bounds checking for caret
 	if (caret->pos.x < 0) {
 		if (caret->pos.y == 0) {
@@ -323,20 +322,13 @@ internal inline void normaliseCaretPosition(ProgramState *state) {
 			caret->pos.x = (state->columns-1);
 		}
 		caret->pos.y--;
-	} else if (caret->pos.x >= lastCharPos.x &&
-			caret->pos.y >= lastCharPos.y) {
-		caret->pos.x = lastCharPos.x;
-		caret->pos.y = lastCharPos.y;
 	} else if (caret->pos.x >= state->columns) {
-		caret->pos.x = 0;
-		caret->pos.y++;
+		caret->pos.y += (u32)caret->pos.x / state->columns;
+		caret->pos.x = (u32)caret->pos.x % state->columns;
 	}
 
 	if (caret->pos.y < 0) {
 		caret->pos.y = 0;
-	} else if (caret->pos.y > lastCharPos.y) {
-		caret->pos.x = lastCharPos.x;
-		caret->pos.y = lastCharPos.y;
 	}
 
 }
@@ -384,15 +376,14 @@ int main(int argc, char* argv[]) {
 	// Initialise screen
 	state->screen = pushStruct(&state->arena, ScreenData);
 	ScreenData *screen = state->screen;
-	screen->size = (v2) {1000, 750};
+	screen->size = (v2) {990, 720};
 	screen->bytesPerPixel = 4;
 	// Allocate size for screen backbuffer
 	screen->backBuffer =
 		pushSize(&state->arena,
-				 screen->size.w * screen->size.h * screen->bytesPerPixel);
-
-	state->columns = (screen->size.w/rasterFont.size.w);
-	state->rows = (screen->size.h/rasterFont.size.h);
+				 (u32)screen->size.w * (u32)screen->size.h * screen->bytesPerPixel);
+	state->columns = (u32)(screen->size.w/rasterFont.size.w);
+	state->rows = (u32)(screen->size.h/rasterFont.size.h);
 
 	// Initialise caret
 	TextCaret *caret = &state->caret;
@@ -529,6 +520,18 @@ int main(int argc, char* argv[]) {
 			}
 		}
 
+		v2 lastCharPos = getLastCharPos(state);
+		if (caret->pos.x >= lastCharPos.x &&
+		    caret->pos.y >= lastCharPos.y) {
+			caret->pos.x = lastCharPos.x;
+			caret->pos.y = lastCharPos.y;
+		}
+
+		if (caret->pos.y >= lastCharPos.y) {
+			caret->pos.x = lastCharPos.x;
+			caret->pos.y = lastCharPos.y;
+
+		}
 
 		// Map screen columns/rows to pixels on screen
 		caret->rect.pos.x = caret->pos.x * rasterFont.size.w;
@@ -640,13 +643,13 @@ int main(int argc, char* argv[]) {
 		// Draw grid line
 		u32 lineThickness = 1;
 		u32 gridColour =  SDL_MapRGBA(format, 0, 255, 0, 255);
-		for (int x = 0; x < state->columns+1; x++) {
+		for (int x = 0; x < state->columns; x++) {
 			Rect verticalLine = {x * rasterFont.size.w, 0, lineThickness,
 			                     screen->size.h};
 			DrawRectangle(verticalLine, gridColour, screen);
 		}
 
-		for (int y = 0; y < state->rows+1; y++) {
+		for (int y = 0; y < state->rows; y++) {
 			Rect horizontalLine = {0, y * rasterFont.size.h,
 			                       screen->size.w, lineThickness};
 			DrawRectangle(horizontalLine, gridColour, screen);
