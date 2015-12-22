@@ -30,7 +30,7 @@ typedef uint64_t u64;
 typedef float r32;
 typedef double r64;
 
-typedef struct {
+typedef struct v2 {
 	union {
 		r32 x;
 		r32 w;
@@ -41,7 +41,7 @@ typedef struct {
 	};
 } v2;
 
-typedef struct {
+typedef struct Rect {
 	v2 pos;
 	v2 size;
 } Rect;
@@ -68,23 +68,23 @@ inline internal v2 mulV2(v2 a, v2 b) {
 	return result;
 }
 
-typedef struct {
+typedef struct FileReadResult {
 	void *contents;
 	u32 size;
 } FileReadResult;
 
-typedef struct {
+typedef struct ScreenData {
 	u32 *backBuffer;
 	v2 size;
 	u32 bytesPerPixel;
 } ScreenData;
 
-typedef struct {
+typedef struct TextCaret {
 	Rect rect;
 	v2 pos;
 } TextCaret;
 
-typedef union {
+typedef union Input {
 	SDL_KeyboardEvent keys[7];
 	struct {
 		SDL_KeyboardEvent escape;
@@ -97,33 +97,33 @@ typedef union {
 	};
 } Input;
 
-typedef struct {
+typedef struct RasterFontData {
 	v2 firstUpperAlphaChar;
 	v2 firstLowerAlphaChar;
 	v2 size;
 	u32 glyphsPerRow;
 } RasterFontData;
 
-typedef struct {
+typedef struct MemoryArena {
 	u32 size;
 	u8 *base;
 	u32 used;
 } MemoryArena;
 
-typedef struct {
+typedef struct TextBuffer {
 	char *memory;
 	u32 position;
 	u32 size;
 	u32 lastCharPos;
 } TextBuffer;
 
-typedef struct {
+typedef struct ProgramMemory {
 	void *block;
 	u32 size;
 	b32 initialised;
 } ProgramMemory;
 
-typedef struct {
+typedef struct ProgramState {
 	ScreenData *screen;
 	MemoryArena arena;
 	Input input;
@@ -137,7 +137,7 @@ typedef struct {
 
 #pragma pack(push)
 #pragma pack(2)
-typedef struct {
+typedef struct BmpFileHeader {
 	u16 fileType;     /* File type, always 4D42h ("BM") */
 	u32 fileSize;     /* Size of the file in bytes */
 	u16 reserved1;    /* Always 0 */
@@ -145,7 +145,7 @@ typedef struct {
 	u32 bitmapOffset; /* Starting position of image data in bytes */
 } BmpFileHeader;
 
-typedef struct bmpBitmapHeader {
+typedef struct BmpBitmapHeader {
 	u32 size;            /* Size of this header in bytes */
 	i32 width;           /* Image width in pixels */
 	i32 height;          /* Image height in pixels */
@@ -159,7 +159,7 @@ typedef struct bmpBitmapHeader {
 	u32 colorsImportant; /* Minimum number of important colors */
 } BmpBitmapHeader;
 
-typedef struct bmpBitfieldMasks {
+typedef struct BmpBitfieldMasks {
 	u32 redMask;         /* Mask identifying bits of red component */
 	u32 greenMask;       /* Mask identifying bits of green component */
 	u32 blueMask;        /* Mask identifying bits of blue component */
@@ -535,6 +535,9 @@ int main(int argc, char* argv[]) {
 		caret->rect.pos.y = caret->pos.y * rasterFont.size.h;
 
 		// TODO: Input has lag
+		// TODO: Perhaps we need to assume that all font sheets align characters
+		// to the ascii table standard, this would minimise the need to handle
+		// mutliple cases
 		v2 textBufferPos = {0};
 		for (int i = 0; i < textBuffer->size; i++) {
 			u32 textChar = textBuffer->memory[i];
