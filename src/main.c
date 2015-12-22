@@ -12,6 +12,7 @@
 #define Terabytes(Value) (Gigabytes(Value)*1024LL)
 
 #define internal static
+#define globalVariable static
 #define inline __inline
 
 // TODO: Split into platform layer and independant layer
@@ -29,6 +30,8 @@ typedef uint64_t u64;
 
 typedef float r32;
 typedef double r64;
+
+globalVariable b32 globalRunning = TRUE;
 
 typedef struct v2 {
 	union {
@@ -68,6 +71,21 @@ inline internal v2 mulV2(v2 a, v2 b) {
 	return result;
 }
 
+inline internal v2 convertRawPosToVec2(u32 pos, u32 width) {
+	v2 result = {0};
+	result.x = pos % width;
+	result.y = pos / width;
+	return result;
+}
+
+inline internal u32 convertVec2ToRawPos(v2 pos, u32 width) {
+	u32 result;
+	result = width * pos.y;
+	result += pos.x;
+	return result;
+}
+
+
 typedef struct FileReadResult {
 	void *contents;
 	u32 size;
@@ -100,12 +118,15 @@ typedef union Input {
 	};
 } Input;
 
-typedef struct RasterFontData {
-	v2 firstUpperAlphaChar;
-	v2 firstLowerAlphaChar;
-	v2 size;
+typedef struct FontSheet {
+	u32 firstUpperAlphaChar;
+	u32 firstLowerAlphaChar;
+	u32 firstNumericChar;
+
+	v2 glyphSize;
 	u32 glyphsPerRow;
-} RasterFontData;
+	u32 paddingWidth;
+} FontSheet;
 
 typedef struct MemoryArena {
 	u32 size;
@@ -130,6 +151,7 @@ typedef struct ProgramState {
 	ScreenData *screen;
 	TextBuffer *buffer;
 	TextCaret *caret;
+	FontSheet fontSheet;
 	MemoryArena arena;
 	Input input;
 } ProgramState;
@@ -286,13 +308,14 @@ internal u32 *loadBmpFile(char *filePath, u32 *buffer) {
 	return NULL;
 }
 
-internal inline void canonicaliseCaretPos(TextCaret *caret, TextBuffer *buffer, ScreenData *screen) {
+internal inline void canonicaliseCaretPos(TextCaret *caret, TextBuffer buffer,
+                                          ScreenData screen) {
 
 	// Get the last displayable character in the buffer, the caret can't pass
 	// the last char
 	u32 lastCharInBuffer = 0;
-	for (int i = 0; i < buffer->size-1; i++) {
-		if (buffer->memory[i] == 0 && buffer->memory[i-1] != 0) {
+	for (int i = 0; i < buffer.size-1; i++) {
+		if (buffer.memory[i] == 0 && buffer.memory[i-1] != 0) {
 			lastCharInBuffer = i;
 		}
 	}
@@ -304,8 +327,145 @@ internal inline void canonicaliseCaretPos(TextCaret *caret, TextBuffer *buffer, 
 		caret->rawPos = lastCharInBuffer;
 	}
 
-	caret->gridPos.x = caret->rawPos % (u32)screen->sizeInGlyphs.w;
-	caret->gridPos.y = caret->rawPos / (u32)screen->sizeInGlyphs.w;
+	caret->gridPos = convertRawPosToVec2(caret->rawPos,
+	                                     (u32)screen.sizeInGlyphs.w);
+}
+
+internal void processEventLoop(ProgramState *state) {
+	Input *input = &state->input;
+	TextCaret *caret = state->caret;
+	FontSheet fontSheet = state->fontSheet;
+	ScreenData *screen = state->screen;
+	TextBuffer *textBuffer = state->buffer;
+
+	SDL_Event event;
+	while (SDL_PollEvent(&event)) {
+		if (event.type == SDL_QUIT) {
+			globalRunning = FALSE;
+			break;
+		}
+
+		// TODO: Do we really care about mouse/key up at this point?
+		// Early exit by ignoring events we don't care about
+		if (event.type != SDL_KEYDOWN &&
+				event.type != SDL_KEYUP &&
+				event.type != SDL_MOUSEBUTTONDOWN &&
+				event.type != SDL_MOUSEBUTTONUP) {
+			break;
+		}
+
+		if (event.type == SDL_MOUSEBUTTONDOWN) {
+			input->mouse = event.button;
+			caret->gridPos.x = (u32)(input->mouse.x / fontSheet.glyphSize.w);
+			caret->gridPos.y = (u32)(input->mouse.y / fontSheet.glyphSize.h);
+		}
+
+		// Extract key state
+		SDL_Keycode code = event.key.keysym.sym;
+		switch (code) {
+			case SDLK_ESCAPE:
+				input->escape = event.key;
+				globalRunning = (event.type == SDL_KEYDOWN);
+				break;
+
+			case SDLK_UP:
+				input->arrowUp = event.key;
+				if (input->arrowUp.type == SDL_KEYDOWN) {
+					// NOTE: Special case where if we are at the top of the
+					// document, pressing up should not move the caret
+					if (caret->rawPos - (i32)screen->sizeInGlyphs.w >= 0) {
+						caret->rawPos -= screen->sizeInGlyphs.w;
+					}
+				}
+				break;
+
+			case SDLK_DOWN:
+				input->arrowDown = event.key;
+				if (input->arrowDown.type == SDL_KEYDOWN) {
+					caret->rawPos += screen->sizeInGlyphs.w;
+				}
+				break;
+
+			case SDLK_LEFT:
+				input->arrowLeft = event.key;
+				if (input->arrowLeft.type == SDL_KEYDOWN) {
+					caret->rawPos--;
+				}
+				break;
+
+			case SDLK_RIGHT:
+				input->arrowRight = event.key;
+				if (input->arrowRight.type == SDL_KEYDOWN) {
+					caret->rawPos++;
+				}
+				break;
+
+			// TODO: Complete return key implementation
+			case SDLK_RETURN:
+				if (event.key.type == SDL_KEYDOWN) {
+					u32 lenToEndOfLine =
+						screen->sizeInGlyphs.w -
+						(caret->rawPos % (u32)screen->sizeInGlyphs.w) ;
+					caret->rawPos += screen->sizeInGlyphs.w;
+				}
+				break;
+
+			default:
+				printf("Key code: %d\n", code);
+				input->key = event.key;
+				if (event.key.type == SDL_KEYDOWN) {
+					if (code == SDLK_BACKSPACE) {
+						caret->rawPos--;
+						canonicaliseCaretPos(state->caret,
+						                     *state->buffer, *state->screen);
+
+						textBuffer->memory[caret->rawPos] = 0;
+						for (int i = caret->rawPos; i < textBuffer->size; i++) {
+							textBuffer->memory[i] = textBuffer->memory[i+1];
+						}
+					} else if (code == SDLK_SPACE ||
+							(code >= 'a' && code <= 'z') ||
+							(code >= '0' && code <= '9')) {
+						// Bruteforce shift all array elements after out
+						// current caret pos by 1
+						if (textBuffer->memory[caret->rawPos] != 0) {
+							for (int i = textBuffer->size-1; i > caret->rawPos; i--) {
+								textBuffer->memory[i] = textBuffer->memory[i-1];
+							}
+						}
+						textBuffer->memory[caret->rawPos++] = code;
+					}
+				}
+				break;
+		}
+	}
+}
+
+internal b32 convertInputToFontCoords(u32 input, FontSheet fontSheet,
+                                      ScreenData *screen, v2 *result) {
+
+	// TODO: Group into an object possibly
+	u32 initialCharLoc = {0};
+	u32 deltaFromInitialCharLoc = 0;
+	u32 seriesLength = 0;
+
+	// Generate the x,y coordinate of the character to extract
+	if (input >= 'a' && input <= 'z') {
+		initialCharLoc = fontSheet.firstUpperAlphaChar;
+		deltaFromInitialCharLoc = input - 'a';
+		seriesLength = 'a' - 'z';
+	} else if (input >= '0' && input <= '9') {
+		initialCharLoc = fontSheet.firstNumericChar;
+		deltaFromInitialCharLoc = input - '0';
+		seriesLength = '0' - '9';
+	} else {
+		return FALSE;
+	}
+
+	u32 inputRawSheetCoords = initialCharLoc + deltaFromInitialCharLoc;
+	*result = convertRawPosToVec2(inputRawSheetCoords, fontSheet.glyphsPerRow);
+	return TRUE;
+
 }
 
 int main(int argc, char* argv[]) {
@@ -325,7 +485,7 @@ int main(int argc, char* argv[]) {
 	                (u8 *)memory.block + sizeof(ProgramState));
 
 	// Load BMP
-	char *filePath = "../content/cla_font.bmp";
+	char *filePath = "../content/xterm613.bmp";
 	u32 *bmpFile = loadBmpFile(filePath,
 	                           (u32 *)(state->arena.base + state->arena.used));
 	u32 *bmpScanner = bmpFile;
@@ -342,11 +502,14 @@ int main(int argc, char* argv[]) {
 	// Update arena manually because size of BMP is determined post file load
 	pushSize(&state->arena, fileHeader.fileSize);
 
-	RasterFontData rasterFont = {0};
-	rasterFont.firstUpperAlphaChar = (v2) {1, 4};
-	rasterFont.firstLowerAlphaChar = (v2) {1, 6};
-	rasterFont.size = (v2) {18, 18};
-	rasterFont.glyphsPerRow = fileBitmapHeader.width/rasterFont.size.w;
+	FontSheet fontSheet = state->fontSheet;
+	fontSheet.glyphSize = (v2) {6, 13};
+	fontSheet.glyphsPerRow = 16;
+	fontSheet.paddingWidth = 1 * fontSheet.glyphSize.w;
+
+	fontSheet.firstUpperAlphaChar = convertVec2ToRawPos((v2){1, 4}, fontSheet.glyphsPerRow);
+	fontSheet.firstLowerAlphaChar = convertVec2ToRawPos((v2){1, 6}, fontSheet.glyphsPerRow);
+	fontSheet.firstNumericChar = convertVec2ToRawPos((v2){0, 3}, fontSheet.glyphsPerRow);
 
 	// Initialise screen
 	state->screen = pushStruct(&state->arena, ScreenData);
@@ -358,14 +521,14 @@ int main(int argc, char* argv[]) {
 		pushSize(&state->arena,
 				 (u32)screen->size.w * (u32)screen->size.h * screen->bytesPerPixel);
 
-	screen->sizeInGlyphs.w = (u32)(screen->size.w/rasterFont.size.w);
-	screen->sizeInGlyphs.h = (u32)(screen->size.h/rasterFont.size.h);
+	screen->sizeInGlyphs.w = (u32)(screen->size.w/fontSheet.glyphSize.w);
+	screen->sizeInGlyphs.h = (u32)(screen->size.h/fontSheet.glyphSize.h);
 
 	// Initialise caret
 	state->caret = pushStruct(&state->arena, TextCaret);
 	TextCaret *caret = state->caret;
-	caret->rect.size.w = rasterFont.size.w/2;
-	caret->rect.size.h = rasterFont.size.h;
+	caret->rect.size.w = fontSheet.glyphSize.w/2;
+	caret->rect.size.h = fontSheet.glyphSize.h;
 	Input input = {0};
 
 	// Use remaining space for text buffer
@@ -374,7 +537,6 @@ int main(int argc, char* argv[]) {
 	textBuffer->size = screen->sizeInGlyphs.w * screen->sizeInGlyphs.h;
 	textBuffer->memory = pushSize(&state->arena, textBuffer->size);
 
-	b32 globalRunning = TRUE;
 
 	// SDL Initialisation
 	SDL_Window *win = SDL_CreateWindow("Text Editor", SDL_WINDOWPOS_UNDEFINED,
@@ -398,110 +560,18 @@ int main(int argc, char* argv[]) {
 	u32 inputParsingMSCounter = 0;
 
 	while (globalRunning) {
+
+		// TODO: Dirty clear screen e.g. only clear areas that have changed
 		// Clear screen
 		memset(screen->backBuffer, 0,
 		       screen->size.w * screen->size.h * screen->bytesPerPixel);
 
-		u32 bufferPos = (u32)caret->gridPos.x + ((u32)caret->gridPos.y * screen->sizeInGlyphs.w);
-		SDL_Event event;
-		while (SDL_PollEvent(&event)) {
-			if (event.type == SDL_QUIT) {
-				globalRunning = TRUE;
-				break;
-			}
-
-			// TODO: Do we really care about mouse/key up at this point?
-			// Early exit by ignoring events we don't care about
-			if (event.type != SDL_KEYDOWN &&
-			    event.type != SDL_KEYUP &&
-			    event.type != SDL_MOUSEBUTTONDOWN &&
-			    event.type != SDL_MOUSEBUTTONUP) {
-				break;
-			}
-
-			if (event.type == SDL_MOUSEBUTTONDOWN) {
-				input.mouse = event.button;
-				caret->gridPos.x = (u32)(input.mouse.x / rasterFont.size.w);
-				caret->gridPos.y = (u32)(input.mouse.y / rasterFont.size.h);
-			}
-
-			// Extract key state
-			SDL_Keycode code = event.key.keysym.sym;
-			switch (code) {
-				case SDLK_ESCAPE:
-					input.escape = event.key;
-					globalRunning = (event.type == SDL_KEYDOWN);
-				break;
-
-				case SDLK_UP:
-					input.arrowUp = event.key;
-					if (input.arrowUp.type == SDL_KEYDOWN) {
-						// NOTE: Special case where if we are at the top of the
-						// document, pressing up should not move the caret
-						if (caret->rawPos - (i32)screen->sizeInGlyphs.w >= 0) {
-							caret->rawPos -= screen->sizeInGlyphs.w;
-						}
-					}
-				break;
-
-				case SDLK_DOWN:
-					input.arrowDown = event.key;
-					if (input.arrowDown.type == SDL_KEYDOWN) {
-						caret->rawPos += screen->sizeInGlyphs.w;
-					}
-				break;
-				
-				case SDLK_LEFT:
-					input.arrowLeft = event.key;
-					if (input.arrowLeft.type == SDL_KEYDOWN) {
-						caret->rawPos--;
-					}
-				break;
-
-				case SDLK_RIGHT:
-					input.arrowRight = event.key;
-					if (input.arrowRight.type == SDL_KEYDOWN) {
-						caret->rawPos++;
-					}
-				break;
-
-				default:
-					printf("Key code: %d\n", code);
-					input.key = event.key;
-					if (event.key.type == SDL_KEYDOWN) {
-						if (code == SDLK_BACKSPACE) {
-							caret->rawPos--;
-							canonicaliseCaretPos(state->caret, state->buffer, state->screen);
-
-							bufferPos = (u32)caret->gridPos.x + ((u32)caret->gridPos.y * screen->sizeInGlyphs.w);
-							textBuffer->memory[bufferPos] = 0;
-							for (int i = bufferPos; i < textBuffer->size; i++) {
-								textBuffer->memory[i] = textBuffer->memory[i+1];
-							}
-						} else if (code == SDLK_SPACE ||
-						           (code >= 'a' && code <= 'z') ||
-								   (code >= '0' && code <= '9')) {
-							// Bruteforce shift all array elements after out
-							// current caret pos by 1
-							if (textBuffer->memory[bufferPos] != 0) {
-								for (int i = textBuffer->size-1; i > bufferPos; i--) {
-									textBuffer->memory[i] = textBuffer->memory[i-1];
-								}
-							}
-
-							textBuffer->memory[bufferPos] = code;
-							caret->rawPos++;
-						}
-					}
-				break;
-			}
-		}
-
-		canonicaliseCaretPos(state->caret, state->buffer, state->screen);
+		processEventLoop(state);
+		canonicaliseCaretPos(state->caret, *state->buffer, *state->screen);
 
 		// Map screen columns/rows to pixels on screen
-		caret->rect.pos.x = caret->gridPos.x * rasterFont.size.w;
-		caret->rect.pos.y = caret->gridPos.y * rasterFont.size.h;
+		caret->rect.pos.x = caret->gridPos.x * fontSheet.glyphSize.w;
+		caret->rect.pos.y = caret->gridPos.y * fontSheet.glyphSize.h;
 
 		// TODO: Input has lag
 		// TODO: Perhaps we need to assume that all font sheets align characters
@@ -509,35 +579,17 @@ int main(int argc, char* argv[]) {
 		// mutliple cases
 		v2 textBufferPos = {0};
 		for (int i = 0; i < textBuffer->size; i++) {
-			u32 textChar = textBuffer->memory[i];
-			if (textChar >= 'a' && textChar <= 'z') {
-				u32 deltaFromInitialChar = textChar - 'a';
-
-				// Font Image -> Character selector
-				v2 fontChar = rasterFont.firstUpperAlphaChar;
-				fontChar.x += deltaFromInitialChar;
-
-				// Check if all the characters are located in one row or
-				// not otherwise we'll need some wrapping logic to move
-				// the bmp character selector down a row
-				u32 numAlphaCharsInRow =
-					rasterFont.glyphsPerRow - rasterFont.firstLowerAlphaChar.x;
-
-				u32 lengthOfSeries = 26;
-				if (numAlphaCharsInRow < lengthOfSeries) {
-					if (fontChar.x >= rasterFont.glyphsPerRow) {
-						fontChar.y++;
-						fontChar.x = (u32)fontChar.x % rasterFont.glyphsPerRow;
-					}
-				}
-
-				// BMP drawing
+			v2 charCoords;
+			if (convertInputToFontCoords(textBuffer->memory[i], fontSheet, screen,
+			                          &charCoords)) {
+				// TODO: Abstract/clean up here
 				Rect srcBmpRect = {0};
-				srcBmpRect.pos = mulV2(rasterFont.size, fontChar);
-				srcBmpRect.size = rasterFont.size;
+				srcBmpRect.pos = mulV2(fontSheet.glyphSize, charCoords);
+				srcBmpRect.pos.x += fontSheet.paddingWidth * charCoords.x;
+				srcBmpRect.size = fontSheet.glyphSize;
 
 				if (textBufferPos.x >= screen->sizeInGlyphs.w &&
-					textBufferPos.y >= screen->sizeInGlyphs.h) {
+						textBufferPos.y >= screen->sizeInGlyphs.h) {
 					// Stop printing out chars, can't display anymore in buffer
 					break;
 				} else if (textBufferPos.x >= screen->sizeInGlyphs.w) {
@@ -550,54 +602,10 @@ int main(int argc, char* argv[]) {
 				}
 
 				Rect destBmpRect = {0};
-				destBmpRect.pos = mulV2(textBufferPos, rasterFont.size);
+				destBmpRect.pos = mulV2(textBufferPos, fontSheet.glyphSize);
 				destBmpRect.size = srcBmpRect.size;
 				drawBitmap(srcBmpRect, destBmpRect, bmpFile, fileHeader,
-				           fileBitmapHeader, screen, format);
-			} else if (textChar >= '0' && textChar <= '9') {
-				u32 deltaFromInitialChar = textChar - '0';
-
-				// Font Image -> Character selector
-				v2 fontChar = (v2) {0, 3};
-				fontChar.x += deltaFromInitialChar;
-
-				// Check if all the characters are located in one row or
-				// not otherwise we'll need some wrapping logic to move
-				// the bmp character selector down a row
-				u32 numAlphaCharsInRow =
-					rasterFont.glyphsPerRow - 0;
-
-				u32 lengthOfSeries = 10;
-				if (numAlphaCharsInRow < lengthOfSeries) {
-					if (fontChar.x >= lengthOfSeries) {
-						fontChar.y++;
-						fontChar.x = (u32)fontChar.x % rasterFont.glyphsPerRow;
-					}
-				}
-
-				// BMP drawing
-				Rect srcBmpRect = {0};
-				srcBmpRect.pos = mulV2(rasterFont.size, fontChar);
-				srcBmpRect.size = rasterFont.size;
-
-				if (textBufferPos.x >= screen->sizeInGlyphs.w &&
-					textBufferPos.y >= screen->sizeInGlyphs.h) {
-					// Stop printing out chars, can't display anymore in buffer
-					break;
-				} else if (textBufferPos.x >= screen->sizeInGlyphs.w) {
-					textBufferPos.x = 0;
-					textBufferPos.y++;
-				}
-
-				if (textBufferPos.y > screen->sizeInGlyphs.h) {
-					break;
-				}
-
-				Rect destBmpRect = {0};
-				destBmpRect.pos = mulV2(textBufferPos, rasterFont.size);
-				destBmpRect.size = srcBmpRect.size;
-				drawBitmap(srcBmpRect, destBmpRect, bmpFile, fileHeader,
-				           fileBitmapHeader, screen, format);
+						fileBitmapHeader, screen, format);
 			}
 			textBufferPos.x++;
 		}
@@ -607,19 +615,19 @@ int main(int argc, char* argv[]) {
 		DrawRectangle(caret->rect, caretColor, screen);
 
 		// Draw grid line
-		u32 lineThickness = 1;
-		u32 gridColour =  SDL_MapRGBA(format, 0, 255, 0, 255);
-		for (int x = 0; x < screen->sizeInGlyphs.w; x++) {
-			Rect verticalLine = {x * rasterFont.size.w, 0, lineThickness,
-			                     screen->size.h};
-			DrawRectangle(verticalLine, gridColour, screen);
-		}
+		//u32 lineThickness = 1;
+		//u32 gridColour =  SDL_MapRGBA(format, 0, 255, 0, 255);
+		//for (int x = 0; x < screen->sizeInGlyphs.w; x++) {
+		//	Rect verticalLine = {x * fontSheet.glyphSize.w, 0, lineThickness,
+		//	                     screen->size.h};
+		//	DrawRectangle(verticalLine, gridColour, screen);
+		//}
 
-		for (int y = 0; y < screen->sizeInGlyphs.h; y++) {
-			Rect horizontalLine = {0, y * rasterFont.size.h,
-			                       screen->size.w, lineThickness};
-			DrawRectangle(horizontalLine, gridColour, screen);
-		}
+		//for (int y = 0; y < screen->sizeInGlyphs.h; y++) {
+		//	Rect horizontalLine = {0, y * fontSheet.glyphSize.h,
+		//	                       screen->size.w, lineThickness};
+		//	DrawRectangle(horizontalLine, gridColour, screen);
+		//}
 
 
 		SDL_UpdateTexture(screenTex, NULL, screen->backBuffer,
