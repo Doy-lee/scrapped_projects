@@ -75,13 +75,15 @@ typedef struct FileReadResult {
 
 typedef struct ScreenData {
 	u32 *backBuffer;
-	v2 size;
 	u32 bytesPerPixel;
+
+	v2 size;
+	v2 sizeInGlyphs;
 } ScreenData;
 
 typedef struct TextCaret {
 	Rect rect;
-	v2 pos;
+	v2 gridPos;
 	i32 rawPos;
 } TextCaret;
 
@@ -126,14 +128,10 @@ typedef struct ProgramMemory {
 
 typedef struct ProgramState {
 	ScreenData *screen;
+	TextBuffer *buffer;
+	TextCaret *caret;
 	MemoryArena arena;
 	Input input;
-
-	TextBuffer *buffer;
-
-	TextCaret caret;
-	u32 columns;
-	u32 rows;
 } ProgramState;
 
 #pragma pack(push)
@@ -288,9 +286,7 @@ internal u32 *loadBmpFile(char *filePath, u32 *buffer) {
 	return NULL;
 }
 
-internal inline void canonicaliseCaretPos(ProgramState *state) {
-	TextCaret *caret = &state->caret;
-	TextBuffer *buffer = state->buffer;
+internal inline void canonicaliseCaretPos(TextCaret *caret, TextBuffer *buffer, ScreenData *screen) {
 
 	// Get the last displayable character in the buffer, the caret can't pass
 	// the last char
@@ -308,8 +304,8 @@ internal inline void canonicaliseCaretPos(ProgramState *state) {
 		caret->rawPos = lastCharInBuffer;
 	}
 
-	caret->pos.x = caret->rawPos % state->columns;
-	caret->pos.y = caret->rawPos / state->columns;
+	caret->gridPos.x = caret->rawPos % (u32)screen->sizeInGlyphs.w;
+	caret->gridPos.y = caret->rawPos / (u32)screen->sizeInGlyphs.w;
 }
 
 int main(int argc, char* argv[]) {
@@ -356,27 +352,26 @@ int main(int argc, char* argv[]) {
 	state->screen = pushStruct(&state->arena, ScreenData);
 	ScreenData *screen = state->screen;
 	screen->size = (v2) {990, 720};
-	screen->size = (v2) {100, 100};
 	screen->bytesPerPixel = 4;
 	// Allocate size for screen backbuffer
 	screen->backBuffer =
 		pushSize(&state->arena,
 				 (u32)screen->size.w * (u32)screen->size.h * screen->bytesPerPixel);
-	state->columns = (u32)(screen->size.w/rasterFont.size.w);
-	state->rows = (u32)(screen->size.h/rasterFont.size.h);
+
+	screen->sizeInGlyphs.w = (u32)(screen->size.w/rasterFont.size.w);
+	screen->sizeInGlyphs.h = (u32)(screen->size.h/rasterFont.size.h);
 
 	// Initialise caret
-	TextCaret *caret = &state->caret;
+	state->caret = pushStruct(&state->arena, TextCaret);
+	TextCaret *caret = state->caret;
 	caret->rect.size.w = rasterFont.size.w/2;
 	caret->rect.size.h = rasterFont.size.h;
 	Input input = {0};
 
 	// Use remaining space for text buffer
-	//state->textBufferSize = state->arena.size - state->arena.used;
-	//state->textBuffer = pushSize(&state->arena, state->textBufferSize);
 	state->buffer = pushStruct(&state->arena, TextBuffer);
 	TextBuffer *textBuffer = state->buffer;
-	textBuffer->size = state->columns * state->rows;
+	textBuffer->size = screen->sizeInGlyphs.w * screen->sizeInGlyphs.h;
 	textBuffer->memory = pushSize(&state->arena, textBuffer->size);
 
 	b32 globalRunning = TRUE;
@@ -407,7 +402,7 @@ int main(int argc, char* argv[]) {
 		memset(screen->backBuffer, 0,
 		       screen->size.w * screen->size.h * screen->bytesPerPixel);
 
-		u32 bufferPos = (u32)caret->pos.x + ((u32)caret->pos.y * state->columns);
+		u32 bufferPos = (u32)caret->gridPos.x + ((u32)caret->gridPos.y * screen->sizeInGlyphs.w);
 		SDL_Event event;
 		while (SDL_PollEvent(&event)) {
 			if (event.type == SDL_QUIT) {
@@ -426,8 +421,8 @@ int main(int argc, char* argv[]) {
 
 			if (event.type == SDL_MOUSEBUTTONDOWN) {
 				input.mouse = event.button;
-				caret->pos.x = (u32)(input.mouse.x / rasterFont.size.w);
-				caret->pos.y = (u32)(input.mouse.y / rasterFont.size.h);
+				caret->gridPos.x = (u32)(input.mouse.x / rasterFont.size.w);
+				caret->gridPos.y = (u32)(input.mouse.y / rasterFont.size.h);
 			}
 
 			// Extract key state
@@ -443,8 +438,8 @@ int main(int argc, char* argv[]) {
 					if (input.arrowUp.type == SDL_KEYDOWN) {
 						// NOTE: Special case where if we are at the top of the
 						// document, pressing up should not move the caret
-						if (caret->rawPos - (i32)state->columns >= 0) {
-							caret->rawPos -= state->columns;
+						if (caret->rawPos - (i32)screen->sizeInGlyphs.w >= 0) {
+							caret->rawPos -= screen->sizeInGlyphs.w;
 						}
 					}
 				break;
@@ -452,7 +447,7 @@ int main(int argc, char* argv[]) {
 				case SDLK_DOWN:
 					input.arrowDown = event.key;
 					if (input.arrowDown.type == SDL_KEYDOWN) {
-						caret->rawPos += state->columns;
+						caret->rawPos += screen->sizeInGlyphs.w;
 					}
 				break;
 				
@@ -476,9 +471,9 @@ int main(int argc, char* argv[]) {
 					if (event.key.type == SDL_KEYDOWN) {
 						if (code == SDLK_BACKSPACE) {
 							caret->rawPos--;
-							canonicaliseCaretPos(state);
+							canonicaliseCaretPos(state->caret, state->buffer, state->screen);
 
-							bufferPos = (u32)caret->pos.x + ((u32)caret->pos.y * state->columns);
+							bufferPos = (u32)caret->gridPos.x + ((u32)caret->gridPos.y * screen->sizeInGlyphs.w);
 							textBuffer->memory[bufferPos] = 0;
 							for (int i = bufferPos; i < textBuffer->size; i++) {
 								textBuffer->memory[i] = textBuffer->memory[i+1];
@@ -496,18 +491,17 @@ int main(int argc, char* argv[]) {
 
 							textBuffer->memory[bufferPos] = code;
 							caret->rawPos++;
-
 						}
 					}
 				break;
 			}
 		}
 
-		canonicaliseCaretPos(state);
+		canonicaliseCaretPos(state->caret, state->buffer, state->screen);
 
 		// Map screen columns/rows to pixels on screen
-		caret->rect.pos.x = caret->pos.x * rasterFont.size.w;
-		caret->rect.pos.y = caret->pos.y * rasterFont.size.h;
+		caret->rect.pos.x = caret->gridPos.x * rasterFont.size.w;
+		caret->rect.pos.y = caret->gridPos.y * rasterFont.size.h;
 
 		// TODO: Input has lag
 		// TODO: Perhaps we need to assume that all font sheets align characters
@@ -542,16 +536,16 @@ int main(int argc, char* argv[]) {
 				srcBmpRect.pos = mulV2(rasterFont.size, fontChar);
 				srcBmpRect.size = rasterFont.size;
 
-				if (textBufferPos.x >= state->columns &&
-					textBufferPos.y >= state->rows) {
+				if (textBufferPos.x >= screen->sizeInGlyphs.w &&
+					textBufferPos.y >= screen->sizeInGlyphs.h) {
 					// Stop printing out chars, can't display anymore in buffer
 					break;
-				} else if (textBufferPos.x >= state->columns) {
+				} else if (textBufferPos.x >= screen->sizeInGlyphs.w) {
 					textBufferPos.x = 0;
 					textBufferPos.y++;
 				}
 
-				if (textBufferPos.y > state->rows) {
+				if (textBufferPos.y > screen->sizeInGlyphs.h) {
 					break;
 				}
 
@@ -586,16 +580,16 @@ int main(int argc, char* argv[]) {
 				srcBmpRect.pos = mulV2(rasterFont.size, fontChar);
 				srcBmpRect.size = rasterFont.size;
 
-				if (textBufferPos.x >= state->columns &&
-					textBufferPos.y >= state->rows) {
+				if (textBufferPos.x >= screen->sizeInGlyphs.w &&
+					textBufferPos.y >= screen->sizeInGlyphs.h) {
 					// Stop printing out chars, can't display anymore in buffer
 					break;
-				} else if (textBufferPos.x >= state->columns) {
+				} else if (textBufferPos.x >= screen->sizeInGlyphs.w) {
 					textBufferPos.x = 0;
 					textBufferPos.y++;
 				}
 
-				if (textBufferPos.y > state->rows) {
+				if (textBufferPos.y > screen->sizeInGlyphs.h) {
 					break;
 				}
 
@@ -615,13 +609,13 @@ int main(int argc, char* argv[]) {
 		// Draw grid line
 		u32 lineThickness = 1;
 		u32 gridColour =  SDL_MapRGBA(format, 0, 255, 0, 255);
-		for (int x = 0; x < state->columns; x++) {
+		for (int x = 0; x < screen->sizeInGlyphs.w; x++) {
 			Rect verticalLine = {x * rasterFont.size.w, 0, lineThickness,
 			                     screen->size.h};
 			DrawRectangle(verticalLine, gridColour, screen);
 		}
 
-		for (int y = 0; y < state->rows; y++) {
+		for (int y = 0; y < screen->sizeInGlyphs.h; y++) {
 			Rect horizontalLine = {0, y * rasterFont.size.h,
 			                       screen->size.w, lineThickness};
 			DrawRectangle(horizontalLine, gridColour, screen);
