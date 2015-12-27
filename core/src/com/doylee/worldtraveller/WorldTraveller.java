@@ -3,23 +3,29 @@ package com.doylee.worldtraveller;
 import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.audio.Music;
+import com.badlogic.gdx.audio.Sound;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
+import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.utils.Array;
+
+import java.util.Iterator;
 
 // TODO: Read this https://github.com/libgdx/libgdx/wiki/Projection,-viewport,-&-camera
 public class WorldTraveller extends ApplicationAdapter {
 	// Textures
 	private Texture uvMap;
 	private Texture avatarSheet;
+	private Texture coinTex;
 
 	// Sounds/music
 	private Music backgroundMusic;
+	private Sound coinSfx;
 
 	// Game sys configuration
 	private OrthographicCamera camera;
@@ -27,16 +33,19 @@ public class WorldTraveller extends ApplicationAdapter {
 	private BitmapFont debugFont;
 
 	// Game obj data
+	private float worldHorizonInPixels;
 	private float spriteWidth;
 	private float spriteHeight;
 	private float spriteScale;
 	private int walkCurrFrame;
 	private float walkUpdateSpeedSeconds;
+	private float coinSpawnTimeSeconds;
 
 	// Game objects
 	private Rectangle worldGround;
 	private Rectangle avatar;
 	private Array<Rectangle> avatarWalk;
+	private Array<Rectangle> coins;
 
 	// World intrinsics
 	private float pixelsPerMeter;
@@ -44,17 +53,21 @@ public class WorldTraveller extends ApplicationAdapter {
 	private long distTravelled;
 	private float oneSecondCounter;
 
+	private int playerMoney;
+
 
 	@Override
 	public void create () {
 		// Textures
 		uvMap = new Texture(Gdx.files.internal("plain_terrain.png"));
 		avatarSheet = new Texture(Gdx.files.internal("MyChar.png"));
+		coinTex = new Texture(Gdx.files.internal("coin.png"));
 
 		// Game sounds
 		backgroundMusic = Gdx.audio.newMusic(Gdx.files.internal("ffvi_searching_for_friends.mp3"));
 		backgroundMusic.setLooping(true);
-		backgroundMusic.play();
+		//backgroundMusic.play();
+		coinSfx = Gdx.audio.newSound(Gdx.files.internal("coin1.wav"));
 
 		// Game sys config
 		camera = new OrthographicCamera();
@@ -64,29 +77,32 @@ public class WorldTraveller extends ApplicationAdapter {
 				          Gdx.graphics.getHeight());
 		batch = new SpriteBatch();
 		debugFont = new BitmapFont();
-		debugFont.setColor(Color.RED);
+		debugFont.setColor(Color.GREEN);
 
 		worldGround = new Rectangle(0.0f, 0.0f, uvMap.getWidth(),
 				                    uvMap.getHeight());
 
 		// Game obj data
+		worldHorizonInPixels = 280.0f;
 		spriteWidth = 16.0f;
 		spriteHeight = 16.0f;
 		spriteScale = 4.0f;
 		walkCurrFrame = 0;
 		walkUpdateSpeedSeconds = 0.1f;
+		coinSpawnTimeSeconds = 1.0f;
 		float avatarCenterToScreen = Gdx.graphics.getWidth()/2 -
 				                   (spriteWidth*spriteScale);
 		float avatarSize = spriteWidth * spriteScale;
 
 		// Game objs
-		avatar = new Rectangle(avatarCenterToScreen, 280.0f, avatarSize,
-				               avatarSize);
+		avatar = new Rectangle(avatarCenterToScreen, worldHorizonInPixels,
+				               avatarSize, avatarSize);
 		avatarWalk = new Array<Rectangle>();
 		avatarWalk.add(new Rectangle(0.0f, 16.0f, 16.0f, 16.0f));
 		avatarWalk.add(new Rectangle(16.0f, 16.0f, 16.0f, 16.0f));
 		avatarWalk.add(new Rectangle(32.0f, 16.0f, 16.0f, 16.0f));
 		avatarWalk.add(new Rectangle(48.0f, 16.0f, 16.0f, 16.0f));
+		coins = new Array<Rectangle>();
 
 		// World intrinsics
 		// NOTE: The average human height is 1.7m, canonically in our world, ~60pixels
@@ -98,6 +114,8 @@ public class WorldTraveller extends ApplicationAdapter {
 		worldMoveSpeed = 4.4f;
 		distTravelled = 0;
 		oneSecondCounter = 0;
+
+		playerMoney = 0;
 	}
 
 	@Override
@@ -127,15 +145,46 @@ public class WorldTraveller extends ApplicationAdapter {
 			oneSecondCounter = 0.0f;
 		}
 
+		coinSpawnTimeSeconds -= Gdx.graphics.getDeltaTime();
+		if (coinSpawnTimeSeconds <= 0) {
+			float randomiseCoinX = Gdx.graphics.getWidth();
+			randomiseCoinX += MathUtils.random(0.0f, Gdx.graphics.getWidth());
+			Rectangle coinObj = new Rectangle(randomiseCoinX,
+					                          worldHorizonInPixels, 16.0f*2,
+											  16.0f*2);
+			coins.add(coinObj);
+			coinSpawnTimeSeconds = 1.0f;
+		}
+
+		Iterator<Rectangle> coinIter = coins.iterator();
+		while (coinIter.hasNext()) {
+			Rectangle coin = coinIter.next();
+			coin.x -= (worldMoveSpeed * pixelsPerMeter) * Gdx.graphics.getDeltaTime();
+			if (coin.overlaps(avatar)) {
+				playerMoney++;
+				coinSfx.play();
+				coinIter.remove();
+			}
+		}
+
+		// TODO: Use proper 2D physics
 		batch.setProjectionMatrix(camera.combined);
 		batch.begin();
+			// RENDER WORLD
             batch.draw(uvMap, worldGround.x, worldGround.y);
 			batch.draw(uvMap, worldGround.x + worldGround.width, worldGround.y);
+
+			for (Rectangle coin: coins) {
+				batch.draw(coinTex, coin.x, coin.y, coin.width, coin.height);
+			}
+
 			batch.draw(avatarSheet, avatar.x, avatar.y, avatar.width,
 					avatar.height, (int) avatarWalk.get(walkCurrFrame).x,
 					(int) avatarWalk.get(walkCurrFrame).y,
 					(int) avatarWalk.get(walkCurrFrame).width,
 					(int) avatarWalk.get(walkCurrFrame).height, false, false);
+
+			// RENDER DEBUG FONT
             debugFont.draw(batch, "Gdx DeltaTime():  " + Gdx.graphics.getDeltaTime(),
 					       20.0f, (Gdx.graphics.getHeight() - 20.0f));
 			debugFont.draw(batch, "Gdx FramesPerSec: " +
@@ -146,7 +195,18 @@ public class WorldTraveller extends ApplicationAdapter {
 					       (Gdx.graphics.getHeight() - 60.0f));
             debugFont.draw(batch, "Distance Travelled: " + distTravelled, 20.0f,
 				           (Gdx.graphics.getHeight() - 80.0f));
+            debugFont.draw(batch, "Player Money: " + playerMoney, 20.0f,
+					       (Gdx.graphics.getHeight() - 100.0f));
 		batch.end();
 
+	}
+
+	@Override
+	public void dispose() {
+		uvMap.dispose();
+		avatarSheet.dispose();
+		coinTex.dispose();
+
+		backgroundMusic.dispose();
 	}
 }
