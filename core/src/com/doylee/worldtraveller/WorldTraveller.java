@@ -2,6 +2,7 @@ package com.doylee.worldtraveller;
 
 import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.Input;
 import com.badlogic.gdx.audio.Music;
 import com.badlogic.gdx.audio.Sound;
 import com.badlogic.gdx.graphics.Color;
@@ -22,6 +23,7 @@ public class WorldTraveller extends ApplicationAdapter {
 	private Texture uvMap;
 	private Texture avatarSheet;
 	private Texture coinTex;
+	private Texture tentTex;
 
 	// Sounds/music
 	private Music backgroundMusic;
@@ -46,6 +48,7 @@ public class WorldTraveller extends ApplicationAdapter {
 	private Rectangle avatar;
 	private Array<Rectangle> avatarWalk;
 	private Array<Rectangle> coins;
+	private Rectangle tent;
 
 	// World intrinsics
 	private float pixelsPerMeter;
@@ -54,6 +57,7 @@ public class WorldTraveller extends ApplicationAdapter {
 	private float oneSecondCounter;
 
 	private int playerMoney;
+	private boolean tentMode;
 
 
 	@Override
@@ -62,6 +66,7 @@ public class WorldTraveller extends ApplicationAdapter {
 		uvMap = new Texture(Gdx.files.internal("plain_terrain.png"));
 		avatarSheet = new Texture(Gdx.files.internal("MyChar.png"));
 		coinTex = new Texture(Gdx.files.internal("coin.png"));
+		tentTex = new Texture(Gdx.files.internal("circus_tent.png"));
 
 		// Game sounds
 		backgroundMusic = Gdx.audio.newMusic(Gdx.files.internal("ffvi_searching_for_friends.mp3"));
@@ -103,6 +108,7 @@ public class WorldTraveller extends ApplicationAdapter {
 		avatarWalk.add(new Rectangle(32.0f, 16.0f, 16.0f, 16.0f));
 		avatarWalk.add(new Rectangle(48.0f, 16.0f, 16.0f, 16.0f));
 		coins = new Array<Rectangle>();
+		tent = new Rectangle(avatar.x, avatar.y, 94.0f*1.5f, 77.0f*1.5f);
 
 		// World intrinsics
 		// NOTE: The average human height is 1.7m, canonically in our world, ~60pixels
@@ -124,46 +130,55 @@ public class WorldTraveller extends ApplicationAdapter {
 		Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
 		camera.update();
 
-		worldGround.x -= (worldMoveSpeed * pixelsPerMeter) * Gdx.graphics.getDeltaTime();
-		if (worldGround.x <= -worldGround.width) {
-			worldGround.x = 0;
+		if (Gdx.input.isKeyJustPressed(Input.Keys.Z)) {
+			// toggle tentMode
+			tentMode = !tentMode;
 		}
 
-		walkUpdateSpeedSeconds -= Gdx.graphics.getDeltaTime();
-		if (walkUpdateSpeedSeconds <= 0) {
-			if (walkCurrFrame < 3) {
-				walkCurrFrame++;
-			} else {
-				walkCurrFrame = 0;
+		if (tentMode == true) {
+		} else {
+			worldGround.x -= (worldMoveSpeed * pixelsPerMeter) * Gdx.graphics.getDeltaTime();
+
+			if (worldGround.x <= -worldGround.width) {
+				worldGround.x = 0;
 			}
-			walkUpdateSpeedSeconds = 0.09f;
-		}
 
-		oneSecondCounter += Gdx.graphics.getDeltaTime();
-		if (oneSecondCounter >= 1.0f) {
-			distTravelled += worldMoveSpeed;
-			oneSecondCounter = 0.0f;
-		}
+			walkUpdateSpeedSeconds -= Gdx.graphics.getDeltaTime();
+			if (walkUpdateSpeedSeconds <= 0) {
+				if (walkCurrFrame < 3) {
+					walkCurrFrame++;
+				} else {
+					walkCurrFrame = 0;
+				}
+				walkUpdateSpeedSeconds = 0.09f;
+			}
 
-		coinSpawnTimeSeconds -= Gdx.graphics.getDeltaTime();
-		if (coinSpawnTimeSeconds <= 0) {
-			float randomiseCoinX = Gdx.graphics.getWidth();
-			randomiseCoinX += MathUtils.random(0.0f, Gdx.graphics.getWidth());
-			Rectangle coinObj = new Rectangle(randomiseCoinX,
-					                          worldHorizonInPixels, 16.0f*2,
-											  16.0f*2);
-			coins.add(coinObj);
-			coinSpawnTimeSeconds = 1.0f;
-		}
+			oneSecondCounter += Gdx.graphics.getDeltaTime();
+			if (oneSecondCounter >= 1.0f) {
+				distTravelled += worldMoveSpeed;
+				oneSecondCounter = 0.0f;
+			}
 
-		Iterator<Rectangle> coinIter = coins.iterator();
-		while (coinIter.hasNext()) {
-			Rectangle coin = coinIter.next();
-			coin.x -= (worldMoveSpeed * pixelsPerMeter) * Gdx.graphics.getDeltaTime();
-			if (coin.overlaps(avatar)) {
-				playerMoney++;
-				coinSfx.play();
-				coinIter.remove();
+			coinSpawnTimeSeconds -= Gdx.graphics.getDeltaTime();
+			if (coinSpawnTimeSeconds <= 0) {
+				float randomiseCoinX = Gdx.graphics.getWidth();
+				randomiseCoinX += MathUtils.random(0.0f, Gdx.graphics.getWidth());
+				Rectangle coinObj = new Rectangle(randomiseCoinX,
+						worldHorizonInPixels, 16.0f*2,
+						16.0f*2);
+				coins.add(coinObj);
+				coinSpawnTimeSeconds = 1.0f;
+			}
+
+			Iterator<Rectangle> coinIter = coins.iterator();
+			while (coinIter.hasNext()) {
+				Rectangle coin = coinIter.next();
+				coin.x -= (worldMoveSpeed * pixelsPerMeter) * Gdx.graphics.getDeltaTime();
+				if (coin.overlaps(avatar)) {
+					playerMoney++;
+					coinSfx.play();
+					coinIter.remove();
+				}
 			}
 		}
 
@@ -178,11 +193,16 @@ public class WorldTraveller extends ApplicationAdapter {
 				batch.draw(coinTex, coin.x, coin.y, coin.width, coin.height);
 			}
 
-			batch.draw(avatarSheet, avatar.x, avatar.y, avatar.width,
-					avatar.height, (int) avatarWalk.get(walkCurrFrame).x,
-					(int) avatarWalk.get(walkCurrFrame).y,
-					(int) avatarWalk.get(walkCurrFrame).width,
-					(int) avatarWalk.get(walkCurrFrame).height, false, false);
+			if (tentMode) {
+				batch.draw(tentTex, tent.x, tent.y, tent.width, tent.height);
+			} else {
+				batch.draw(avatarSheet, avatar.x, avatar.y, avatar.width,
+						avatar.height, (int) avatarWalk.get(walkCurrFrame).x,
+						(int) avatarWalk.get(walkCurrFrame).y,
+						(int) avatarWalk.get(walkCurrFrame).width,
+						(int) avatarWalk.get(walkCurrFrame).height, false, false);
+			}
+
 
 			// RENDER DEBUG FONT
             debugFont.draw(batch, "Gdx DeltaTime():  " + Gdx.graphics.getDeltaTime(),
@@ -197,6 +217,8 @@ public class WorldTraveller extends ApplicationAdapter {
 				           (Gdx.graphics.getHeight() - 80.0f));
             debugFont.draw(batch, "Player Money: " + playerMoney, 20.0f,
 					       (Gdx.graphics.getHeight() - 100.0f));
+            debugFont.draw(batch, "Tent State: " + tentMode, 20.0f,
+                    (Gdx.graphics.getHeight() - 120.0f));
 		batch.end();
 
 	}
