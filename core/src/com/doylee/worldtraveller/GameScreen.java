@@ -1,6 +1,5 @@
 package com.doylee.worldtraveller;
 
-import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.Screen;
@@ -11,15 +10,19 @@ import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
-import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Rectangle;
+import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.Stage;
+import com.badlogic.gdx.scenes.scene2d.ui.Table;
+import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
+import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
 import com.badlogic.gdx.utils.Array;
+import com.badlogic.gdx.utils.viewport.ScreenViewport;
 
 import java.util.Iterator;
 
-// TODO: Read this https://github.com/libgdx/libgdx/wiki/Projection,-viewport,-&-camera
+// TODO: Read this https://github.com/libgdx/libgdx/wiki/Projection,-viewport,-&-cavatarWalkamera
 public class GameScreen implements Screen {
 	final WorldTraveller game;
 
@@ -35,7 +38,6 @@ public class GameScreen implements Screen {
 
 	// Game sys configuration
 	private OrthographicCamera camera;
-	private SpriteBatch batch;
 	private BitmapFont debugFont;
 	private Stage stage;
 
@@ -44,14 +46,12 @@ public class GameScreen implements Screen {
 	private float spriteWidth;
 	private float spriteHeight;
 	private float spriteScale;
-	private int walkCurrFrame;
-	private float walkUpdateSpeedSeconds;
 	private float coinSpawnTimeSeconds;
 
 	// Game objects
 	private Rectangle worldGround;
 	private Rectangle avatar;
-	private Array<Rectangle> avatarWalk;
+	private SpriteAnim walk;
 	private Array<Rectangle> coins;
 	private Rectangle tent;
 
@@ -61,8 +61,9 @@ public class GameScreen implements Screen {
 	private long distTravelled;
 	private float oneSecondCounter;
 
-	private int playerMoney;
-	private boolean tentMode;
+	private GameState gameState;
+
+	private Table table;
 
 	public GameScreen(final WorldTraveller wtGame) {
 		game = wtGame;
@@ -84,10 +85,10 @@ public class GameScreen implements Screen {
 		// setToOrtho(Y Orientation=Down, viewPortWidth, viewPortHeight)
 		camera.setToOrtho(false, Gdx.graphics.getWidth(),
 				          Gdx.graphics.getHeight());
-		batch = new SpriteBatch();
 		debugFont = new BitmapFont();
 		debugFont.setColor(Color.GREEN);
-		stage = new Stage();
+		stage = new Stage(new ScreenViewport(camera), game.batch);
+		Gdx.input.setInputProcessor(stage);
 
 		worldGround = new Rectangle(0.0f, 0.0f, uvMap.getWidth(),
 				                    uvMap.getHeight());
@@ -97,8 +98,6 @@ public class GameScreen implements Screen {
 		spriteWidth = 16.0f;
 		spriteHeight = 16.0f;
 		spriteScale = 4.0f;
-		walkCurrFrame = 0;
-		walkUpdateSpeedSeconds = 0.1f;
 		coinSpawnTimeSeconds = 1.0f;
 		float avatarCenterToScreen = Gdx.graphics.getWidth()/2 -
 				                   (spriteWidth*spriteScale);
@@ -107,11 +106,14 @@ public class GameScreen implements Screen {
 		// Game objs
 		avatar = new Rectangle(avatarCenterToScreen, worldHorizonInPixels,
 				               avatarSize, avatarSize);
-		avatarWalk = new Array<Rectangle>();
+		Array<Rectangle> avatarWalk = new Array<Rectangle>(4);
 		avatarWalk.add(new Rectangle(0.0f, 16.0f, 16.0f, 16.0f));
 		avatarWalk.add(new Rectangle(16.0f, 16.0f, 16.0f, 16.0f));
 		avatarWalk.add(new Rectangle(32.0f, 16.0f, 16.0f, 16.0f));
 		avatarWalk.add(new Rectangle(48.0f, 16.0f, 16.0f, 16.0f));
+		float walkUpdateSpeedSeconds = 0.1f;
+		walk = new SpriteAnim(avatarWalk, avatarWalk.size, walkUpdateSpeedSeconds);
+
 		coins = new Array<Rectangle>();
 		tent = new Rectangle(avatar.x, avatar.y, 94.0f*1.5f, 77.0f*1.5f);
 
@@ -126,7 +128,22 @@ public class GameScreen implements Screen {
 		distTravelled = 0;
 		oneSecondCounter = 0;
 
-		playerMoney = 0;
+		gameState = new GameState();
+
+		TextButton camp = new TextButton("Camp", game.skin);
+		camp.pad(20);
+		camp.addListener(new ChangeListener() {
+			@Override
+			public void changed(ChangeEvent event, Actor actor) {
+				gameState.tentMode = !gameState.tentMode;
+			}
+		});
+
+		table = new Table(game.skin);
+		table.setFillParent(true);
+		table.setBounds(0, 0, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
+		table.add(camp);
+		stage.addActor(table);
 	}
 
 	@Override
@@ -141,10 +158,10 @@ public class GameScreen implements Screen {
 
 		if (Gdx.input.isKeyJustPressed(Input.Keys.Z)) {
 			// toggle tentMode
-			tentMode = !tentMode;
+			gameState.tentMode = !gameState.tentMode;
 		}
 
-		if (tentMode == true) {
+		if (gameState.tentMode == true) {
 		} else {
 			worldGround.x -= (worldMoveSpeed * pixelsPerMeter) * Gdx.graphics.getDeltaTime();
 
@@ -152,15 +169,7 @@ public class GameScreen implements Screen {
 				worldGround.x = 0;
 			}
 
-			walkUpdateSpeedSeconds -= Gdx.graphics.getDeltaTime();
-			if (walkUpdateSpeedSeconds <= 0) {
-				if (walkCurrFrame < 3) {
-					walkCurrFrame++;
-				} else {
-					walkCurrFrame = 0;
-				}
-				walkUpdateSpeedSeconds = 0.09f;
-			}
+			walk.update(Gdx.graphics.getDeltaTime());
 
 			oneSecondCounter += Gdx.graphics.getDeltaTime();
 			if (oneSecondCounter >= 1.0f) {
@@ -184,7 +193,7 @@ public class GameScreen implements Screen {
 				Rectangle coin = coinIter.next();
 				coin.x -= (worldMoveSpeed * pixelsPerMeter) * Gdx.graphics.getDeltaTime();
 				if (coin.overlaps(avatar)) {
-					playerMoney++;
+					gameState.playerMoney++;
 					coinSfx.play();
 					coinIter.remove();
 				}
@@ -192,43 +201,48 @@ public class GameScreen implements Screen {
 		}
 
 		// TODO: Use proper 2D physics
-		batch.setProjectionMatrix(camera.combined);
-		batch.begin();
+		game.batch.setProjectionMatrix(camera.combined);
+		game.batch.begin();
 			// RENDER WORLD
-            batch.draw(uvMap, worldGround.x, worldGround.y);
-			batch.draw(uvMap, worldGround.x + worldGround.width, worldGround.y);
+            game.batch.draw(uvMap, worldGround.x, worldGround.y);
+			game.batch.draw(uvMap, worldGround.x + worldGround.width, worldGround.y);
 
 			for (Rectangle coin: coins) {
-				batch.draw(coinTex, coin.x, coin.y, coin.width, coin.height);
+				game.batch.draw(coinTex, coin.x, coin.y, coin.width, coin.height);
 			}
 
-			if (tentMode) {
-				batch.draw(tentTex, tent.x, tent.y, tent.width, tent.height);
+			if (gameState.tentMode) {
+				game.batch.draw(tentTex, tent.x, tent.y, tent.width, tent.height);
 			} else {
-				batch.draw(avatarSheet, avatar.x, avatar.y, avatar.width,
-						avatar.height, (int) avatarWalk.get(walkCurrFrame).x,
-						(int) avatarWalk.get(walkCurrFrame).y,
-						(int) avatarWalk.get(walkCurrFrame).width,
-						(int) avatarWalk.get(walkCurrFrame).height, false, false);
+				Rectangle frame = walk.getCurrFrame();
+				game.batch.draw(avatarSheet, avatar.x, avatar.y, avatar.width,
+						avatar.height, (int) frame.x,
+						(int) frame.y,
+						(int) frame.width,
+						(int) frame.height, false, false);
 			}
 
 
 			// RENDER DEBUG FONT
-            debugFont.draw(batch, "Gdx DeltaTime():  " + Gdx.graphics.getDeltaTime(),
+            debugFont.draw(game.batch, "Gdx DeltaTime():  " + Gdx.graphics.getDeltaTime(),
 					       20.0f, (Gdx.graphics.getHeight() - 20.0f));
-			debugFont.draw(batch, "Gdx FramesPerSec: " +
+			debugFont.draw(game.batch, "Gdx FramesPerSec: " +
 					       Gdx.graphics.getFramesPerSecond(), 20.0f,
 					       (Gdx.graphics.getHeight() - 40.0f));
-            debugFont.draw(batch, "Gdx Mouse X,Y: " + Gdx.input.getX() + ", " +
+            debugFont.draw(game.batch, "Gdx Mouse X,Y: " + Gdx.input.getX() + ", " +
 					       (Gdx.graphics.getHeight() - Gdx.input.getY()), 20.0f,
 					       (Gdx.graphics.getHeight() - 60.0f));
-            debugFont.draw(batch, "Distance Travelled: " + distTravelled, 20.0f,
+            debugFont.draw(game.batch, "Distance Travelled: " + distTravelled, 20.0f,
 				           (Gdx.graphics.getHeight() - 80.0f));
-            debugFont.draw(batch, "Player Money: " + playerMoney, 20.0f,
+            debugFont.draw(game.batch, "Player Money: " + gameState.playerMoney, 20.0f,
 					       (Gdx.graphics.getHeight() - 100.0f));
-            debugFont.draw(batch, "Tent State: " + tentMode, 20.0f,
+            debugFont.draw(game.batch, "Tent State: " + gameState.tentMode, 20.0f,
                     (Gdx.graphics.getHeight() - 120.0f));
-		batch.end();
+		game.batch.end();
+
+		stage.act(delta);
+		stage.draw();
+
 
 	}
 
@@ -258,7 +272,6 @@ public class GameScreen implements Screen {
 		avatarSheet.dispose();
 		coinTex.dispose();
 
-		batch.dispose();
 		debugFont.dispose();
 		stage.dispose();
 

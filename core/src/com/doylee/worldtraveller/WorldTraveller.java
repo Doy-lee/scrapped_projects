@@ -1,18 +1,25 @@
 package com.doylee.worldtraveller;
 import com.badlogic.gdx.Game;
+import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
+import com.badlogic.gdx.graphics.g2d.TextureAtlas;
+import com.badlogic.gdx.scenes.scene2d.ui.Skin;
 
 
 public class WorldTraveller extends Game {
-
     public SpriteBatch batch;
     public BitmapFont font;
+    public Skin skin;
 
     public void create() {
         batch = new SpriteBatch();
         //Use LibGDX's default Arial font.
         font = new BitmapFont();
+
+        TextureAtlas atlas = new TextureAtlas(Gdx.files.internal("uiskin.atlas"));
+        skin = new Skin(Gdx.files.internal("uiskin.json"), atlas);
+
         this.setScreen(new MainMenuScreen(this));
     }
 
