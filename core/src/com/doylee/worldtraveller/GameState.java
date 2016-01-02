@@ -16,6 +16,7 @@ public class GameState {
     public int playerMoney;
     public boolean tentMode;
     public float coinSpawnTimer;
+    public int distTravelled;
 
     public GameState() {
         playerMoney = 0;

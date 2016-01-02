@@ -9,7 +9,7 @@ import com.badlogic.gdx.scenes.scene2d.Group;
 /**
  * Created by Doyle on 31/12/2015.
  */
-public abstract class GameObj extends Group {
+public class GameObj extends Group {
     private Texture baseTexture;
     private Animation anim;
     private boolean isAnimated;
@@ -36,7 +36,7 @@ public abstract class GameObj extends Group {
 
     @Override
     public void draw(Batch batch, float parentAlpha) {
-        // TODO: Currently draws parent first, then the most child-element and upwards
+        super.draw(batch, parentAlpha);
         if (anim == null || isAnimated == false) {
             if (baseTexture == null) System.err.println("Base texture does not exist");
             batch.draw(baseTexture, this.getX(), this.getY(), this.getWidth(), this.getHeight());
@@ -44,7 +44,6 @@ public abstract class GameObj extends Group {
             TextureRegion currFrame = anim.getKeyFrame(stateTime, true);
             batch.draw(currFrame, this.getX(), this.getY(), this.getWidth(), this.getHeight());
         }
-        super.draw(batch, parentAlpha);
     }
 }
 
