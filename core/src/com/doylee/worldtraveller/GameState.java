@@ -23,7 +23,6 @@ public class GameState {
     public static final float COIN_SPAWN_TIME = 1.0f;
 
     public int playerMoney;
-    public boolean tentMode;
     public float coinSpawnTimer;
     public int distTravelled;
     public boolean isTentActive;
@@ -34,7 +33,7 @@ public class GameState {
 
     public GameState() {
         this.playerMoney = 0;
-        this.tentMode = false;
+        this.isTentActive = false;
         this.coinSpawnTimer = 1.0f;
         this.distTravelled = 0;
 

@@ -61,26 +61,8 @@ public class GameScreen implements Screen {
 		// setToOrtho(Y Orientation=Down, viewPortWidth, viewPortHeight)
 		camera.setToOrtho(false, Gdx.graphics.getWidth(),
 				          Gdx.graphics.getHeight());
-		uiStage = new Stage(new ScreenViewport(), game.batch);
-		Gdx.input.setInputProcessor(uiStage);
 
-		TextButton camp = new TextButton("Camp", game.skin);
-		camp.pad(20);
-		camp.addListener(new ChangeListener() {
-			@Override
-			public void changed(ChangeEvent event, Actor actor) {
-				if (gameState.isTentActive) gameState.setTentMode(false);
-				else gameState.setTentMode(true);
-			}
-		});
-
-		table = new Table(game.skin);
-		table.setFillParent(true);
-		table.setBounds(0, 0, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
-		table.add(camp);
-		uiStage.addActor(table);
-
-		//  NOTE;
+		setupGUI();
 		updateGameStage();
 		oneSecondCounter = 0;
 	}
@@ -92,6 +74,47 @@ public class GameScreen implements Screen {
 		}
 		gameStage.addActor(gameState.hero);
 		gameStage.addActor(gameState.hero.tent);
+	}
+
+	public void setupGUI() {
+		uiStage = new Stage(new ScreenViewport(), game.batch);
+		Gdx.input.setInputProcessor(uiStage);
+
+		TextButton campBtn = new TextButton("Camp", game.skin);
+		campBtn.pad(10);
+		campBtn.addListener(new ChangeListener() {
+			@Override
+			public void changed(ChangeEvent event, Actor actor) {
+				if (gameState.isTentActive) gameState.setTentMode(false);
+				else gameState.setTentMode(true);
+			}
+		});
+
+		TextButton menuBtn = new TextButton("Menu", game.skin);
+		menuBtn.pad(10);
+		menuBtn.addListener(new ChangeListener() {
+			@Override
+			public void changed(ChangeEvent event, Actor actor) {
+			}
+		});
+
+		TextButton buyBtn = new TextButton("Buy", game.skin);
+		buyBtn.pad(10);
+		buyBtn.addListener(new ChangeListener() {
+			@Override
+			public void changed(ChangeEvent event, Actor actor) {
+			}
+		});
+
+		table = new Table(game.skin);
+		table.bottom().left();
+		table.setDebug(true);
+		table.setFillParent(true);
+		table.add(campBtn);
+		table.add(menuBtn);
+		table.add(buyBtn);
+
+		uiStage.addActor(table);
 	}
 
 	@Override
@@ -123,7 +146,7 @@ public class GameScreen implements Screen {
 				else gameState.setTentMode(true);
 			}
 
-			if (gameState.tentMode == false) {
+			if (gameState.isTentActive == false) {
 				oneSecondCounter += Gdx.graphics.getDeltaTime();
 				if (oneSecondCounter >= 1.0f) {
 					gameState.distTravelled += GameState.WORLD_MOVE_SPEED;
@@ -184,7 +207,7 @@ public class GameScreen implements Screen {
                 (Gdx.graphics.getHeight() - 80.0f));
         DEBUGFont.draw(game.batch, "Player Money: " + gameState.playerMoney, 20.0f,
                 (Gdx.graphics.getHeight() - 100.0f));
-        DEBUGFont.draw(game.batch, "Tent State: " + gameState.tentMode, 20.0f,
+        DEBUGFont.draw(game.batch, "Tent State: " + gameState.isTentActive, 20.0f,
                 (Gdx.graphics.getHeight() - 120.0f));
         DEBUGFont.draw(game.batch, "Player X: " + gameState.hero.getX(), 20.0f,
                 (Gdx.graphics.getHeight() - 140.0f));
