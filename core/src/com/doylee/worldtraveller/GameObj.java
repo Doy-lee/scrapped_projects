@@ -12,11 +12,11 @@ import com.badlogic.gdx.scenes.scene2d.Group;
 public class GameObj extends Group {
     private Texture baseTexture;
     private Animation anim;
-    private boolean isAnimated;
+    private boolean playAnim;
     private float stateTime;
 
-    public GameObj(float x, float y, float width, float height, boolean isAnimated) {
-        this.isAnimated = isAnimated;
+    public GameObj(float x, float y, float width, float height, boolean playAnim) {
+        this.playAnim = playAnim;
         this.setBounds(x, y, width, height);
         stateTime = 0f;
     }
@@ -37,7 +37,7 @@ public class GameObj extends Group {
     @Override
     public void draw(Batch batch, float parentAlpha) {
         super.draw(batch, parentAlpha);
-        if (anim == null || isAnimated == false) {
+        if (anim == null || playAnim == false) {
             if (baseTexture == null) System.err.println("Base texture does not exist");
             batch.draw(baseTexture, this.getX(), this.getY(), this.getWidth(), this.getHeight());
         } else {
