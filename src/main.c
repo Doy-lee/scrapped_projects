@@ -119,10 +119,6 @@ typedef union Input {
 } Input;
 
 typedef struct FontSheet {
-	u32 firstUpperAlphaChar;
-	u32 firstLowerAlphaChar;
-	u32 firstNumericChar;
-
 	v2 glyphSize;
 	u32 glyphsPerRow;
 	u32 paddingWidth;
@@ -424,7 +420,7 @@ internal void processEventLoop(ProgramState *state) {
 							textBuffer->memory[i] = textBuffer->memory[i+1];
 						}
 					} else if (code == SDLK_SPACE ||
-							(code >= 'a' && code <= 'z') ||
+							(code >= SDLK_SPACE && code <= '~') ||
 							(code >= '0' && code <= '9')) {
 
 						// Bruteforce shift all array elements after out
@@ -436,8 +432,30 @@ internal void processEventLoop(ProgramState *state) {
 						}
 
 						if (input->key.keysym.mod & KMOD_SHIFT) {
-							// offset to capital letter
-							textBuffer->memory[caret->rawPos++] = code - 32;
+							u32 offset = 0;
+							if (code >= 'a' && code <= 'z') offset = 'a' -'A';
+							else if (code == '`') offset = '`' - '~';
+							else if (code == '0') offset = '0' - ')';
+							else if (code == '1') offset = '1' - '!';
+							else if (code == '2') offset = '2' - '@';
+							else if (code == '3') offset = '3' - '#';
+							else if (code == '4') offset = '4' - '$';
+							else if (code == '5') offset = '5' - '%';
+							else if (code == '6') offset = '6' - '^';
+							else if (code == '7') offset = '7' - '&';
+							else if (code == '8') offset = '8' - '*';
+							else if (code == '9') offset = '9' - '(';
+							else if (code == '-') offset = '-' - '_';
+							else if (code == '=') offset = '=' - '+';
+							else if (code == '[') offset = '[' - '{';
+							else if (code == ']') offset = ']' - '}';
+							else if (code == '\\') offset = '\\' - '|';
+							else if (code == ';') offset = ';' - ':';
+							else if (code == '\'') offset = '\'' - '"';
+							else if (code == ',') offset = ',' - '<';
+							else if (code == '.') offset = '.' - '>';
+							else if (code == '/') offset = '/' - '?';
+							textBuffer->memory[caret->rawPos++] = code - offset;
 						} else {
 							textBuffer->memory[caret->rawPos++] = code;
 						}
@@ -446,37 +464,6 @@ internal void processEventLoop(ProgramState *state) {
 				break;
 		}
 	}
-}
-
-internal b32 convertInputToFontCoords(u32 input, FontSheet fontSheet,
-                                      ScreenData *screen, v2 *result) {
-
-	// TODO: Group into an object possibly
-	u32 initialCharLoc = {0};
-	u32 deltaFromInitialCharLoc = 0;
-	u32 seriesLength = 0;
-
-	// Generate the x,y coordinate of the character to extract
-	if (input >= 'a' && input <= 'z') {
-		initialCharLoc = fontSheet.firstLowerAlphaChar;
-		deltaFromInitialCharLoc = input - 'a';
-		seriesLength = 'a' - 'z';
-	} else if  (input >= 'A' && input <= 'Z') {
-		initialCharLoc = fontSheet.firstUpperAlphaChar;
-		deltaFromInitialCharLoc = input - 'A';
-		seriesLength = 'A' - 'Z';
-	} else if (input >= '0' && input <= '9') {
-		initialCharLoc = fontSheet.firstNumericChar;
-		deltaFromInitialCharLoc = input - '0';
-		seriesLength = '0' - '9';
-	} else {
-		return FALSE;
-	}
-
-	u32 inputRawSheetCoords = initialCharLoc + deltaFromInitialCharLoc;
-	*result = convertRawPosToVec2(inputRawSheetCoords, fontSheet.glyphsPerRow);
-	return TRUE;
-
 }
 
 int main(int argc, char* argv[]) {
@@ -517,10 +504,6 @@ int main(int argc, char* argv[]) {
 	fontSheet.glyphSize = (v2) {6, 13};
 	fontSheet.glyphsPerRow = 16;
 	fontSheet.paddingWidth = 1 * fontSheet.glyphSize.w;
-
-	fontSheet.firstUpperAlphaChar = convertVec2ToRawPos((v2){1, 4}, fontSheet.glyphsPerRow);
-	fontSheet.firstLowerAlphaChar = convertVec2ToRawPos((v2){1, 6}, fontSheet.glyphsPerRow);
-	fontSheet.firstNumericChar = convertVec2ToRawPos((v2){0, 3}, fontSheet.glyphsPerRow);
 
 	// Initialise screen
 	state->screen = pushStruct(&state->arena, ScreenData);
@@ -585,14 +568,11 @@ int main(int argc, char* argv[]) {
 		caret->rect.pos.y = caret->gridPos.y * fontSheet.glyphSize.h;
 
 		// TODO: Input has lag
-		// TODO: Perhaps we need to assume that all font sheets align characters
-		// to the ascii table standard, this would minimise the need to handle
-		// mutliple cases
 		v2 textBufferPos = {0};
 		for (int i = 0; i < textBuffer->size; i++) {
-			v2 charCoords;
-			if (convertInputToFontCoords(textBuffer->memory[i], fontSheet, screen,
-			                          &charCoords)) {
+			u32 input = textBuffer->memory[i];
+			if (input >= SDLK_SPACE && input <= '~') {
+				v2 charCoords = convertRawPosToVec2(input, fontSheet.glyphsPerRow);
 				// TODO: Abstract/clean up here
 				Rect srcBmpRect = {0};
 				srcBmpRect.pos = mulV2(fontSheet.glyphSize, charCoords);
