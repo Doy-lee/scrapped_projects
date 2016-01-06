@@ -426,6 +426,7 @@ internal void processEventLoop(ProgramState *state) {
 					} else if (code == SDLK_SPACE ||
 							(code >= 'a' && code <= 'z') ||
 							(code >= '0' && code <= '9')) {
+
 						// Bruteforce shift all array elements after out
 						// current caret pos by 1
 						if (textBuffer->memory[caret->rawPos] != 0) {
@@ -433,7 +434,13 @@ internal void processEventLoop(ProgramState *state) {
 								textBuffer->memory[i] = textBuffer->memory[i-1];
 							}
 						}
-						textBuffer->memory[caret->rawPos++] = code;
+
+						if (input->key.keysym.mod & KMOD_SHIFT) {
+							// offset to capital letter
+							textBuffer->memory[caret->rawPos++] = code - 32;
+						} else {
+							textBuffer->memory[caret->rawPos++] = code;
+						}
 					}
 				}
 				break;
@@ -451,9 +458,13 @@ internal b32 convertInputToFontCoords(u32 input, FontSheet fontSheet,
 
 	// Generate the x,y coordinate of the character to extract
 	if (input >= 'a' && input <= 'z') {
-		initialCharLoc = fontSheet.firstUpperAlphaChar;
+		initialCharLoc = fontSheet.firstLowerAlphaChar;
 		deltaFromInitialCharLoc = input - 'a';
 		seriesLength = 'a' - 'z';
+	} else if  (input >= 'A' && input <= 'Z') {
+		initialCharLoc = fontSheet.firstUpperAlphaChar;
+		deltaFromInitialCharLoc = input - 'A';
+		seriesLength = 'A' - 'Z';
 	} else if (input >= '0' && input <= '9') {
 		initialCharLoc = fontSheet.firstNumericChar;
 		deltaFromInitialCharLoc = input - '0';
