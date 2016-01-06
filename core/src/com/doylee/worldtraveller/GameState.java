@@ -31,6 +31,18 @@ public class GameState {
     public GamePlayer hero;
     public Array<String> worldAdjectives;
 
+    private Array<Array<Texture>> terrainAssets;
+
+    private Array<Texture> dayTerrain;
+    private Array<Texture> noonTerrain;
+    private Array<Texture> nightTerrain;
+
+    private DayState worldTime;
+
+    public enum DayState {
+        day, noon, night
+    }
+
     public GameState() {
         this.playerMoney = 0;
         this.isTentActive = false;
@@ -53,10 +65,6 @@ public class GameState {
             System.out.println("DEBUG Parsed adjective: " + adjectives);
         }
 
-        Array<WorldChunk> chunksArray = generateWorldChunks(6);
-        String worldName = generateWorldName();
-        this.world = new World(chunksArray, worldName);
-
         float spriteSize = 16.0f;
         float spriteScale = 4.0f;
         float avatarCenterToScreen = Gdx.graphics.getWidth()/2 -
@@ -74,13 +82,26 @@ public class GameState {
         }
         Animation walkAnim = new Animation(0.05f, walkFrames);
 
-        hero = new GamePlayer(avatarCenterToScreen, world.horizonInPixels,
+        hero = new GamePlayer(avatarCenterToScreen, World.HORIZON_IN_PIXELS,
                             avatarSize, avatarSize, true, tentTex, walkAnim);
-    }
 
-    public void generateWorld() {
-        String worldName = worldAdjectives.get(MathUtils.random(0, worldAdjectives.size - 1));
-        world = new World(generateWorldChunks(6), worldName);
+        worldTime = DayState.day;
+
+        dayTerrain = new Array<Texture>();
+        noonTerrain = new Array<Texture>();
+        nightTerrain = new Array<Texture>();
+        terrainAssets = new Array<Array<Texture>>(3);
+
+        terrainAssets.add(dayTerrain);
+        terrainAssets.add(noonTerrain);
+        terrainAssets.add(nightTerrain);
+
+        dayTerrain.add(new Texture(Gdx.files.internal("plains_day.png")));
+        noonTerrain.add(new Texture(Gdx.files.internal("plains_noon.png")));
+        nightTerrain.add(new Texture(Gdx.files.internal("plains_night.png")));
+
+        nightTerrain.add(new Texture(Gdx.files.internal("forest_night_1.png")));
+        nightTerrain.add(new Texture(Gdx.files.internal("forest_night_2.png")));
     }
 
     public void resetHeroPosition() {
@@ -91,10 +112,36 @@ public class GameState {
         hero.setX(avatarCenterToScreen);
     }
 
+    public void generateWorld() {
+        String worldName = worldAdjectives.get(MathUtils.random(0, worldAdjectives.size - 1));
+        world = new World(generateWorldChunks(6), worldName);
+    }
+
+    private DayState advanceDayState(DayState time) {
+        DayState result = time;
+        switch (result) {
+            case day:
+                result = DayState.noon;
+                break;
+            case noon:
+                result = DayState.night;
+                break;
+            case night:
+                result = DayState.day;
+                break;
+        }
+        return result;
+    }
+
     public Array<WorldChunk> generateWorldChunks(int numChunks) {
         Array<WorldChunk> result = new Array<WorldChunk>(6);
 
-        Texture tex = new Texture(Gdx.files.internal("plain_terrain_cut.png"));
+        Array<Texture> worldTimeToTerrainArray = terrainAssets.get(worldTime.ordinal());
+        Texture tex = worldTimeToTerrainArray.random();
+        this.worldTime = advanceDayState(worldTime);
+        assert(tex != null);
+
+        // TODO: Figure out whether game is mapped to screen or image size
         //int height = tex.getHeight();
         //int width = tex.getWidth();
         int height = Gdx.graphics.getHeight();

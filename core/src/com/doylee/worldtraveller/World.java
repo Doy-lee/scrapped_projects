@@ -7,10 +7,11 @@ import com.badlogic.gdx.utils.Array;
  * Created by Doyle on 2/01/2016.
  */
 public class World {
+    public static float HORIZON_IN_PIXELS = 0.25f * Gdx.graphics.getHeight();
+
     public Array<WorldChunk> chunks;
     public Array<GameItemSpawn> coins;
     public String worldName;
-    public float horizonInPixels = 0.25f * Gdx.graphics.getHeight();
 
     public World(WorldChunk chunk) {
         this.chunks.add(chunk);
