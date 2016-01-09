@@ -5,16 +5,19 @@ import com.badlogic.gdx.graphics.g2d.Animation;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.utils.Array;
+import com.badlogic.gdx.utils.IntMap;
 
 /**
  * Created by Doyle on 9/01/2016.
  */
+
 public class Hero {
     // NOTE: Rect is public because rect fields are already public, why hide it further
     public Rectangle rect;
     public Rectangle baseRect;
-    private Array<Animation> anims;
+    private IntMap<Animation> anims;
 
+    private States currAnimState;
     private Animation currAnim;
     private TextureRegion currFrame;
 
@@ -24,12 +27,17 @@ public class Hero {
     private float thirst;
     private float energy;
 
-    public Hero(Rectangle rect, Rectangle baseRect, Array<Animation> anims) {
+    public enum States {
+        walk_left, walk_right, idle_left, idle_right
+    }
+
+    public Hero(Rectangle rect, Rectangle baseRect, IntMap<Animation> anims) {
         this.rect = rect;
         this.baseRect = baseRect;
         this.anims = anims;
 
-        this.currAnim = anims.get(0);
+        this.currAnimState = States.walk_right;
+        this.currAnim = anims.get(this.currAnimState.ordinal());
         this.currFrame = currAnim.getKeyFrame(stateTime, true);
         this.stateTime = 0.0f;
 
@@ -38,6 +46,7 @@ public class Hero {
         this.energy = 100;
     }
 
+    public States getCurrAnimState() { return currAnimState; }
     public TextureRegion getCurrFrame() { return currFrame; }
     public int getHunger() { return (int)hunger; }
     public int getThirst() { return (int)thirst; }

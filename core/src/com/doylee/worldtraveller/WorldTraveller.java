@@ -11,6 +11,9 @@ import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
 import com.badlogic.gdx.utils.Array;
+import com.badlogic.gdx.utils.IntMap;
+
+import javax.lang.model.type.ArrayType;
 
 
 public class WorldTraveller extends Game {
@@ -58,13 +61,14 @@ public class WorldTraveller extends Game {
         Animation walkLeft = extractAnim(frames, frameDuration,
                                          walkLeftStartSprite, 4);
 
-        Array<Animation> heroAnims = new Array<Animation>();
-        heroAnims.add(walkRight);
-        heroAnims.add(walkLeft);
-        heroAnims.add(idleLeft);
-        heroAnims.add(idleRight);
+        IntMap<Animation> heroAnim = new IntMap<Animation>();
+        heroAnim.put(Hero.States.idle_left.ordinal(), idleLeft);
+        heroAnim.put(Hero.States.idle_left.ordinal(),  idleRight);
+        heroAnim.put(Hero.States.idle_right.ordinal(), idleLeft);
+        heroAnim.put(Hero.States.walk_right.ordinal(), walkRight);
+        heroAnim.put(Hero.States.walk_left.ordinal(), walkLeft);
 
-        Hero result = new Hero(rect, baseRect, heroAnims);
+        Hero result = new Hero(rect, baseRect, heroAnim);
         return result;
     }
 

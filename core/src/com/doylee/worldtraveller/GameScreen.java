@@ -131,12 +131,15 @@ public class GameScreen implements Screen {
                         (Gdx.graphics.getHeight() - Gdx.input.getY()), 20.0f,
                 (Gdx.graphics.getHeight() - 60.0f));
 
-		DEBUGFont.draw(game.batch, "Hunger:  " + hero.getHunger(), 20.0f,
+		DEBUGFont.draw(game.batch, "CurrAnim:  " + hero.getCurrAnimState().toString(), 20.0f,
 				(Gdx.graphics.getHeight() - 80.0f));
-		DEBUGFont.draw(game.batch, "Thirst: " + hero.getThirst(), 20.0f,
+
+		DEBUGFont.draw(game.batch, "Hunger:  " + hero.getHunger(), 20.0f,
 				(Gdx.graphics.getHeight() - 100.0f));
-		DEBUGFont.draw(game.batch, "Energy: " + hero.getEnergy(), 20.0f,
+		DEBUGFont.draw(game.batch, "Thirst: " + hero.getThirst(), 20.0f,
 				(Gdx.graphics.getHeight() - 120.0f));
+		DEBUGFont.draw(game.batch, "Energy: " + hero.getEnergy(), 20.0f,
+				(Gdx.graphics.getHeight() - 140.0f));
 
         game.batch.end();
 
