@@ -47,7 +47,7 @@ public class GameScreen implements Screen {
 		backgroundMusic.setLooping(true);
 		coinSfx = Gdx.audio.newSound(Gdx.files.internal("coin1.wav"));
 
-		// World intrinsics
+		// Display configuration
 		DEBUGFont = new BitmapFont();
 		DEBUGFont.setColor(Color.GREEN);
 		camera = new OrthographicCamera();
@@ -108,7 +108,20 @@ public class GameScreen implements Screen {
 		Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
 		game.batch.setProjectionMatrix(camera.combined);
 
-        // RENDER DEBUG FONT
+		game.state.update(delta);
+		uiStage.act(delta);
+
+		GameState localState = game.state;
+
+		// NOTE: Draw game first, then overlay UI on top
+		game.batch.begin();
+
+		// GAME STATE RENDERING
+		Hero hero = localState.getHero();
+		game.batch.draw(hero.getCurrFrame(), hero.rect.x, hero.rect.y, hero.rect.width, hero.rect.height);
+
+
+		// DEBUG
         DEBUGFont.draw(game.batch, "Gdx DeltaTime():  " + Gdx.graphics.getDeltaTime(),
                 20.0f, (Gdx.graphics.getHeight() - 20.0f));
         DEBUGFont.draw(game.batch, "Gdx FramesPerSec: " +
@@ -117,7 +130,17 @@ public class GameScreen implements Screen {
         DEBUGFont.draw(game.batch, "Gdx Mouse X,Y: " + Gdx.input.getX() + ", " +
                         (Gdx.graphics.getHeight() - Gdx.input.getY()), 20.0f,
                 (Gdx.graphics.getHeight() - 60.0f));
+
+		DEBUGFont.draw(game.batch, "Hunger:  " + hero.getHunger(), 20.0f,
+				(Gdx.graphics.getHeight() - 80.0f));
+		DEBUGFont.draw(game.batch, "Thirst: " + hero.getThirst(), 20.0f,
+				(Gdx.graphics.getHeight() - 100.0f));
+		DEBUGFont.draw(game.batch, "Energy: " + hero.getEnergy(), 20.0f,
+				(Gdx.graphics.getHeight() - 120.0f));
+
         game.batch.end();
+
+		uiStage.draw();
 
 	}
 
