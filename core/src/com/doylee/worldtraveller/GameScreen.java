@@ -63,27 +63,48 @@ public class GameScreen implements Screen {
 		uiStage = new Stage(new ScreenViewport(), game.batch);
 		Gdx.input.setInputProcessor(uiStage);
 
-		TextButton campBtn = new TextButton("Camp", game.skin);
-		campBtn.pad(10);
-		campBtn.addListener(new ChangeListener() {
+		TextButton eatBtn = new TextButton("Eat", game.skin);
+		eatBtn.pad(10);
+		eatBtn.addListener(new ChangeListener() {
 			@Override
 			public void changed(ChangeEvent event, Actor actor) {
+				game.state.getHero().setHunger(100.0f);
 			}
 		});
 
-		TextButton menuBtn = new TextButton("Menu", game.skin);
-		menuBtn.pad(10);
-		menuBtn.addListener(new ChangeListener() {
+		TextButton drinkBtn = new TextButton("Drink", game.skin);
+		drinkBtn.pad(10);
+		drinkBtn.addListener(new ChangeListener() {
 			@Override
 			public void changed(ChangeEvent event, Actor actor) {
+				game.state.getHero().setThirst(100.0f);
 			}
 		});
 
-		TextButton buyBtn = new TextButton("Buy", game.skin);
-		buyBtn.pad(10);
-		buyBtn.addListener(new ChangeListener() {
+		TextButton restBtn = new TextButton("Rest", game.skin);
+		restBtn.pad(10);
+		restBtn.addListener(new ChangeListener() {
 			@Override
 			public void changed(ChangeEvent event, Actor actor) {
+				game.state.getHero().setEnergy(100.0f);
+			}
+		});
+
+		TextButton homeBtn = new TextButton("Home", game.skin);
+		homeBtn.pad(10);
+		homeBtn.addListener(new ChangeListener() {
+			@Override
+			public void changed(ChangeEvent event, Actor actor) {
+					game.state.setCurrScene(game.state.getHomeScene());
+			}
+		});
+
+		TextButton adventureBtn = new TextButton("Adventure", game.skin);
+		adventureBtn.pad(10);
+		adventureBtn.addListener(new ChangeListener() {
+			@Override
+			public void changed(ChangeEvent event, Actor actor) {
+				game.state.setCurrScene(game.state.getAdventureScene());
 			}
 		});
 
@@ -91,10 +112,11 @@ public class GameScreen implements Screen {
 		uiTable.bottom().left();
 		uiTable.setDebug(true);
 		uiTable.setFillParent(true);
-		uiTable.add(campBtn);
-		uiTable.add(menuBtn);
-		uiTable.add(buyBtn);
-
+		uiTable.add(eatBtn);
+		uiTable.add(drinkBtn);
+		uiTable.add(restBtn);
+		uiTable.add(homeBtn);
+		uiTable.add(adventureBtn);
 		uiStage.addActor(uiTable);
 	}
 
@@ -118,6 +140,8 @@ public class GameScreen implements Screen {
 
 		// GAME STATE RENDERING
 		Hero hero = localState.getHero();
+		Scene scene = localState.getCurrScene();
+		game.batch.draw(scene.getBackdrop(), 0, 0, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
 		game.batch.draw(hero.getCurrFrame(), hero.rect.x, hero.rect.y, hero.rect.width, hero.rect.height);
 
 

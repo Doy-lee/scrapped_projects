@@ -48,9 +48,15 @@ public class Hero {
 
     public States getCurrAnimState() { return currAnimState; }
     public TextureRegion getCurrFrame() { return currFrame; }
+
     public int getHunger() { return (int)hunger; }
     public int getThirst() { return (int)thirst; }
     public int getEnergy() { return (int)energy; }
+
+    public void setHunger(float amount) { this.hunger = amount; }
+    public void setThirst(float amount) { this.thirst = amount; }
+    public void setEnergy(float amount) { this.energy = amount; }
+
 
     public void update(float delta) {
         if (this.energy >= 0) this.energy -= GameState.ENERGY_RATE * delta;

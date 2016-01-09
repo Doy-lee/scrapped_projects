@@ -36,10 +36,10 @@ public class WorldTraveller extends Game {
     }
 
     public Hero generateHero() {
-        Rectangle rect = new Rectangle(Gdx.graphics.getWidth()/2,
+        Rectangle baseRect = new Rectangle(0, 0, 16, 16);
+        Rectangle rect = new Rectangle((Gdx.graphics.getWidth()/2) - baseRect.getWidth(),
                 Gdx.graphics.getHeight()/2, 16*3, 16*3);
         Texture base = new Texture(Gdx.files.internal("MyChar.png"));
-        Rectangle baseRect = new Rectangle(0, 0, 16, 16);
 
         // Extract animations
         TextureRegion[][] frames = TextureRegion.split(base, (int)baseRect.width, (int)baseRect.height);
