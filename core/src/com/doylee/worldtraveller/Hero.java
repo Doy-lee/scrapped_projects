@@ -2,6 +2,7 @@ package com.doylee.worldtraveller;
 
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.Animation;
+import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.utils.Array;
@@ -44,6 +45,10 @@ public class Hero {
         this.hunger = 100;
         this.thirst = 100;
         this.energy = 100;
+    }
+
+    public void render(SpriteBatch batch) {
+        batch.draw(getCurrFrame(), rect.x, rect.y, rect.width, rect.height);
     }
 
     public States getCurrAnimState() { return currAnimState; }

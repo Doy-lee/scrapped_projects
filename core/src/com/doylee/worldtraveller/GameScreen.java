@@ -133,16 +133,15 @@ public class GameScreen implements Screen {
 		game.state.update(delta);
 		uiStage.act(delta);
 
-		GameState localState = game.state;
-
 		// NOTE: Draw game first, then overlay UI on top
 		game.batch.begin();
 
 		// GAME STATE RENDERING
-		Hero hero = localState.getHero();
-		Scene scene = localState.getCurrScene();
-		game.batch.draw(scene.getBackdrop(), 0, 0, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
-		game.batch.draw(hero.getCurrFrame(), hero.rect.x, hero.rect.y, hero.rect.width, hero.rect.height);
+		Hero hero = game.state.getHero();
+		Scene scene = game.state.getCurrScene();
+
+		scene.render(game.batch);
+		hero.render(game.batch);
 
 
 		// DEBUG
