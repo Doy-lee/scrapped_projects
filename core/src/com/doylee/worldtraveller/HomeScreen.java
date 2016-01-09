@@ -11,14 +11,14 @@ import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
 
-public class MainMenuScreen implements Screen {
+public class HomeScreen implements Screen {
     final WorldTraveller game;
     private OrthographicCamera camera;
 
     private Stage stage;
     private Table table;
 
-    public MainMenuScreen(final WorldTraveller wtGame) {
+    public HomeScreen(final WorldTraveller wtGame) {
         game = wtGame;
 
         camera = new OrthographicCamera();

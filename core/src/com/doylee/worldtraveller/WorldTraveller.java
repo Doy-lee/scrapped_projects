@@ -20,7 +20,7 @@ public class WorldTraveller extends Game {
         TextureAtlas atlas = new TextureAtlas(Gdx.files.internal("uiskin.atlas"));
         skin = new Skin(Gdx.files.internal("uiskin.json"), atlas);
 
-        this.setScreen(new MainMenuScreen(this));
+        this.setScreen(new HomeScreen(this));
     }
 
     public void render() {

@@ -26,25 +26,20 @@ import java.util.Iterator;
 // TODO: Read this https://github.com/libgdx/libgdx/wiki/Projection,-viewport,-&-cavatarWalkamera
 public class GameScreen implements Screen {
 	final WorldTraveller game;
-	private GameState state;
 
 	// Assets
 	private Texture coinTex;
-	private Music backgroundMusic;
 	private Sound coinSfx;
+	private Music backgroundMusic;
 
 	// World intrinsics
 	private BitmapFont DEBUGFont;
 	private OrthographicCamera camera;
 	private Stage uiStage;
-	private Stage gameStage;
-	private float oneSecondCounter;
-	private Table table;
+	private Table uiTable;
 
 	public GameScreen(final WorldTraveller wtGame) {
 		game = wtGame;
-		state = new GameState();
-		state.generateWorld();
 
 		// Assets
 		coinTex = new Texture(Gdx.files.internal("coin.png"));
@@ -59,20 +54,9 @@ public class GameScreen implements Screen {
 		// NOTE: Match camera to the device resolution
 		// setToOrtho(Y Orientation=Down, viewPortWidth, viewPortHeight)
 		camera.setToOrtho(false, Gdx.graphics.getWidth(),
-				          Gdx.graphics.getHeight());
+				Gdx.graphics.getHeight());
 
 		setupGUI();
-		updateGameStage();
-		oneSecondCounter = 0;
-	}
-
-	public void updateGameStage() {
-		gameStage = new Stage(new ScreenViewport(camera), game.batch);
-		for (WorldChunk chunk : state.world.chunks) {
-			gameStage.addActor(chunk);
-		}
-		gameStage.addActor(state.hero);
-		gameStage.addActor(state.hero.tent);
 	}
 
 	public void setupGUI() {
@@ -84,8 +68,6 @@ public class GameScreen implements Screen {
 		campBtn.addListener(new ChangeListener() {
 			@Override
 			public void changed(ChangeEvent event, Actor actor) {
-				if (state.isTentActive) state.setTentMode(false);
-				else state.setTentMode(true);
 			}
 		});
 
@@ -105,15 +87,15 @@ public class GameScreen implements Screen {
 			}
 		});
 
-		table = new Table(game.skin);
-		table.bottom().left();
-		table.setDebug(true);
-		table.setFillParent(true);
-		table.add(campBtn);
-		table.add(menuBtn);
-		table.add(buyBtn);
+		uiTable = new Table(game.skin);
+		uiTable.bottom().left();
+		uiTable.setDebug(true);
+		uiTable.setFillParent(true);
+		uiTable.add(campBtn);
+		uiTable.add(menuBtn);
+		uiTable.add(buyBtn);
 
-		uiStage.addActor(table);
+		uiStage.addActor(uiTable);
 	}
 
 	@Override
@@ -126,73 +108,6 @@ public class GameScreen implements Screen {
 		Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
 		game.batch.setProjectionMatrix(camera.combined);
 
-		if (state.hero.getX() >= state.world.getWorldSizeInPixels()) {
-			System.out.println("DEBUG Cleared stage");
-			state.generateWorld();
-			state.resetHeroPosition();
-			this.updateGameStage();
-		} else {
-			// NOTE: Camera positions sets the center point of the camera view port
-			float camOriginX = camera.position.x - (Gdx.graphics.getWidth()/2) + state.hero.getWidth()/2;
-			if (camOriginX  <= Gdx.graphics.getWidth() * (state.world.chunks.size-1)) {
-				camera.position.set(state.hero.getX() + state.hero.getWidth(), Gdx.graphics.getHeight()/2, 0);
-			}
-			camera.update();
-
-			// Toggle camp
-			if (Gdx.input.isKeyJustPressed(Input.Keys.Z)) {
-				if (state.isTentActive) state.setTentMode(false);
-				else state.setTentMode(true);
-			}
-
-			if (state.isTentActive == false) {
-				oneSecondCounter += Gdx.graphics.getDeltaTime();
-				if (oneSecondCounter >= 1.0f) {
-					state.distTravelled += GameState.WORLD_MOVE_SPEED;
-					oneSecondCounter = 0.0f;
-				}
-
-				state.coinSpawnTimer -= Gdx.graphics.getDeltaTime();
-				if (state.coinSpawnTimer <= 0) {
-					// NOTE: Always generate a coin off-screen away from the user
-					float randomiseCoinX = state.hero.getX() + Gdx.graphics.getWidth();
-					randomiseCoinX += MathUtils.random(0.0f, Gdx.graphics.getWidth());
-					if (randomiseCoinX <= state.world.getWorldSizeInPixels()) {
-						GameItemSpawn coinObj = new GameItemSpawn(randomiseCoinX,
-								World.HORIZON_IN_PIXELS, 16.0f * 2,
-								16.0f * 2, false);
-						coinObj.setTexture(coinTex);
-						state.world.coins.add(coinObj);
-						gameStage.addActor(coinObj);
-						System.out.println("DEBUG Adding coin " + state.world.coins.size + " to stage at " + coinObj.getX());
-					}
-					state.coinSpawnTimer = state.COIN_SPAWN_TIME;
-				}
-
-				Iterator<GameItemSpawn> coinIter = state.world.coins.iterator();
-				while (coinIter.hasNext()) {
-					GameObj coin = coinIter.next();
-					if (coin.getX() <= state.hero.getX() + state.hero.getWidth() / 2) {
-						state.playerMoney++;
-						coinSfx.play();
-						// NOTE: Remove coin from array, remove coin from stage (stop drawing)
-						coinIter.remove();
-						coin.remove();
-					}
-				}
-			}
-		}
-
-        // TODO: Use proper 2D physics
-        gameStage.act(delta);
-        uiStage.act(delta);
-
-        gameStage.draw();
-        uiStage.draw();
-
-        game.batch.begin();
-        // NOTE: Render title, probably put as actor into ui
-        game.font.draw(game.batch, "The " + state.world.worldName + " Plains", Gdx.graphics.getWidth() / 2, Gdx.graphics.getHeight() - 400.0f);
         // RENDER DEBUG FONT
         DEBUGFont.draw(game.batch, "Gdx DeltaTime():  " + Gdx.graphics.getDeltaTime(),
                 20.0f, (Gdx.graphics.getHeight() - 20.0f));
@@ -202,14 +117,6 @@ public class GameScreen implements Screen {
         DEBUGFont.draw(game.batch, "Gdx Mouse X,Y: " + Gdx.input.getX() + ", " +
                         (Gdx.graphics.getHeight() - Gdx.input.getY()), 20.0f,
                 (Gdx.graphics.getHeight() - 60.0f));
-        DEBUGFont.draw(game.batch, "Distance Travelled: " + state.distTravelled, 20.0f,
-                (Gdx.graphics.getHeight() - 80.0f));
-        DEBUGFont.draw(game.batch, "Player Money: " + state.playerMoney, 20.0f,
-                (Gdx.graphics.getHeight() - 100.0f));
-        DEBUGFont.draw(game.batch, "Tent State: " + state.isTentActive, 20.0f,
-                (Gdx.graphics.getHeight() - 120.0f));
-        DEBUGFont.draw(game.batch, "Player X: " + state.hero.getX(), 20.0f,
-                (Gdx.graphics.getHeight() - 140.0f));
         game.batch.end();
 
 	}
@@ -237,10 +144,7 @@ public class GameScreen implements Screen {
 	@Override
 	public void dispose() {
 		coinTex.dispose();
-
 		uiStage.dispose();
-		gameStage.dispose();
-
 		backgroundMusic.dispose();
 	}
 }
