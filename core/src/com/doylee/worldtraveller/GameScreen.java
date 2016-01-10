@@ -139,9 +139,12 @@ public class GameScreen implements Screen {
 		// GAME STATE RENDERING
 		Hero hero = game.state.getHero();
 		Scene scene = game.state.getCurrScene();
-
 		scene.render(game.batch);
-		//hero.render(game.batch);
+
+		GameState.Battle battle = game.state.getBattleState();
+		if (battle == GameState.Battle.active) {
+			game.font.draw(game.batch, "BATTLE ACTIVE", Gdx.graphics.getWidth()/2 - 50.0f, Gdx.graphics.getHeight()/2 + 100.0f);
+		}
 
 
 		// DEBUG

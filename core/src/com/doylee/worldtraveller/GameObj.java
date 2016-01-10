@@ -2,6 +2,7 @@ package com.doylee.worldtraveller;
 
 import com.badlogic.gdx.audio.Sound;
 import com.badlogic.gdx.graphics.g2d.Animation;
+import com.badlogic.gdx.graphics.g2d.Sprite;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.math.Rectangle;
@@ -11,9 +12,8 @@ import com.badlogic.gdx.utils.IntMap;
  * Created by Doyle on 10/01/2016.
  */
 public class GameObj {
-    // NOTE: Rect is public because rect fields are already public, why hide it further
-    public Rectangle rect;
     private IntMap<Animation> anims;
+    private Sprite sprite;
 
     private States currAnimState;
     private Animation currAnim;
@@ -34,7 +34,6 @@ public class GameObj {
     }
 
     public GameObj(Rectangle rect, IntMap<Animation> anims, Sound sfx, Type type) {
-        this.rect = rect;
         this.anims = anims;
 
         this.currAnimState = States.neutral;
@@ -42,19 +41,24 @@ public class GameObj {
         this.currFrame = currAnim.getKeyFrame(stateTime, true);
         this.stateTime = 0.0f;
 
+        this.sprite = new Sprite(currFrame);
+        this.sprite.setBounds(rect.x, rect.y, rect.width, rect.height);
+
         this.type = type;
         this.sfx = sfx;
         this.objectSpeedModifier = 1.0f;
     }
 
     public GameObj(Rectangle rect, IntMap<Animation> anims, Sound sfx, Type type, States animState) {
-        this.rect = rect;
         this.anims = anims;
 
         this.currAnimState = animState;
         this.currAnim = anims.get(this.currAnimState.ordinal());
         this.currFrame = currAnim.getKeyFrame(stateTime, true);
         this.stateTime = 0.0f;
+
+        this.sprite = new Sprite(currFrame);
+        this.sprite.setBounds(rect.x, rect.y, rect.width, rect.height);
 
         this.type = type;
         this.sfx = sfx;
@@ -67,13 +71,15 @@ public class GameObj {
     public void update(float delta) {
         this.stateTime += delta;
         this.currFrame = currAnim.getKeyFrame(stateTime, true);
+        sprite.setRegion(currFrame);
     }
 
     public void render(SpriteBatch batch) {
-        batch.draw(getCurrFrame(), rect.x, rect.y, rect.width, rect.height);
+        sprite.draw(batch);
     }
 
     public Type getType() { return type; }
+    public Sprite getSprite() { return sprite; }
     public States getCurrAnimState() { return currAnimState; }
     public TextureRegion getCurrFrame() { return currFrame; }
 

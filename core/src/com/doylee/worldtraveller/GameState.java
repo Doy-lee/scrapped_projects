@@ -9,6 +9,7 @@ import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector2;
+import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.IntMap;
 
 import java.util.Iterator;
@@ -55,18 +56,19 @@ public class GameState {
 
         IntMap<Texture> homeAssets = new IntMap<Texture>();
         Texture homeTex = new Texture(Gdx.files.internal("backdrop.png"));
-        this.homeScene = new Scene(homeTex, homeAssets, false);
+        Array<GameObj> homeObjs = new Array<GameObj>();
+        homeObjs.add(hero);
+        this.homeScene = new Scene(homeTex, homeAssets, homeObjs, false);
 
         IntMap<Texture> adventAssets = new IntMap<Texture>();
         Texture coinAsset = new Texture(Gdx.files.internal("coin.png"));
         adventAssets.put(GameObj.Type.coin.ordinal(), coinAsset);
-
+        Array<GameObj> adventObjs = new Array<GameObj>();
+        adventObjs.add(hero);
         Texture adventTex = new Texture(Gdx.files.internal("forest_night_1.png"));
-        this.adventureScene = new Scene(adventTex, adventAssets, true);
-        this.adventureScene.getSceneObj().add(hero);
+        this.adventureScene = new Scene(adventTex, adventAssets, adventObjs, true);
 
         worldMoveSpeed = 0.0f;
-
         battleState = Battle.inactive;
 
         coinSpawnTimer = 1.0f;
@@ -110,25 +112,25 @@ public class GameState {
 
         // Proximity detection
         if (currScene.equals(adventureScene)) {
-            Iterator<GameObj> objIterator = currScene.getSceneObj().iterator();
+
+                Iterator<GameObj> objIterator = currScene.getSceneObj().iterator();
 
             while (objIterator.hasNext()) {
                 GameObj obj = objIterator.next();
 
-
                 if (obj.getType() == GameObj.Type.coin) {
-                    if (obj.rect.x <= hero.rect.x + hero.rect.width / 2) {
+                    if (obj.getSprite().getX() <= hero.getSprite().getX() + hero.getSprite().getWidth() / 2) {
                         hero.addMoney(1);
                         obj.act();
                         objIterator.remove();
                     }
                 } else if (obj.getType() == GameObj.Type.monster) {
-                    float battleThresholdX = currScene.rect.width + (0.15f*currScene.rect.width);
-                    if (obj.rect.x <= battleThresholdX) {
+                    float battleThresholdX = currScene.rect.width + (0.15f * currScene.rect.width);
+                    if (obj.getSprite().getX() <= battleThresholdX && battleState != Battle.active) {
                         battleState = Battle.transition;
                     }
                 } else if (obj.getType() == GameObj.Type.hero) {
-                    if (obj.rect.x <= (0.15f * currScene.rect.width) && battleState == Battle.transition) {
+                    if (obj.getSprite().getX() <= (0.15f * currScene.rect.width) && battleState == Battle.transition) {
                         // Stop world moving, battle transition complete
                         battleState = Battle.active;
                         obj.setCurrAnimState(GameObj.States.battle_right);
@@ -147,7 +149,7 @@ public class GameState {
                 }
 
             } else if (battleState == Battle.transition) {
-                globalObjectSpeedModifier = 0.5f;
+                globalObjectSpeedModifier = 0.75f;
             } else if (battleState == Battle.active) {
                 globalObjectSpeedModifier = 0.0f;
             }
@@ -169,18 +171,18 @@ public class GameState {
 
         coinSpawnTimer -= delta;
         if (coinSpawnTimer <= 0) {
-            Rectangle coinRect = new Rectangle((int)generateRandOffscreenX(), hero.rect.y,
+            Rectangle coinRect = new Rectangle((int)generateRandOffscreenX(), hero.getSprite().getY(),
                     SPRITE_SIZE, SPRITE_SIZE);
             GameObj coin = new GameObj(coinRect, anims, coinSfx, GameObj.Type.coin);
             currScene.getSceneObj().add(coin);
             coinSpawnTimer = 1.0f;
-            System.out.println("DEBUG: Generated coin at x: " + coin.rect.x);
+            System.out.println("DEBUG: Generated coin at x: " + coin.getSprite().getX());
         }
     }
 
     private void generateMonster() {
         Rectangle baseRect = new Rectangle(0, 0, 16, 16);
-        Rectangle rect = new Rectangle((int)generateRandOffscreenX(), hero.rect.y, SPRITE_SIZE, SPRITE_SIZE);
+        Rectangle rect = new Rectangle((int)generateRandOffscreenX(), hero.getSprite().getY(), SPRITE_SIZE, SPRITE_SIZE);
         Texture base = new Texture(Gdx.files.internal("MyCharEnemy.png"));
 
         // Extract animations
@@ -213,7 +215,7 @@ public class GameState {
                                       GameObj.Type.monster,
                                       GameObj.States.walk_left);
         currScene.getSceneObj().add(monster);
-        System.out.println("DEBUG: Generated monster at x: " + monster.rect.x);
+        System.out.println("DEBUG: Generated monster at x: " + monster.getSprite().getX());
 
     }
 
