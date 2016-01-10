@@ -2,21 +2,54 @@ package com.doylee.worldtraveller;
 
 import com.badlogic.gdx.audio.Sound;
 import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.g2d.Animation;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
+import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.math.Rectangle;
+import com.badlogic.gdx.utils.IntMap;
 
 /**
  * Created by Doyle on 10/01/2016.
  */
 public class GameObj {
+    // NOTE: Rect is public because rect fields are already public, why hide it further
     public Rectangle rect;
-    private Texture base;
+    private IntMap<Animation> anims;
+
+    private States currAnimState;
+    private Animation currAnim;
+    private TextureRegion currFrame;
+    private float stateTime;
+
     private Sound sfx;
     private GameState.Type type;
 
-    public GameObj(Rectangle rect, Texture base, Sound sfx, GameState.Type type) {
+    public enum States {
+        walk_left, walk_right, idle_left, idle_right, neutral
+    }
+
+    public GameObj(Rectangle rect, IntMap<Animation> anims, Sound sfx, GameState.Type type) {
         this.rect = rect;
-        this.base = base;
+        this.anims = anims;
+
+        this.currAnimState = States.neutral;
+        this.currAnim = anims.get(this.currAnimState.ordinal());
+        this.currFrame = currAnim.getKeyFrame(stateTime, true);
+        this.stateTime = 0.0f;
+
+        this.type = type;
+        this.sfx = sfx;
+    }
+
+    public GameObj(Rectangle rect, IntMap<Animation> anims, Sound sfx, GameState.Type type, States animState) {
+        this.rect = rect;
+        this.anims = anims;
+
+        this.currAnimState = animState;
+        this.currAnim = anims.get(this.currAnimState.ordinal());
+        this.currFrame = currAnim.getKeyFrame(stateTime, true);
+        this.stateTime = 0.0f;
+
         this.type = type;
         this.sfx = sfx;
     }
@@ -25,9 +58,23 @@ public class GameObj {
         sfx.play();
     }
 
+    public void update(float delta) {
+        this.stateTime += delta;
+        this.currFrame = currAnim.getKeyFrame(stateTime, true);
+    }
+
     public void render(SpriteBatch batch) {
-        batch.draw(base, rect.x, rect.y, rect.width, rect.height);
+        batch.draw(getCurrFrame(), rect.x, rect.y, rect.width, rect.height);
     }
 
     public GameState.Type getType() { return type; }
+    public States getCurrAnimState() { return currAnimState; }
+    public TextureRegion getCurrFrame() { return currFrame; }
+
+    public void setCurrAnimState(States state) {
+        this.currAnimState = state;
+        this.currAnim = anims.get(currAnimState.ordinal());
+        stateTime = 0.0f;
+    }
+
 }

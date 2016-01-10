@@ -3,8 +3,11 @@ package com.doylee.worldtraveller;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.audio.Sound;
 import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.g2d.Animation;
+import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Rectangle;
+import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.IntMap;
 
@@ -26,7 +29,7 @@ public class GameState {
     public static float THIRST_RATE = 0.3f;
 
     public enum Type {
-        coin
+        coin, hero
     }
 
     private Hero hero;
@@ -68,7 +71,7 @@ public class GameState {
         while (objIterator.hasNext()) {
             GameObj obj = objIterator.next();
             if (obj.getType() == GameState.Type.coin) {
-                if (obj.rect.x <= hero.rect.x + hero.rect.width) {
+                if (obj.rect.x <= hero.rect.x + hero.rect.width/2) {
                     hero.addMoney(1);
                     obj.act();
                     objIterator.remove();
@@ -81,6 +84,14 @@ public class GameState {
     }
 
     private void generateRandCoin(float delta) {
+
+        // Generate coin texture
+        TextureRegion coinTexReg = new TextureRegion(coinTex);
+        float frameDuration = 0.05f;
+        Animation neutral = new Animation(frameDuration, coinTexReg);
+        IntMap<Animation> anims = new IntMap<Animation>();
+        anims.put(GameObj.States.neutral.ordinal(), neutral);
+
         if (currScene.equals(adventureScene)) {
             coinSpawnTimer -= delta;
             if (coinSpawnTimer <= 0) {
@@ -88,7 +99,7 @@ public class GameState {
                 randomiseCoinPosX += MathUtils.random(0.0f, currScene.rect.width);
                 Rectangle coinRect = new Rectangle(randomiseCoinPosX, hero.rect.y,
                         hero.rect.width, hero.rect.height);
-                GameObj coin = new GameObj(coinRect, coinTex, coinSfx, GameState.Type.coin);
+                GameObj coin = new GameObj(coinRect, anims, coinSfx, GameState.Type.coin);
                 currScene.getSceneObj().add(coin);
                 coinSpawnTimer = 1.0f;
                 System.out.println("DEBUG: Generated coin at x: " + coin.rect.x);

@@ -10,11 +10,7 @@ import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
-import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.IntMap;
-
-import javax.lang.model.type.ArrayType;
-
 
 public class WorldTraveller extends Game {
     public SpriteBatch batch;
@@ -46,43 +42,28 @@ public class WorldTraveller extends Game {
         float frameDuration = 0.05f;
 
         Vector2 idleRightStartSprite = new Vector2(0, 1);
-        Animation idleRight = extractAnim(frames, frameDuration,
+        Animation idleRight = Util.extractAnim(frames, frameDuration,
                                           idleRightStartSprite, 1);
 
         Vector2 idleLeftStartSprite = new Vector2(0, 0);
-        Animation idleLeft = extractAnim(frames, frameDuration,
+        Animation idleLeft = Util.extractAnim(frames, frameDuration,
                                          idleLeftStartSprite, 1);
 
         Vector2 walkRightStartSprite  = new Vector2(0, 1);
-        Animation walkRight = extractAnim(frames, frameDuration,
+        Animation walkRight = Util.extractAnim(frames, frameDuration,
                                           walkRightStartSprite, 4);
 
         Vector2 walkLeftStartSprite = new Vector2(0, 0);
-        Animation walkLeft = extractAnim(frames, frameDuration,
+        Animation walkLeft = Util.extractAnim(frames, frameDuration,
                                          walkLeftStartSprite, 4);
 
         IntMap<Animation> heroAnim = new IntMap<Animation>();
         heroAnim.put(Hero.States.idle_left.ordinal(), idleLeft);
-        heroAnim.put(Hero.States.idle_left.ordinal(),  idleRight);
-        heroAnim.put(Hero.States.idle_right.ordinal(), idleLeft);
+        heroAnim.put(Hero.States.idle_right.ordinal(), idleRight);
         heroAnim.put(Hero.States.walk_right.ordinal(), walkRight);
         heroAnim.put(Hero.States.walk_left.ordinal(), walkLeft);
 
-        Hero result = new Hero(rect, heroAnim);
-        return result;
-    }
-
-    // TODO: We assume all animations are consecutively lined up in one row
-    private Animation extractAnim(TextureRegion[][] frames, float duration,
-                                  Vector2 startSpriteLoc, int animLength) {
-
-        TextureRegion[] animFrames = new TextureRegion[animLength];
-
-        int index = 0;
-        for (int i = (int)startSpriteLoc.x; i < animLength; i++) {
-            animFrames[index++] = frames[(int)startSpriteLoc.y][i];
-        }
-        Animation result = new Animation(duration, animFrames);
+        Hero result = new Hero(rect, heroAnim, null, GameState.Type.hero, GameObj.States.walk_right);
         return result;
     }
 
