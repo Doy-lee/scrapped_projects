@@ -2,6 +2,7 @@ package com.doylee.worldtraveller;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
+import com.badlogic.gdx.audio.Music;
 import com.badlogic.gdx.audio.Sound;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.Animation;
@@ -51,22 +52,43 @@ public class GameState {
         transition, active, inactive
     }
 
+    // TODO: Make music independant of scene, so have 1 global music var and
+    // TODO: retrieve currsong selected from scene to allow music to correctly
+    // TODO: turn on and off at different scenes
     public GameState(Hero hero) {
         this.hero = hero;
 
         IntMap<Texture> homeAssets = new IntMap<Texture>();
-        Texture homeTex = new Texture(Gdx.files.internal("backdrop.png"));
+
+        IntMap<Music> homeMusic = new IntMap<Music>();
+        Music homeBackground = Gdx.audio.newMusic(Gdx.files.internal("homeBackground.mp3"));
+        homeMusic.put(Scene.ScnMusic.background.ordinal(), homeBackground);
+
         Array<GameObj> homeObjs = new Array<GameObj>();
         homeObjs.add(hero);
-        this.homeScene = new Scene(homeTex, homeAssets, homeObjs, false);
+
+        Texture homeTex = new Texture(Gdx.files.internal("backdrop.png"));
+        this.homeScene = new Scene(homeTex, homeAssets, homeObjs, homeMusic, false);
 
         IntMap<Texture> adventAssets = new IntMap<Texture>();
         Texture coinAsset = new Texture(Gdx.files.internal("coin.png"));
         adventAssets.put(GameObj.Type.coin.ordinal(), coinAsset);
+
         Array<GameObj> adventObjs = new Array<GameObj>();
         adventObjs.add(hero);
+
+        Music adventBackground = Gdx.audio.newMusic(Gdx.files.internal("adventBackground.mp3"));
+        Music adventBattle = Gdx.audio.newMusic(Gdx.files.internal("adventBattle.mp3"));
+        adventBackground.setLooping(true);
+        adventBattle.setLooping(true);
+
+        IntMap<Music> adventMusic = new IntMap<Music>();
+        adventMusic.put(Scene.ScnMusic.background.ordinal(), adventBackground);
+        adventMusic.put(Scene.ScnMusic.battle.ordinal(), adventBattle);
+
         Texture adventTex = new Texture(Gdx.files.internal("forest_night_1.png"));
-        this.adventureScene = new Scene(adventTex, adventAssets, adventObjs, true);
+
+        this.adventureScene = new Scene(adventTex, adventAssets, adventObjs, adventMusic, true);
 
         worldMoveSpeed = 0.0f;
         battleState = Battle.inactive;
@@ -113,8 +135,7 @@ public class GameState {
         // Proximity detection
         if (currScene.equals(adventureScene)) {
 
-                Iterator<GameObj> objIterator = currScene.getSceneObj().iterator();
-
+            Iterator<GameObj> objIterator = currScene.getSceneObj().iterator();
             while (objIterator.hasNext()) {
                 GameObj obj = objIterator.next();
 
@@ -123,6 +144,8 @@ public class GameState {
                         hero.addMoney(1);
                         obj.act();
                         objIterator.remove();
+                    } else if (battleState == Battle.active) {
+                        obj.getSprite().setAlpha(0.3f);
                     }
                 } else if (obj.getType() == GameObj.Type.monster) {
                     float battleThresholdX = currScene.rect.width + (0.15f * currScene.rect.width);

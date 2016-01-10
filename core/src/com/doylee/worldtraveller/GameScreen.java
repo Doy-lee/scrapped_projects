@@ -27,11 +27,6 @@ import java.util.Iterator;
 public class GameScreen implements Screen {
 	final WorldTraveller game;
 
-	// Assets
-	private Texture coinTex;
-	private Sound coinSfx;
-	private Music backgroundMusic;
-
 	// World intrinsics
 	private BitmapFont DEBUGFont;
 	private OrthographicCamera camera;
@@ -42,10 +37,6 @@ public class GameScreen implements Screen {
 		game = wtGame;
 
 		// Assets
-		coinTex = new Texture(Gdx.files.internal("coin.png"));
-		backgroundMusic = Gdx.audio.newMusic(Gdx.files.internal("ffvi_searching_for_friends.mp3"));
-		backgroundMusic.setLooping(true);
-		coinSfx = Gdx.audio.newSound(Gdx.files.internal("coin1.wav"));
 
 		// Display configuration
 		DEBUGFont = new BitmapFont();
@@ -198,8 +189,6 @@ public class GameScreen implements Screen {
 
 	@Override
 	public void dispose() {
-		coinTex.dispose();
 		uiStage.dispose();
-		backgroundMusic.dispose();
 	}
 }
