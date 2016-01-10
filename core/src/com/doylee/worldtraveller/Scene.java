@@ -27,8 +27,9 @@ public class Scene {
 
     public void update(float delta) {
         if (isAnimated) {
+            // TODO: Depending on obj type, do different actions
             for (GameObj obj : sceneObjs) {
-                obj.rect.x -= GameState.RUN_SPEED_IN_PIXELS * delta;
+                    obj.rect.x -= GameState.RUN_SPEED_IN_PIXELS * delta;
             }
             rect.x -= GameState.RUN_SPEED_IN_PIXELS * delta;
             if (rect.x <= -rect.width) rect.x = 0;

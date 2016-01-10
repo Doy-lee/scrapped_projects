@@ -10,15 +10,18 @@ import com.badlogic.gdx.utils.IntMap;
  */
 
 public class Hero extends GameObj {
+    private float health;
+
     private float hunger;
     private float thirst;
     private float energy;
 
     private int money;
 
-    public Hero(Rectangle rect, IntMap<Animation> anims, Sound sfx, GameState.Type type, States animState) {
+    public Hero(Rectangle rect, IntMap<Animation> anims, Sound sfx, Type type, States animState) {
         super(rect, anims, sfx, type, animState);
-        this.rect = rect;
+
+        this.health = 100;
 
         this.hunger = 100;
         this.thirst = 100;

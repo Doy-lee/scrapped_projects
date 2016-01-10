@@ -1,4 +1,5 @@
 package com.doylee.worldtraveller;
+
 import com.badlogic.gdx.Game;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Texture;
@@ -31,10 +32,10 @@ public class WorldTraveller extends Game {
         this.setScreen(new HomeScreen(this));
     }
 
-    public Hero generateHero() {
+    private Hero generateHero() {
         Rectangle baseRect = new Rectangle(0, 0, 16, 16);
         Rectangle rect = new Rectangle((Gdx.graphics.getWidth()/2) - baseRect.getWidth(),
-                Gdx.graphics.getHeight()/2, 16*3, 16*3);
+                Gdx.graphics.getHeight()/2, GameState.SPRITE_SIZE, GameState.SPRITE_SIZE);
         Texture base = new Texture(Gdx.files.internal("MyChar.png"));
 
         // Extract animations
@@ -43,19 +44,19 @@ public class WorldTraveller extends Game {
 
         Vector2 idleRightStartSprite = new Vector2(0, 1);
         Animation idleRight = Util.extractAnim(frames, frameDuration,
-                                          idleRightStartSprite, 1);
+                idleRightStartSprite, 1);
 
         Vector2 idleLeftStartSprite = new Vector2(0, 0);
         Animation idleLeft = Util.extractAnim(frames, frameDuration,
-                                         idleLeftStartSprite, 1);
+                idleLeftStartSprite, 1);
 
         Vector2 walkRightStartSprite  = new Vector2(0, 1);
         Animation walkRight = Util.extractAnim(frames, frameDuration,
-                                          walkRightStartSprite, 4);
+                walkRightStartSprite, 4);
 
         Vector2 walkLeftStartSprite = new Vector2(0, 0);
         Animation walkLeft = Util.extractAnim(frames, frameDuration,
-                                         walkLeftStartSprite, 4);
+                walkLeftStartSprite, 4);
 
         IntMap<Animation> heroAnim = new IntMap<Animation>();
         heroAnim.put(Hero.States.idle_left.ordinal(), idleLeft);
@@ -63,7 +64,7 @@ public class WorldTraveller extends Game {
         heroAnim.put(Hero.States.walk_right.ordinal(), walkRight);
         heroAnim.put(Hero.States.walk_left.ordinal(), walkLeft);
 
-        Hero result = new Hero(rect, heroAnim, null, GameState.Type.hero, GameObj.States.walk_right);
+        Hero result = new Hero(rect, heroAnim, null, GameObj.Type.hero, GameObj.States.walk_right);
         return result;
     }
 

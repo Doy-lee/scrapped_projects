@@ -1,7 +1,6 @@
 package com.doylee.worldtraveller;
 
 import com.badlogic.gdx.audio.Sound;
-import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.Animation;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
@@ -22,13 +21,17 @@ public class GameObj {
     private float stateTime;
 
     private Sound sfx;
-    private GameState.Type type;
+    private Type type;
 
     public enum States {
         walk_left, walk_right, idle_left, idle_right, neutral
     }
 
-    public GameObj(Rectangle rect, IntMap<Animation> anims, Sound sfx, GameState.Type type) {
+    public enum Type {
+        coin, hero, monster
+    }
+
+    public GameObj(Rectangle rect, IntMap<Animation> anims, Sound sfx, Type type) {
         this.rect = rect;
         this.anims = anims;
 
@@ -41,7 +44,7 @@ public class GameObj {
         this.sfx = sfx;
     }
 
-    public GameObj(Rectangle rect, IntMap<Animation> anims, Sound sfx, GameState.Type type, States animState) {
+    public GameObj(Rectangle rect, IntMap<Animation> anims, Sound sfx, Type type, States animState) {
         this.rect = rect;
         this.anims = anims;
 
@@ -67,7 +70,7 @@ public class GameObj {
         batch.draw(getCurrFrame(), rect.x, rect.y, rect.width, rect.height);
     }
 
-    public GameState.Type getType() { return type; }
+    public Type getType() { return type; }
     public States getCurrAnimState() { return currAnimState; }
     public TextureRegion getCurrFrame() { return currFrame; }
 
