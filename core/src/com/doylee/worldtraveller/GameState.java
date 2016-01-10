@@ -1,6 +1,7 @@
 package com.doylee.worldtraveller;
 
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.audio.Sound;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Rectangle;
@@ -35,6 +36,7 @@ public class GameState {
 
     private float coinSpawnTimer;
     private Texture coinTex;
+    private Sound coinSfx;
 
     public GameState(Hero hero) {
         this.hero = hero;
@@ -52,6 +54,7 @@ public class GameState {
 
         coinSpawnTimer = 1.0f;
         coinTex = new Texture(Gdx.files.internal("coin.png"));
+        coinSfx = Gdx.audio.newSound(Gdx.files.internal("coin1.wav"));
 
         this.currScene = homeScene;
     }
@@ -67,19 +70,25 @@ public class GameState {
             if (obj.getType() == GameState.Type.coin) {
                 if (obj.rect.x <= hero.rect.x + hero.rect.width) {
                     hero.addMoney(1);
+                    obj.act();
                     objIterator.remove();
                 }
             }
         }
 
+        generateRandCoin(delta);
+
+    }
+
+    private void generateRandCoin(float delta) {
         if (currScene.equals(adventureScene)) {
             coinSpawnTimer -= delta;
             if (coinSpawnTimer <= 0) {
                 float randomiseCoinPosX = currScene.rect.width;
                 randomiseCoinPosX += MathUtils.random(0.0f, currScene.rect.width);
                 Rectangle coinRect = new Rectangle(randomiseCoinPosX, hero.rect.y,
-                                                   hero.rect.width, hero.rect.height);
-                GameObj coin = new GameObj(coinRect, coinTex, GameState.Type.coin);
+                        hero.rect.width, hero.rect.height);
+                GameObj coin = new GameObj(coinRect, coinTex, coinSfx, GameState.Type.coin);
                 currScene.getSceneObj().add(coin);
                 coinSpawnTimer = 1.0f;
                 System.out.println("DEBUG: Generated coin at x: " + coin.rect.x);

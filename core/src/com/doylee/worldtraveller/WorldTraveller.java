@@ -68,7 +68,7 @@ public class WorldTraveller extends Game {
         heroAnim.put(Hero.States.walk_right.ordinal(), walkRight);
         heroAnim.put(Hero.States.walk_left.ordinal(), walkLeft);
 
-        Hero result = new Hero(rect, baseRect, heroAnim);
+        Hero result = new Hero(rect, heroAnim);
         return result;
     }
 

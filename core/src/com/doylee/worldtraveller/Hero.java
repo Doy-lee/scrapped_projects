@@ -14,7 +14,6 @@ import com.badlogic.gdx.utils.IntMap;
 public class Hero {
     // NOTE: Rect is public because rect fields are already public, why hide it further
     public Rectangle rect;
-    public Rectangle baseRect;
     private IntMap<Animation> anims;
 
     private States currAnimState;
@@ -32,9 +31,8 @@ public class Hero {
         walk_left, walk_right, idle_left, idle_right
     }
 
-    public Hero(Rectangle rect, Rectangle baseRect, IntMap<Animation> anims) {
+    public Hero(Rectangle rect, IntMap<Animation> anims) {
         this.rect = rect;
-        this.baseRect = baseRect;
         this.anims = anims;
 
         this.currAnimState = States.walk_right;
