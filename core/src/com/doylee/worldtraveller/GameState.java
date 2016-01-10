@@ -32,14 +32,23 @@ public class GameState {
     public static float HUNGER_RATE = 0.3f;
     public static float THIRST_RATE = 0.3f;
 
+    public float globalObjectSpeedModifier = 1.0f;
+
     private Hero hero;
     private Scene homeScene;
     private Scene adventureScene;
     private Scene currScene;
 
+    private float worldMoveSpeed;
+    private Battle battleState;
+
     private float coinSpawnTimer;
     private Texture coinTex;
     private Sound coinSfx;
+
+    public enum Battle {
+        transition, active, inactive
+    }
 
     public GameState(Hero hero) {
         this.hero = hero;
@@ -54,6 +63,11 @@ public class GameState {
 
         Texture adventTex = new Texture(Gdx.files.internal("forest_night_1.png"));
         this.adventureScene = new Scene(adventTex, adventAssets, true);
+        this.adventureScene.getSceneObj().add(hero);
+
+        worldMoveSpeed = 0.0f;
+
+        battleState = Battle.inactive;
 
         coinSpawnTimer = 1.0f;
         coinTex = new Texture(Gdx.files.internal("coin.png"));
@@ -63,16 +77,45 @@ public class GameState {
     }
 
     public void update(float delta) {
-        currScene.update(delta);
-        hero.update(delta);
+        GameObj.States state = hero.getCurrAnimState();
+        switch (state) {
+            case neutral:
+            case idle_left:
+            case idle_right:
+                worldMoveSpeed = 0.0f;
+                break;
+
+            case walk_right:
+                worldMoveSpeed = RUN_SPEED_IN_PIXELS;
+            break;
+
+            case walk_left:
+                worldMoveSpeed = -RUN_SPEED_IN_PIXELS;
+                break;
+
+            case battle_left:
+                worldMoveSpeed = 0.0f;
+                break;
+
+            case battle_right:
+                worldMoveSpeed = 0.0f;
+                break;
+
+            default:
+                System.err.println("ERROR: Unexpected GameObj.State given");
+                break;
+        }
 
         // TODO: Move this out of gamestate? Maybe have a game master
 
         // Proximity detection
         if (currScene.equals(adventureScene)) {
             Iterator<GameObj> objIterator = currScene.getSceneObj().iterator();
+
             while (objIterator.hasNext()) {
                 GameObj obj = objIterator.next();
+
+
                 if (obj.getType() == GameObj.Type.coin) {
                     if (obj.rect.x <= hero.rect.x + hero.rect.width / 2) {
                         hero.addMoney(1);
@@ -80,15 +123,40 @@ public class GameState {
                         objIterator.remove();
                     }
                 } else if (obj.getType() == GameObj.Type.monster) {
+                    float battleThresholdX = currScene.rect.width + (0.15f*currScene.rect.width);
+                    if (obj.rect.x <= battleThresholdX) {
+                        battleState = Battle.transition;
+                    }
+                } else if (obj.getType() == GameObj.Type.hero) {
+                    if (obj.rect.x <= (0.15f * currScene.rect.width) && battleState == Battle.transition) {
+                        // Stop world moving, battle transition complete
+                        battleState = Battle.active;
+                        obj.setCurrAnimState(GameObj.States.battle_right);
+                    }
                 }
             }
-            generateRandCoin(delta);
 
-            // TODO: TEMPORARY!!! Generate monster intelligently
-            if (Gdx.input.isKeyJustPressed(Input.Keys.Z)) {
-                generateMonster();
+            if (battleState == Battle.inactive) {
+                globalObjectSpeedModifier = 1.0f;
+
+                generateRandCoin(delta);
+
+                // TODO: TEMPORARY!!! Generate monster intelligently
+                if (Gdx.input.isKeyJustPressed(Input.Keys.Z)) {
+                    generateMonster();
+                }
+
+            } else if (battleState == Battle.transition) {
+                globalObjectSpeedModifier = 0.5f;
+            } else if (battleState == Battle.active) {
+                globalObjectSpeedModifier = 0.0f;
             }
+
         }
+
+        currScene.update(this, delta);
+        hero.update(delta);
+
     }
 
     private void generateRandCoin(float delta) {
@@ -160,6 +228,10 @@ public class GameState {
     public Scene getHomeScene() { return homeScene; }
     public Scene getAdventureScene() { return adventureScene; }
 
+    public float getWorldMoveSpeed() { return worldMoveSpeed; }
+    public Battle getBattleState() { return battleState; }
+
+    public void setWorldMoveSpeed(float amount) { this.worldMoveSpeed = amount; }
     public void setCurrScene(Scene scene) {
         this.currScene = scene;
     }

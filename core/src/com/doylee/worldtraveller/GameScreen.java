@@ -141,7 +141,7 @@ public class GameScreen implements Screen {
 		Scene scene = game.state.getCurrScene();
 
 		scene.render(game.batch);
-		hero.render(game.batch);
+		//hero.render(game.batch);
 
 
 		// DEBUG

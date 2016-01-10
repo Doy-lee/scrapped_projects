@@ -22,9 +22,11 @@ public class GameObj {
 
     private Sound sfx;
     private Type type;
+    private float objectSpeedModifier;
 
     public enum States {
-        walk_left, walk_right, idle_left, idle_right, neutral
+        walk_left, walk_right, idle_left, idle_right, neutral, battle_left,
+        battle_right
     }
 
     public enum Type {
@@ -42,6 +44,7 @@ public class GameObj {
 
         this.type = type;
         this.sfx = sfx;
+        this.objectSpeedModifier = 1.0f;
     }
 
     public GameObj(Rectangle rect, IntMap<Animation> anims, Sound sfx, Type type, States animState) {
@@ -74,7 +77,11 @@ public class GameObj {
     public States getCurrAnimState() { return currAnimState; }
     public TextureRegion getCurrFrame() { return currFrame; }
 
+    public float getObjectSpeedModifier() { return this.objectSpeedModifier; }
+    public void setObjectSpeedModifier(float amount) { this.objectSpeedModifier = amount; }
+
     public void setCurrAnimState(States state) {
+        assert(anims.containsKey(state.ordinal()));
         this.currAnimState = state;
         this.currAnim = anims.get(currAnimState.ordinal());
         stateTime = 0.0f;

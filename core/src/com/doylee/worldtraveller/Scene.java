@@ -25,13 +25,24 @@ public class Scene {
         this.isAnimated = isAnimated;
     }
 
-    public void update(float delta) {
+    public void update(GameState state, float delta) {
         if (isAnimated) {
-            // TODO: Depending on obj type, do different actions
+            float worldMoveSpeed = state.getWorldMoveSpeed();
+            GameState.Battle battleState = state.getBattleState();
+
             for (GameObj obj : sceneObjs) {
-                    obj.rect.x -= GameState.RUN_SPEED_IN_PIXELS * delta;
+                if (obj.getType() != GameObj.Type.hero) {
+                    obj.rect.x -= worldMoveSpeed * state.globalObjectSpeedModifier * delta;
+                } else {
+                    // TODO: Should we tie the hero movement to stage and then counteract stage moving?
+                    // TODO: Otherwise the hero is in actuality stationary until we need to shift him to battle mode
+                    if (battleState == GameState.Battle.transition) {
+                        obj.rect.x -= worldMoveSpeed * state.globalObjectSpeedModifier * delta;
+                    }
+                }
             }
-            rect.x -= GameState.RUN_SPEED_IN_PIXELS * delta;
+
+            rect.x -= worldMoveSpeed * delta;
             if (rect.x <= -rect.width) rect.x = 0;
         }
     }
