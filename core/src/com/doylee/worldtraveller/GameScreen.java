@@ -164,6 +164,9 @@ public class GameScreen implements Screen {
 		DEBUGFont.draw(game.batch, "Energy: " + hero.getEnergy(), 20.0f,
 				(Gdx.graphics.getHeight() - 140.0f));
 
+		DEBUGFont.draw(game.batch, "Money: " + hero.getMoney(), 20.0f,
+				(Gdx.graphics.getHeight() - 160.0f));
+
         game.batch.end();
 
 		uiStage.draw();

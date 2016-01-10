@@ -5,7 +5,6 @@ import com.badlogic.gdx.graphics.g2d.Animation;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.math.Rectangle;
-import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.IntMap;
 
 /**
@@ -21,12 +20,13 @@ public class Hero {
     private States currAnimState;
     private Animation currAnim;
     private TextureRegion currFrame;
-
     private float stateTime;
 
     private float hunger;
     private float thirst;
     private float energy;
+
+    private int money;
 
     public enum States {
         walk_left, walk_right, idle_left, idle_right
@@ -45,6 +45,8 @@ public class Hero {
         this.hunger = 100;
         this.thirst = 100;
         this.energy = 100;
+
+        this.money = 0;
     }
 
     public void render(SpriteBatch batch) {
@@ -62,6 +64,8 @@ public class Hero {
     public void setThirst(float amount) { this.thirst = amount; }
     public void setEnergy(float amount) { this.energy = amount; }
 
+    public void addMoney(float amount) { this.money += amount; }
+    public int getMoney() { return this.money; }
 
     public void update(float delta) {
         if (this.energy >= 0) this.energy -= GameState.ENERGY_RATE * delta;

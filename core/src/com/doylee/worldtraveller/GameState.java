@@ -65,7 +65,10 @@ public class GameState {
         while (objIterator.hasNext()) {
             GameObj obj = objIterator.next();
             if (obj.getType() == GameState.Type.coin) {
-                if (obj.rect.x <= hero.rect.x + hero.rect.width) objIterator.remove();
+                if (obj.rect.x <= hero.rect.x + hero.rect.width) {
+                    hero.addMoney(1);
+                    objIterator.remove();
+                }
             }
         }
 
@@ -79,7 +82,6 @@ public class GameState {
                 GameObj coin = new GameObj(coinRect, coinTex, GameState.Type.coin);
                 currScene.getSceneObj().add(coin);
                 coinSpawnTimer = 1.0f;
-
                 System.out.println("DEBUG: Generated coin at x: " + coin.rect.x);
             }
         }
