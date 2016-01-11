@@ -14,13 +14,14 @@ import com.badlogic.gdx.utils.IntMap;
  */
 public class Scene {
     private Texture backdrop;
+    private Music currSong;
+
     public Rectangle rect;
     private IntMap<Texture> assets;
     private IntMap<Music> music;
     private Array<GameObj> sceneObjs;
     private boolean isAnimated;
 
-    private Music currSong;
     public enum ScnMusic {
         background, battle
     }
@@ -85,6 +86,11 @@ public class Scene {
            obj.render(batch);
        }
     }
+
+    public void dispose() {
+    }
+
+    public Music getCurrSong() { return currSong; }
 
     public Array<GameObj> getSceneObj() { return sceneObjs; }
 

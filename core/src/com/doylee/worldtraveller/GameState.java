@@ -35,6 +35,7 @@ public class GameState {
     public static float THIRST_RATE = 0.3f;
 
     public float globalObjectSpeedModifier = 1.0f;
+    public Music globalCurrSong;
 
     private Hero hero;
     private Scene homeScene;
@@ -258,7 +259,11 @@ public class GameState {
 
     public void setWorldMoveSpeed(float amount) { this.worldMoveSpeed = amount; }
     public void setCurrScene(Scene scene) {
-        this.currScene = scene;
+        // TODO: Don't allow people in battle to change scene?
+        if (currScene != scene && (battleState != Battle.active && battleState != Battle.transition)) {
+            currScene.getCurrSong().stop();
+            this.currScene = scene;
+        }
     }
 
 }
