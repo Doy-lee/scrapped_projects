@@ -1,27 +1,17 @@
 package com.doylee.worldtraveller;
 
 import com.badlogic.gdx.Gdx;
-import com.badlogic.gdx.Input;
 import com.badlogic.gdx.Screen;
-import com.badlogic.gdx.audio.Music;
-import com.badlogic.gdx.audio.Sound;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.OrthographicCamera;
-import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
-import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
-import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
-
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.util.Iterator;
 
 // TODO: Read this https://github.com/libgdx/libgdx/wiki/Projection,-viewport,-&-cavatarWalkamera
 public class GameScreen implements Screen {
@@ -54,50 +44,68 @@ public class GameScreen implements Screen {
 		uiStage = new Stage(new ScreenViewport(), game.batch);
 		Gdx.input.setInputProcessor(uiStage);
 
+		int buttonPadding = 30;
+		float buttonScale = 2;
+
 		TextButton eatBtn = new TextButton("Eat", game.skin);
-		eatBtn.pad(10);
+		eatBtn.pad(buttonPadding);
 		eatBtn.addListener(new ChangeListener() {
 			@Override
 			public void changed(ChangeEvent event, Actor actor) {
 				game.state.getHero().setHunger(100.0f);
 			}
 		});
+		eatBtn.setScale(buttonScale);
 
 		TextButton drinkBtn = new TextButton("Drink", game.skin);
-		drinkBtn.pad(10);
+		drinkBtn.pad(buttonPadding);
 		drinkBtn.addListener(new ChangeListener() {
 			@Override
 			public void changed(ChangeEvent event, Actor actor) {
 				game.state.getHero().setThirst(100.0f);
 			}
 		});
+		drinkBtn.setScale(buttonScale);
 
 		TextButton restBtn = new TextButton("Rest", game.skin);
-		restBtn.pad(10);
+		restBtn.pad(buttonPadding);
 		restBtn.addListener(new ChangeListener() {
 			@Override
 			public void changed(ChangeEvent event, Actor actor) {
 				game.state.getHero().setEnergy(100.0f);
 			}
 		});
+		restBtn.setScale(buttonScale);
 
 		TextButton homeBtn = new TextButton("Home", game.skin);
-		homeBtn.pad(10);
+		homeBtn.pad(buttonPadding);
 		homeBtn.addListener(new ChangeListener() {
 			@Override
 			public void changed(ChangeEvent event, Actor actor) {
 					game.state.setCurrScene(game.state.getHomeScene());
 			}
 		});
+		homeBtn.setScale(buttonScale);
 
 		TextButton adventureBtn = new TextButton("Adventure", game.skin);
-		adventureBtn.pad(10);
+		adventureBtn.pad(buttonPadding);
 		adventureBtn.addListener(new ChangeListener() {
 			@Override
 			public void changed(ChangeEvent event, Actor actor) {
 				game.state.setCurrScene(game.state.getAdventureScene());
 			}
 		});
+		adventureBtn.setScale(buttonScale);
+
+		TextButton attackBtn = new TextButton("Attack", game.skin);
+		attackBtn.pad(buttonPadding);
+		attackBtn.addListener(new ChangeListener() {
+			@Override
+			public void changed(ChangeEvent event, Actor actor) {
+				game.state.getHero().attack(game.state.getCurrBattleMob());
+			}
+		});
+		attackBtn.setScale(buttonScale);
 
 		uiTable = new Table(game.skin);
 		uiTable.bottom().left();
@@ -108,6 +116,7 @@ public class GameScreen implements Screen {
 		uiTable.add(restBtn);
 		uiTable.add(homeBtn);
 		uiTable.add(adventureBtn);
+		uiTable.add(attackBtn);
 		uiStage.addActor(uiTable);
 	}
 
@@ -160,6 +169,13 @@ public class GameScreen implements Screen {
 
 		DEBUGFont.draw(game.batch, "Money: " + hero.getMoney(), 20.0f,
 				(Gdx.graphics.getHeight() - 160.0f));
+
+		// DEBUG DRAW PLAYER HEALTH
+		DEBUGFont.draw(game.batch, "HP: " + hero.getHealth(), hero.getSprite().getX(), hero.getSprite().getY() + GameState.SPRITE_SIZE + 20);
+		if (game.state.getCurrBattleMob() != null) {
+			Battler mob = game.state.getCurrBattleMob();
+			DEBUGFont.draw(game.batch, "HP: " + mob.getHealth(), mob.getSprite().getX(), mob.getSprite().getY() + GameState.SPRITE_SIZE + 20);
+		}
 
         game.batch.end();
 

@@ -50,8 +50,10 @@ public class Scene {
                 } else {
                     // TODO: Should we tie the hero movement to stage and then counteract stage moving?
                     // TODO: Otherwise the hero is in actuality stationary until we need to shift him to battle mode
-                    if (battleState == GameState.Battle.transition) {
+                    if (battleState == GameState.Battle.transitionIn) {
                         obj.getSprite().setX(obj.getSprite().getX() - totalMoveDelta);
+                    } else if (battleState == GameState.Battle.transitionOut) {
+                        obj.getSprite().setX(obj.getSprite().getX() + totalMoveDelta);
                     }
                 }
             }

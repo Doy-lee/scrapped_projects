@@ -35,7 +35,6 @@ public class GameState {
     public static float THIRST_RATE = 0.3f;
 
     public float globalObjectSpeedModifier = 1.0f;
-    public Music globalCurrSong;
 
     private Hero hero;
     private Scene homeScene;
@@ -44,13 +43,14 @@ public class GameState {
 
     private float worldMoveSpeed;
     private Battle battleState;
+    private Battler currBattleMob;
 
     private float coinSpawnTimer;
     private Texture coinTex;
     private Sound coinSfx;
 
     public enum Battle {
-        transition, active, inactive
+        transitionIn, transitionOut, active, inactive
     }
 
     // TODO: Make music independant of scene, so have 1 global music var and
@@ -93,6 +93,7 @@ public class GameState {
 
         worldMoveSpeed = 0.0f;
         battleState = Battle.inactive;
+        currBattleMob = null;
 
         coinSpawnTimer = 1.0f;
         coinTex = new Texture(Gdx.files.internal("coin.png"));
@@ -136,53 +137,77 @@ public class GameState {
         // Proximity detection
         if (currScene.equals(adventureScene)) {
 
-            Iterator<GameObj> objIterator = currScene.getSceneObj().iterator();
-            while (objIterator.hasNext()) {
-                GameObj obj = objIterator.next();
-
-                if (obj.getType() == GameObj.Type.coin) {
-                    if (obj.getSprite().getX() <= hero.getSprite().getX() + hero.getSprite().getWidth() / 2) {
-                        hero.addMoney(1);
-                        obj.act();
-                        objIterator.remove();
-                    } else if (battleState == Battle.active) {
-                        obj.getSprite().setAlpha(0.3f);
-                    }
-                } else if (obj.getType() == GameObj.Type.monster) {
-                    float battleThresholdX = currScene.rect.width + (0.15f * currScene.rect.width);
-                    if (obj.getSprite().getX() <= battleThresholdX && battleState != Battle.active) {
-                        battleState = Battle.transition;
-                    }
-                } else if (obj.getType() == GameObj.Type.hero) {
-                    if (obj.getSprite().getX() <= (0.15f * currScene.rect.width) && battleState == Battle.transition) {
-                        // Stop world moving, battle transition complete
-                        battleState = Battle.active;
-                        obj.setCurrAnimState(GameObj.States.battle_right);
-                    }
-                }
-            }
-
-            if (battleState == Battle.inactive) {
-                globalObjectSpeedModifier = 1.0f;
-
-                generateRandCoin(delta);
-
-                // TODO: TEMPORARY!!! Generate monster intelligently
-                if (Gdx.input.isKeyJustPressed(Input.Keys.Z)) {
-                    generateMonster();
-                }
-
-            } else if (battleState == Battle.transition) {
-                globalObjectSpeedModifier = 0.75f;
-            } else if (battleState == Battle.active) {
+            if (battleState == Battle.active) {
                 globalObjectSpeedModifier = 0.0f;
-            }
 
+                if (getCurrBattleMob().getHealth() <= 0) {
+                    currScene.getSceneObj().removeValue(getCurrBattleMob(), true);
+                    battleState = Battle.transitionOut;
+                    hero.setCurrAnimState(GameObj.States.walk_right);
+                }
+
+            } else {
+                checkGameObjectsAndCheckProximity();
+                if (battleState == Battle.inactive) {
+                    globalObjectSpeedModifier = 1.0f;
+                    generateRandCoin(delta);
+
+                    // TODO: TEMPORARY!!! Generate monster intelligently
+                    if (Gdx.input.isKeyJustPressed(Input.Keys.Z)) {
+                        generateMonster();
+                    }
+                } else if (battleState == Battle.transitionIn || battleState == Battle.transitionOut) {
+                    globalObjectSpeedModifier = 0.75f;
+
+                }
+
+            }
         }
 
         currScene.update(this, delta);
         hero.update(delta);
 
+    }
+
+    private void checkGameObjectsAndCheckProximity() {
+        Iterator<GameObj> objIterator = currScene.getSceneObj().iterator();
+        while (objIterator.hasNext()) {
+            GameObj obj = objIterator.next();
+
+            if (obj.getType() == GameObj.Type.coin) {
+                if (obj.getSprite().getX() <= hero.getSprite().getX() + hero.getSprite().getWidth() / 2) {
+                    hero.addMoney(1);
+                    obj.act();
+                    objIterator.remove();
+                } else if (battleState == Battle.active) {
+                    obj.getSprite().setAlpha(0.3f);
+                }
+            } else if (obj.getType() == GameObj.Type.monster) {
+                if (battleState == Battle.inactive) {
+                    float battleThresholdX = currScene.rect.width + (0.15f * currScene.rect.width);
+                    if (obj.getSprite().getX() <= battleThresholdX) {
+                        battleState = Battle.transitionIn;
+                        currBattleMob = (Battler)obj;
+                        break;
+                    }
+                }
+            } else if (obj.getType() == GameObj.Type.hero) {
+                if (battleState == Battle.transitionIn) {
+                    float battleThresholdX = 0.15f * currScene.rect.width;
+                    if (obj.getSprite().getX() <= battleThresholdX) {
+                        // Stop world moving, battle transition complete
+                        battleState = Battle.active;
+                        obj.setCurrAnimState(GameObj.States.battle_right);
+                    }
+                } else if (battleState == Battle.transitionOut) {
+                    float battleThresholdX = currScene.rect.width/2;
+                    if (obj.getSprite().getX() >= battleThresholdX) {
+                        battleState = Battle.inactive;
+                    }
+
+                }
+            }
+        }
     }
 
     private void generateRandCoin(float delta) {
@@ -235,7 +260,7 @@ public class GameState {
         monsterAnim.put(Hero.States.walk_right.ordinal(), walkRight);
         monsterAnim.put(Hero.States.walk_left.ordinal(), walkLeft);
 
-        GameObj monster = new GameObj(rect, monsterAnim, null,
+        GameObj monster = new Battler(rect, monsterAnim, null,
                                       GameObj.Type.monster,
                                       GameObj.States.walk_left);
         currScene.getSceneObj().add(monster);
@@ -257,10 +282,12 @@ public class GameState {
     public float getWorldMoveSpeed() { return worldMoveSpeed; }
     public Battle getBattleState() { return battleState; }
 
+    public Battler getCurrBattleMob() { return currBattleMob; }
+
     public void setWorldMoveSpeed(float amount) { this.worldMoveSpeed = amount; }
     public void setCurrScene(Scene scene) {
         // TODO: Don't allow people in battle to change scene?
-        if (currScene != scene && (battleState != Battle.active && battleState != Battle.transition)) {
+        if (currScene != scene && (battleState != Battle.active && battleState != Battle.transitionIn && battleState != Battle.transitionOut)) {
             currScene.getCurrSong().stop();
             this.currScene = scene;
         }
