@@ -2,6 +2,7 @@ package com.doylee.worldtraveller;
 
 import com.badlogic.gdx.Game;
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.audio.Sound;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.Animation;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
@@ -66,7 +67,10 @@ public class WorldTraveller extends Game {
         heroAnim.put(Hero.States.battle_right.ordinal(), walkRight);
         heroAnim.put(Hero.States.battle_left.ordinal(), walkLeft);
 
-        Hero result = new Hero(rect, heroAnim, null, GameObj.Type.hero, GameObj.States.walk_right);
+        IntMap<Sound> sfx = new IntMap<Sound>();
+        Sound attackSound = Gdx.audio.newSound(Gdx.files.internal("slice.mp3"));
+        sfx.put(GameObj.SoundFX.attack.ordinal(), attackSound);
+        Hero result = new Hero(rect, heroAnim, sfx, GameObj.Type.hero, GameObj.States.walk_right);
         return result;
     }
 

@@ -14,7 +14,7 @@ public class Hero extends Battler {
     private float thirst;
     private float energy;
 
-    public Hero(Rectangle rect, IntMap<Animation> anims, Sound sfx, Type type, States animState) {
+    public Hero(Rectangle rect, IntMap<Animation> anims, IntMap<Sound> sfx, Type type, States animState) {
         super(rect, anims, sfx, type, animState);
 
         this.hunger = 100;

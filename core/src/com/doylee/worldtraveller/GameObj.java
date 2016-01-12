@@ -20,7 +20,7 @@ public class GameObj {
     private TextureRegion currFrame;
     private float stateTime;
 
-    private Sound sfx;
+    protected IntMap<Sound> sfx;
     private Type type;
     private float objectSpeedModifier;
 
@@ -33,7 +33,11 @@ public class GameObj {
         coin, hero, monster
     }
 
-    public GameObj(Rectangle rect, IntMap<Animation> anims, Sound sfx, Type type) {
+    public enum SoundFX {
+        hit, attack
+    }
+
+    public GameObj(Rectangle rect, IntMap<Animation> anims, IntMap<Sound> sfx, Type type) {
         this.anims = anims;
 
         this.currAnimState = States.neutral;
@@ -49,7 +53,7 @@ public class GameObj {
         this.objectSpeedModifier = 1.0f;
     }
 
-    public GameObj(Rectangle rect, IntMap<Animation> anims, Sound sfx, Type type, States animState) {
+    public GameObj(Rectangle rect, IntMap<Animation> anims, IntMap<Sound> sfx, Type type, States animState) {
         this.anims = anims;
 
         this.currAnimState = animState;
@@ -65,7 +69,16 @@ public class GameObj {
     }
 
     public void act() {
-        sfx.play();
+    }
+
+    public void playSoundIfExist(SoundFX sfx) {
+       if (this.sfx.containsKey(sfx.ordinal())) {
+            this.sfx.get(sfx.ordinal()).play();
+       } else {
+           System.err.println("ERROR: A GameObj tried to play an invalid sound effect");
+           System.err.println(this.getType().toString() +  " => " + sfx.toString());
+
+       }
     }
 
     public void update(float delta) {

@@ -97,15 +97,15 @@ public class GameScreen implements Screen {
 		});
 		adventureBtn.setScale(buttonScale);
 
-		TextButton attackBtn = new TextButton("Attack", game.skin);
-		attackBtn.pad(buttonPadding);
-		attackBtn.addListener(new ChangeListener() {
+		TextButton spawnBtn = new TextButton("Spawn", game.skin);
+		spawnBtn.pad(buttonPadding);
+		spawnBtn.addListener(new ChangeListener() {
 			@Override
 			public void changed(ChangeEvent event, Actor actor) {
-				game.state.getHero().attack(game.state.getCurrBattleMob());
+				game.state.generateMonster(100.0f);
 			}
 		});
-		attackBtn.setScale(buttonScale);
+		spawnBtn.setScale(buttonScale);
 
 		uiTable = new Table(game.skin);
 		uiTable.bottom().left();
@@ -116,7 +116,7 @@ public class GameScreen implements Screen {
 		uiTable.add(restBtn);
 		uiTable.add(homeBtn);
 		uiTable.add(adventureBtn);
-		uiTable.add(attackBtn);
+		uiTable.add(spawnBtn);
 		uiStage.addActor(uiTable);
 	}
 
@@ -170,11 +170,23 @@ public class GameScreen implements Screen {
 		DEBUGFont.draw(game.batch, "Money: " + hero.getMoney(), 20.0f,
 				(Gdx.graphics.getHeight() - 160.0f));
 
+		DEBUGFont.draw(game.batch, "Battle State:  " + game.state.getBattleState().toString(), 20.0f,
+				(Gdx.graphics.getHeight() - 180.0f));
+		DEBUGFont.draw(game.batch, "World Move Speed: " + game.state.getWorldMoveSpeed(), 20.0f,
+				(Gdx.graphics.getHeight() - 200.0f));
+		DEBUGFont.draw(game.batch, "Monster Spawn Timer: " + game.state.getMonsterSpawnTimer(), 20.0f,
+				(Gdx.graphics.getHeight() - 220.0f));
+
+		DEBUGFont.draw(game.batch, "Money: " + hero.getMoney(), 20.0f,
+				(Gdx.graphics.getHeight() - 160.0f));
+
 		// DEBUG DRAW PLAYER HEALTH
 		DEBUGFont.draw(game.batch, "HP: " + hero.getHealth(), hero.getSprite().getX(), hero.getSprite().getY() + GameState.SPRITE_SIZE + 20);
+		DEBUGFont.draw(game.batch, "ATB: " + (int)hero.getATB(), hero.getSprite().getX(), hero.getSprite().getY() + GameState.SPRITE_SIZE + 40);
 		if (game.state.getCurrBattleMob() != null) {
 			Battler mob = game.state.getCurrBattleMob();
 			DEBUGFont.draw(game.batch, "HP: " + mob.getHealth(), mob.getSprite().getX(), mob.getSprite().getY() + GameState.SPRITE_SIZE + 20);
+			DEBUGFont.draw(game.batch, "ATB: " + (int)mob.getATB(), mob.getSprite().getX(), mob.getSprite().getY() + GameState.SPRITE_SIZE + 40);
 		}
 
         game.batch.end();

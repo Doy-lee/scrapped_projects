@@ -29,6 +29,9 @@ public class GameState {
     public static final int SPRITE_SIZE = 16 * SPRITE_SCALE;
     public static final Rectangle BASE_RECT = new Rectangle(0, 0, 16, 16);
 
+    public static final float MONSTER_SPAWN_TIME = 8.0f;
+    public static final float COIN_SPAWN_TIME = 1.0f;
+
     // NOTE: Units of 'need' to deplete per second
     public static float ENERGY_RATE = 0.1f;
     public static float HUNGER_RATE = 0.3f;
@@ -45,6 +48,7 @@ public class GameState {
     private Battle battleState;
     private Battler currBattleMob;
 
+    private float monsterSpawnTimer;
     private float coinSpawnTimer;
     private Texture coinTex;
     private Sound coinSfx;
@@ -95,7 +99,10 @@ public class GameState {
         battleState = Battle.inactive;
         currBattleMob = null;
 
-        coinSpawnTimer = 1.0f;
+        // NOTE: Twice as many monsters as coins
+        monsterSpawnTimer = MONSTER_SPAWN_TIME;
+        coinSpawnTimer = COIN_SPAWN_TIME;
+        // TODO: Get rid of, initialise one copy on start up, instantiate the rest
         coinTex = new Texture(Gdx.files.internal("coin.png"));
         coinSfx = Gdx.audio.newSound(Gdx.files.internal("coin1.wav"));
 
@@ -136,51 +143,58 @@ public class GameState {
 
         // Proximity detection
         if (currScene.equals(adventureScene)) {
-
             if (battleState == Battle.active) {
+                // BATTLE is active, stop objects moving
                 globalObjectSpeedModifier = 0.0f;
 
+                hero.atbUpdateAndAttack(delta, currBattleMob);
+                //currBattleMob.atbUpdateAndAttack(delta, currBattleMob);
+
+                // NOTE: Enemy is dead
                 if (getCurrBattleMob().getHealth() <= 0) {
                     currScene.getSceneObj().removeValue(getCurrBattleMob(), true);
+                    currBattleMob = null;
                     battleState = Battle.transitionOut;
                     hero.setCurrAnimState(GameObj.States.walk_right);
                 }
-
             } else {
-                checkGameObjectsAndCheckProximity();
+                checkGameObjectsAndProximity();
                 if (battleState == Battle.inactive) {
                     globalObjectSpeedModifier = 1.0f;
                     generateRandCoin(delta);
 
                     // TODO: TEMPORARY!!! Generate monster intelligently
                     if (Gdx.input.isKeyJustPressed(Input.Keys.Z)) {
-                        generateMonster();
+                        generateMonster(100.0f);
                     }
+
+                    generateMonster(delta);
                 } else if (battleState == Battle.transitionIn || battleState == Battle.transitionOut) {
                     globalObjectSpeedModifier = 0.75f;
-
                 }
-
             }
         }
-
         currScene.update(this, delta);
         hero.update(delta);
 
     }
 
-    private void checkGameObjectsAndCheckProximity() {
+    private void checkGameObjectsAndProximity() {
         Iterator<GameObj> objIterator = currScene.getSceneObj().iterator();
         while (objIterator.hasNext()) {
             GameObj obj = objIterator.next();
 
             if (obj.getType() == GameObj.Type.coin) {
-                if (obj.getSprite().getX() <= hero.getSprite().getX() + hero.getSprite().getWidth() / 2) {
-                    hero.addMoney(1);
-                    obj.act();
-                    objIterator.remove();
-                } else if (battleState == Battle.active) {
-                    obj.getSprite().setAlpha(0.3f);
+                if (battleState == Battle.active) {
+                    obj.getSprite().setAlpha(0.0f);
+                } else {
+                    if (obj.getSprite().getX() <= hero.getSprite().getX() + hero.getSprite().getWidth() / 2) {
+                        hero.addMoney(1);
+                        // TODO: revise how to handle hits/gameobject actions and sound fx
+                        obj.playSoundIfExist(GameObj.SoundFX.hit);
+                        objIterator.remove();
+                    }
+                    obj.getSprite().setAlpha(1.0f);
                 }
             } else if (obj.getType() == GameObj.Type.monster) {
                 if (battleState == Battle.inactive) {
@@ -211,61 +225,72 @@ public class GameState {
     }
 
     private void generateRandCoin(float delta) {
+        //TODO: Store a copy of coin and copy instances instead of instantiating resources time
         // Generate coin texture
         TextureRegion coinTexReg = new TextureRegion(coinTex);
         float frameDuration = 0.05f;
         Animation neutral = new Animation(frameDuration, coinTexReg);
         IntMap<Animation> anims = new IntMap<Animation>();
         anims.put(GameObj.States.neutral.ordinal(), neutral);
+        IntMap<Sound> sfx = new IntMap<Sound>();
+        sfx.put(GameObj.SoundFX.hit.ordinal(), coinSfx);
 
         coinSpawnTimer -= delta;
         if (coinSpawnTimer <= 0) {
             Rectangle coinRect = new Rectangle((int)generateRandOffscreenX(), hero.getSprite().getY(),
                     SPRITE_SIZE, SPRITE_SIZE);
-            GameObj coin = new GameObj(coinRect, anims, coinSfx, GameObj.Type.coin);
+            GameObj coin = new GameObj(coinRect, anims, sfx, GameObj.Type.coin);
             currScene.getSceneObj().add(coin);
-            coinSpawnTimer = 1.0f;
+            coinSpawnTimer = COIN_SPAWN_TIME;
             System.out.println("DEBUG: Generated coin at x: " + coin.getSprite().getX());
         }
     }
 
-    private void generateMonster() {
-        Rectangle baseRect = new Rectangle(0, 0, 16, 16);
-        Rectangle rect = new Rectangle((int)generateRandOffscreenX(), hero.getSprite().getY(), SPRITE_SIZE, SPRITE_SIZE);
-        Texture base = new Texture(Gdx.files.internal("MyCharEnemy.png"));
+    // TODO: PUBLIC IS TEMPORARY!
+    public void generateMonster(float delta) {
+        monsterSpawnTimer -= delta;
+        if (monsterSpawnTimer <= 0) {
+            Rectangle baseRect = new Rectangle(0, 0, 16, 16);
+            Rectangle rect = new Rectangle((int) generateRandOffscreenX(), hero.getSprite().getY(), SPRITE_SIZE, SPRITE_SIZE);
+            Texture base = new Texture(Gdx.files.internal("MyCharEnemy.png"));
 
-        // Extract animations
-        TextureRegion[][] frames = TextureRegion.split(base, (int)baseRect.width, (int)baseRect.height);
-        float frameDuration = 0.05f;
+            // Extract animations
+            TextureRegion[][] frames = TextureRegion.split(base, (int) baseRect.width, (int) baseRect.height);
+            float frameDuration = 0.05f;
 
-        Vector2 idleRightStartSprite = new Vector2(0, 1);
-        Animation idleRight = Util.extractAnim(frames, frameDuration,
-                idleRightStartSprite, 1);
+            Vector2 idleRightStartSprite = new Vector2(0, 1);
+            Animation idleRight = Util.extractAnim(frames, frameDuration,
+                    idleRightStartSprite, 1);
 
-        Vector2 idleLeftStartSprite = new Vector2(0, 0);
-        Animation idleLeft = Util.extractAnim(frames, frameDuration,
-                idleLeftStartSprite, 1);
+            Vector2 idleLeftStartSprite = new Vector2(0, 0);
+            Animation idleLeft = Util.extractAnim(frames, frameDuration,
+                    idleLeftStartSprite, 1);
 
-        Vector2 walkRightStartSprite  = new Vector2(0, 1);
-        Animation walkRight = Util.extractAnim(frames, frameDuration,
-                walkRightStartSprite, 4);
+            Vector2 walkRightStartSprite = new Vector2(0, 1);
+            Animation walkRight = Util.extractAnim(frames, frameDuration,
+                    walkRightStartSprite, 4);
 
-        Vector2 walkLeftStartSprite = new Vector2(0, 0);
-        Animation walkLeft = Util.extractAnim(frames, frameDuration,
-                walkLeftStartSprite, 4);
+            Vector2 walkLeftStartSprite = new Vector2(0, 0);
+            Animation walkLeft = Util.extractAnim(frames, frameDuration,
+                    walkLeftStartSprite, 4);
 
-        IntMap<Animation> monsterAnim = new IntMap<Animation>();
-        monsterAnim.put(Hero.States.idle_left.ordinal(), idleLeft);
-        monsterAnim.put(Hero.States.idle_right.ordinal(), idleRight);
-        monsterAnim.put(Hero.States.walk_right.ordinal(), walkRight);
-        monsterAnim.put(Hero.States.walk_left.ordinal(), walkLeft);
+            IntMap<Animation> monsterAnim = new IntMap<Animation>();
+            monsterAnim.put(Hero.States.idle_left.ordinal(), idleLeft);
+            monsterAnim.put(Hero.States.idle_right.ordinal(), idleRight);
+            monsterAnim.put(Hero.States.walk_right.ordinal(), walkRight);
+            monsterAnim.put(Hero.States.walk_left.ordinal(), walkLeft);
 
-        GameObj monster = new Battler(rect, monsterAnim, null,
-                                      GameObj.Type.monster,
-                                      GameObj.States.walk_left);
-        currScene.getSceneObj().add(monster);
-        System.out.println("DEBUG: Generated monster at x: " + monster.getSprite().getX());
+            IntMap<Sound> sfx = new IntMap<Sound>();
+            Sound attackSound = Gdx.audio.newSound(Gdx.files.internal("slice.mp3"));
+            sfx.put(GameObj.SoundFX.attack.ordinal(), attackSound);
+            Battler monster = new Battler(rect, monsterAnim, null,
+                    GameObj.Type.monster,
+                    GameObj.States.walk_left);
+            currScene.getSceneObj().add(monster);
+            System.out.println("DEBUG: Generated monster at x: " + monster.getSprite().getX());
 
+            monsterSpawnTimer = MONSTER_SPAWN_TIME;
+        }
     }
 
     private float generateRandOffscreenX () {
@@ -278,6 +303,9 @@ public class GameState {
     public Scene getCurrScene() { return currScene; }
     public Scene getHomeScene() { return homeScene; }
     public Scene getAdventureScene() { return adventureScene; }
+
+    // TODO: Get rid of timer access, temporary only
+    public float getMonsterSpawnTimer() { return monsterSpawnTimer; }
 
     public float getWorldMoveSpeed() { return worldMoveSpeed; }
     public Battle getBattleState() { return battleState; }
