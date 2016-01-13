@@ -2,6 +2,7 @@ package com.doylee.worldtraveller;
 
 import com.badlogic.gdx.audio.Sound;
 import com.badlogic.gdx.graphics.g2d.Animation;
+import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.utils.IntMap;
 
@@ -26,19 +27,20 @@ public class Battler extends GameObj {
         this.atb = BASE_ATB;
         this.speed = 70;
 
-        this.money = 0;
+        this.money = MathUtils.random(0, 5);
     }
 
     private void attack(Battler target) {
         target.setHealth(target.getHealth() - attack);
-        playSoundIfExist(SoundFX.attack);
+        playSoundIfExist(SoundFX.attack, GameState.globalVolume);
         if (target.getHealth() <= 0) {
             target.setHealth(0);
         }
-        System.out.println("DEBUG " + this.getType().toString() + " has attacked " + target.getType().toString() + " for " + attack + " damage.");
+        System.out.println("DEBUG: " + this.getType().toString() + " has attacked " + target.getType().toString() + " for " + attack + " damage.");
     }
 
     public void atbUpdateAndAttack(float delta, Battler target) {
+        super.update(delta);
         atb -= (delta * speed);
         if (atb <= 0) {
             attack(target);
@@ -53,4 +55,8 @@ public class Battler extends GameObj {
     public void addMoney(float amount) { this.money += amount; }
     public void setHealth(int amount) { this.health = amount; }
 
+    public static Battler newInstance(Battler object) {
+        Rectangle rect = object.getSprite().getBoundingRectangle();
+        return new Battler(rect, object.anims, object.sfx, object.getType(), object.getCurrAnimState());
+    }
 }

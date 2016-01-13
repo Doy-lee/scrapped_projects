@@ -97,16 +97,6 @@ public class GameScreen implements Screen {
 		});
 		adventureBtn.setScale(buttonScale);
 
-		TextButton spawnBtn = new TextButton("Spawn", game.skin);
-		spawnBtn.pad(buttonPadding);
-		spawnBtn.addListener(new ChangeListener() {
-			@Override
-			public void changed(ChangeEvent event, Actor actor) {
-				game.state.generateMonster(100.0f);
-			}
-		});
-		spawnBtn.setScale(buttonScale);
-
 		uiTable = new Table(game.skin);
 		uiTable.bottom().left();
 		uiTable.setDebug(true);
@@ -116,7 +106,6 @@ public class GameScreen implements Screen {
 		uiTable.add(restBtn);
 		uiTable.add(homeBtn);
 		uiTable.add(adventureBtn);
-		uiTable.add(spawnBtn);
 		uiStage.addActor(uiTable);
 	}
 
@@ -139,7 +128,7 @@ public class GameScreen implements Screen {
 		// GAME STATE RENDERING
 		Hero hero = game.state.getHero();
 		Scene scene = game.state.getCurrScene();
-		scene.render(game.batch);
+		scene.render(game.batch, GameState.globalVolume);
 
 		GameState.Battle battle = game.state.getBattleState();
 		if (battle == GameState.Battle.active) {

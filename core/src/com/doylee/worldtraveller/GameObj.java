@@ -12,7 +12,7 @@ import com.badlogic.gdx.utils.IntMap;
  * Created by Doyle on 10/01/2016.
  */
 public class GameObj {
-    private IntMap<Animation> anims;
+    protected IntMap<Animation> anims;
     private Sprite sprite;
 
     private States currAnimState;
@@ -23,6 +23,8 @@ public class GameObj {
     protected IntMap<Sound> sfx;
     private Type type;
     private float objectSpeedModifier;
+
+    private boolean initialised;
 
     public enum States {
         walk_left, walk_right, idle_left, idle_right, neutral, battle_left,
@@ -68,12 +70,17 @@ public class GameObj {
         this.sfx = sfx;
     }
 
+    public GameObj(Type type) {
+        this.type = type;
+        this.initialised = false;
+    }
+
     public void act() {
     }
 
-    public void playSoundIfExist(SoundFX sfx) {
+    public void playSoundIfExist(SoundFX sfx, float volume) {
        if (this.sfx.containsKey(sfx.ordinal())) {
-            this.sfx.get(sfx.ordinal()).play();
+            this.sfx.get(sfx.ordinal()).play(volume);
        } else {
            System.err.println("ERROR: A GameObj tried to play an invalid sound effect");
            System.err.println(this.getType().toString() +  " => " + sfx.toString());
@@ -106,4 +113,8 @@ public class GameObj {
         stateTime = 0.0f;
     }
 
+    public static GameObj newInstance(GameObj object) {
+        Rectangle rect = object.getSprite().getBoundingRectangle();
+        return new GameObj(rect, object.anims, object.sfx, object.type, object.currAnimState);
+    }
 }

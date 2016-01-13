@@ -39,9 +39,9 @@ public class Scene {
 
     public void update(GameState state, float delta) {
         GameState.Battle battleState = state.getBattleState();
-        if (isAnimated) {
-            float worldMoveSpeed = state.getWorldMoveSpeed();
+        if (battleState != GameState.Battle.active) {
 
+            float worldMoveSpeed = state.getWorldMoveSpeed();
             float totalMoveDelta = worldMoveSpeed * state.globalObjectSpeedModifier * delta;
 
             for (GameObj obj : sceneObjs) {
@@ -50,39 +50,47 @@ public class Scene {
                 } else {
                     // TODO: Should we tie the hero movement to stage and then counteract stage moving?
                     // TODO: Otherwise the hero is in actuality stationary until we need to shift him to battle mode
-                    if (battleState == GameState.Battle.transitionIn) {
-                        obj.getSprite().setX(obj.getSprite().getX() - totalMoveDelta);
-                    } else if (battleState == GameState.Battle.transitionOut) {
-                        obj.getSprite().setX(obj.getSprite().getX() + totalMoveDelta);
+                    switch (battleState) {
+                        case transitionIn:
+                            obj.getSprite().setX(obj.getSprite().getX() - totalMoveDelta);
+                            break;
+                        case transitionOut:
+                            obj.getSprite().setX(obj.getSprite().getX() + totalMoveDelta);
+                            break;
                     }
                 }
+                obj.update(delta);
             }
 
-            rect.x -= worldMoveSpeed * delta;
-            if (rect.x <= -rect.width) rect.x = 0;
-        }
-
-        if (battleState == GameState.Battle.active) {
-            if (currSong != music.get(ScnMusic.battle.ordinal())) {
-                currSong.stop();
-                currSong = music.get(ScnMusic.battle.ordinal());
+            if (isAnimated) {
+                rect.x -= worldMoveSpeed * delta;
+                if (rect.x <= -rect.width) rect.x = 0;
             }
-        } else {
+
             if (currSong != music.get(ScnMusic.background.ordinal())) {
                 currSong.stop();
                 currSong = music.get(ScnMusic.background.ordinal());
             }
+        } else {
+            // battle active
+            if (currSong != music.get(ScnMusic.battle.ordinal())) {
+                currSong.stop();
+                currSong = music.get(ScnMusic.battle.ordinal());
+            }
         }
     }
 
-    public void render(SpriteBatch batch) {
+    public void render(SpriteBatch batch, float volume) {
         batch.draw(backdrop, rect.x, rect.y, rect.getWidth(), rect.getHeight());
         // Double buffer up for screen scrolling
         if (isAnimated) {
             batch.draw(backdrop, rect.getWidth() + rect.x, rect.y, rect.getWidth(), rect.getHeight());
         }
 
-        if (!currSong.isPlaying()) currSong.play();
+        if (!currSong.isPlaying()) {
+            currSong.setVolume(volume);
+            currSong.play();
+        }
 
        for (GameObj obj : sceneObjs) {
            obj.render(batch);
