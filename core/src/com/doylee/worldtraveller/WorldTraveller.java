@@ -8,6 +8,7 @@ import com.badlogic.gdx.graphics.g2d.Sprite;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureAtlas;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
+import com.doylee.worldtraveller.screens.HomeScreen;
 
 public class WorldTraveller extends Game {
     public SpriteBatch batch;
@@ -19,11 +20,14 @@ public class WorldTraveller extends Game {
         batch = new SpriteBatch();
         //Use LibGDX's default Arial font.
         font = new BitmapFont();
-        TextureAtlas atlas = new TextureAtlas(Gdx.files.internal("uiskin.atlas"));
-        skin = new Skin(Gdx.files.internal("uiskin.json"), atlas);
+
+        // TODO: Using default atlas change to mine
+        TextureAtlas atlas = new TextureAtlas(Gdx.files.internal("template.atlas"));
+        skin = new Skin(Gdx.files.internal("ui.json"), atlas);
+        skin.getFont("default-font").getData().setScale(0.2f);
 
         this.state = new GameState();
-        this.setScreen(new com.doylee.worldtraveller.screens.HomeScreen(this));
+        this.setScreen(new HomeScreen(this));
     }
 
     public void render() {

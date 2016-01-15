@@ -46,7 +46,7 @@ public class GameScreen implements Screen {
 	}
 
 	public void setupGUI() {
-		uiStage = new Stage(new ScreenViewport(), game.batch);
+		uiStage = new Stage(new ScreenViewport(camera), game.batch);
 		Gdx.input.setInputProcessor(uiStage);
 
 		int buttonPadding = 30;
@@ -188,7 +188,12 @@ public class GameScreen implements Screen {
 
 	@Override
 	public void resize(int width, int height) {
+		camera.setToOrtho(false, width, height);
+		// TODO: Look at again
+		//uiStage.setViewport(new ScreenViewport(camera));
 
+		//uiTable.invalidateHierarchy();
+		//uiTable.setSize(width, height);
 	}
 
 	@Override

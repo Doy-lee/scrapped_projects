@@ -6,12 +6,7 @@ import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.Sprite;
-import com.badlogic.gdx.scenes.scene2d.Stage;
-import com.badlogic.gdx.scenes.scene2d.ui.Table;
-import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
-import com.badlogic.gdx.utils.viewport.ScreenViewport;
 import com.doylee.worldtraveller.SpriteAccessor;
-import com.doylee.worldtraveller.Util;
 import com.doylee.worldtraveller.WorldTraveller;
 
 import aurelienribon.tweenengine.Tween;
@@ -21,11 +16,8 @@ public class HomeScreen implements Screen {
     final WorldTraveller game;
     private OrthographicCamera camera;
 
-    private Sprite splashScreen;
+    private Sprite logoSplash;
     private TweenManager tweenManager;
-
-    private Stage stage;
-    private Table table;
 
     public HomeScreen(final WorldTraveller wtGame) {
         game = wtGame;
@@ -34,37 +26,24 @@ public class HomeScreen implements Screen {
         camera.setToOrtho(false, Gdx.graphics.getWidth(),
                           Gdx.graphics.getHeight());
 
-        stage = new Stage(new ScreenViewport(camera), game.batch);
-        Gdx.input.setInputProcessor(stage);
-
-        Texture splashTex = new Texture(Gdx.files.internal("splash.png"));
-        splashScreen = new Sprite(splashTex);
-        splashScreen.setBounds(0, 0, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
+        // TODO: Use just our inbuilt font?
+        Texture logoTex = new Texture(Gdx.files.internal("logo.png"));
+        logoSplash = new Sprite(logoTex);
+        logoSplash.setBounds(0, 0, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
 
         Tween.registerAccessor(Sprite.class, new SpriteAccessor());
         tweenManager = new TweenManager();
         int tweenDuration = 1;
-        Tween.set(splashScreen, SpriteAccessor.ALPHA).target(0).start(tweenManager);
-        Tween.to(splashScreen, SpriteAccessor.ALPHA, tweenDuration).target(1).start(tweenManager);
-        Tween.to(splashScreen, SpriteAccessor.ALPHA, tweenDuration).delay(tweenDuration + 2).target(0).start(tweenManager);
+        Tween.set(logoSplash, SpriteAccessor.ALPHA).target(0).start(tweenManager);
+        Tween.to(logoSplash, SpriteAccessor.ALPHA, tweenDuration).target(1)
+                .repeatYoyo(1, 2).start(tweenManager);
 
-        TextButton debugButton = new TextButton("Start", game.skin);
-        debugButton.pad(20);
-
-        table = new Table(game.skin);
-        table.setFillParent(true);
-        table.setBounds(0, 0, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
-
-        //table.add(debugButton);
-        //table.row();
-        stage.addActor(table);
     }
 
     @Override
     public void show() {
     }
 
-    private float deltaSum = 0.0f;
     @Override
     public void render(float delta) {
         Gdx.gl.glClearColor(0, 0, 0.0f, 1);
@@ -72,15 +51,12 @@ public class HomeScreen implements Screen {
 
         tweenManager.update(delta);
 
-        stage.act(delta);
-        stage.draw();
-
         game.batch.begin();
-        if (tweenManager.getRunningTweensCount() == 0) {
+        if (tweenManager.getRunningTweensCount() == 0 || Gdx.input.isTouched()) {
             game.setScreen(new GameScreen(game));
             dispose();
         } else {
-            splashScreen.draw(game.batch);
+            logoSplash.draw(game.batch);
         }
         game.batch.end();
 
@@ -88,6 +64,7 @@ public class HomeScreen implements Screen {
 
     @Override
     public void resize(int width, int height) {
+        camera.setToOrtho(false, width, height);
     }
 
     @Override
@@ -107,6 +84,6 @@ public class HomeScreen implements Screen {
 
     @Override
     public void dispose() {
-
+        logoSplash.getTexture().dispose();
     }
 }
