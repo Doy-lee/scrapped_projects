@@ -6,6 +6,9 @@ import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
+import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
+import com.badlogic.gdx.math.Rectangle;
+import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
@@ -29,6 +32,8 @@ public class GameScreen implements Screen {
 	private Stage uiStage;
 	private Table uiTable;
 
+	private ShapeRenderer shapeRenderer;
+
 	public GameScreen(final WorldTraveller wtGame) {
 		game = wtGame;
 
@@ -44,6 +49,8 @@ public class GameScreen implements Screen {
 				Gdx.graphics.getHeight());
 
 		setupGUI();
+
+		this.shapeRenderer = new ShapeRenderer();
 	}
 
 	public void setupGUI() {
@@ -128,25 +135,37 @@ public class GameScreen implements Screen {
 	public void render(float delta) {
 		Gdx.gl.glClearColor(0.0f, 0.0f, 0.2f, 1);
 		Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
+		camera.update();
 		game.batch.setProjectionMatrix(camera.combined);
+		shapeRenderer.setProjectionMatrix(camera.combined);
 
 		game.state.update(delta);
 		uiStage.act(delta);
 
-		// NOTE: Draw game first, then overlay UI on top
-		game.batch.begin();
-
 		// GAME STATE RENDERING
+		// NOTE: Draw game first, then overlay UI on top
 		Hero hero = game.state.getHero();
 		Scene scene = game.state.getCurrScene();
+
+		game.batch.begin();
 		scene.render(game.batch, GameState.globalVolume);
+		game.batch.end();
 
 		GameState.Battle battle = game.state.getBattleState();
 		if (battle == GameState.Battle.active) {
-			game.font.draw(game.batch, "BATTLE ACTIVE", Gdx.graphics.getWidth()/2 - 120.0f, Gdx.graphics.getHeight()/2 + 200.0f);
+			game.batch.begin();
+			game.font.draw(game.batch, "BATTLE ACTIVE", Gdx.graphics.getWidth() / 2 - 120.0f, Gdx.graphics.getHeight() / 2 + 200.0f);
+			game.batch.end();
+
+			shapeRenderer.setColor(Color.BLUE);
+			shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
+			Vector2 atbBarSize = new Vector2((int)hero.getATB(), 10);
+			shapeRenderer.rect(hero.getSprite().getX(), hero.getSprite().getY()
+					+ GameState.SPRITE_SIZE + 10, atbBarSize.x, atbBarSize.y);
+			shapeRenderer.end();
 		}
 
-
+		game.batch.begin();
 		// DEBUG
         DEBUGFont.draw(game.batch, "Gdx DeltaTime():  " + Gdx.graphics.getDeltaTime(),
                 20.0f, (Gdx.graphics.getHeight() - 20.0f));
@@ -187,7 +206,6 @@ public class GameScreen implements Screen {
 		}
 
         game.batch.end();
-
 		uiStage.draw();
 
 	}

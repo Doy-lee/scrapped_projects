@@ -20,10 +20,8 @@ public class Battler extends GameObj {
     private int attack;
     private int money;
 
-
     private float atb;
     private int speed;
-
 
     public Battler(Rectangle rect, IntMap<Animation> anims, IntMap<Sound> sfx, Type type, States animState) {
         super(rect, anims, sfx, type, animState);
@@ -50,17 +48,13 @@ public class Battler extends GameObj {
     }
 
     public void atbUpdateAndAttack(float delta, Battler target) {
+        // NOTE: Super updates animation key frames
         super.update(delta);
         atb -= (delta * speed);
         if (atb <= 0) {
             attack(target);
             atb = BASE_ATB;
         }
-    }
-
-    public void render(SpriteBatch batch) {
-        super.render(batch);
-
     }
 
     public int getHealth() { return health; }
