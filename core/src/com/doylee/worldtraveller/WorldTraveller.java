@@ -19,12 +19,13 @@ public class WorldTraveller extends Game {
     public void create() {
         batch = new SpriteBatch();
         //Use LibGDX's default Arial font.
-        font = new BitmapFont();
 
         // TODO: Using default atlas change to mine
         TextureAtlas atlas = new TextureAtlas(Gdx.files.internal("template.atlas"));
         skin = new Skin(Gdx.files.internal("ui.json"), atlas);
-        skin.getFont("default-font").getData().setScale(0.2f);
+        skin.getFont("default-font").getData().setScale(0.35f);
+
+        font = skin.getFont("default-font");
 
         this.state = new GameState();
         this.setScreen(new HomeScreen(this));

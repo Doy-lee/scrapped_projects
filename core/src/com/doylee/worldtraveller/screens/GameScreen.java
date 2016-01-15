@@ -11,6 +11,7 @@ import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
+import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
 import com.doylee.worldtraveller.objects.Battler;
 import com.doylee.worldtraveller.GameState;
@@ -49,58 +50,63 @@ public class GameScreen implements Screen {
 		uiStage = new Stage(new ScreenViewport(camera), game.batch);
 		Gdx.input.setInputProcessor(uiStage);
 
-		int buttonPadding = 30;
-		float buttonScale = 2;
-
-		TextButton eatBtn = new TextButton("Eat", game.skin);
-		eatBtn.pad(buttonPadding);
+		TextButton eatBtn = new TextButton("EAT", game.skin);
 		eatBtn.addListener(new ChangeListener() {
 			@Override
 			public void changed(ChangeEvent event, Actor actor) {
 				game.state.getHero().setHunger(100.0f);
 			}
 		});
-		eatBtn.setScale(buttonScale);
 
-		TextButton drinkBtn = new TextButton("Drink", game.skin);
-		drinkBtn.pad(buttonPadding);
+		TextButton drinkBtn = new TextButton("DRINK", game.skin);
 		drinkBtn.addListener(new ChangeListener() {
 			@Override
 			public void changed(ChangeEvent event, Actor actor) {
 				game.state.getHero().setThirst(100.0f);
 			}
 		});
-		drinkBtn.setScale(buttonScale);
 
-		TextButton restBtn = new TextButton("Rest", game.skin);
-		restBtn.pad(buttonPadding);
+		TextButton restBtn = new TextButton("REST", game.skin);
 		restBtn.addListener(new ChangeListener() {
 			@Override
 			public void changed(ChangeEvent event, Actor actor) {
 				game.state.getHero().setEnergy(100.0f);
 			}
 		});
-		restBtn.setScale(buttonScale);
 
-		TextButton homeBtn = new TextButton("Home", game.skin);
-		homeBtn.pad(buttonPadding);
+		TextButton homeBtn = new TextButton("HOME", game.skin);
 		homeBtn.addListener(new ChangeListener() {
 			@Override
 			public void changed(ChangeEvent event, Actor actor) {
 					game.state.setCurrScene(game.state.getHomeScene());
 			}
 		});
-		homeBtn.setScale(buttonScale);
 
-		TextButton adventureBtn = new TextButton("Adventure", game.skin);
-		adventureBtn.pad(buttonPadding);
+		TextButton adventureBtn = new TextButton("ADVENTURE", game.skin);
 		adventureBtn.addListener(new ChangeListener() {
 			@Override
 			public void changed(ChangeEvent event, Actor actor) {
 				game.state.setCurrScene(game.state.getAdventureScene());
 			}
 		});
-		adventureBtn.setScale(buttonScale);
+
+		Array<TextButton> uiBtns = new Array<TextButton>();
+		uiBtns.add(eatBtn);
+		uiBtns.add(drinkBtn);
+		uiBtns.add(restBtn);
+		uiBtns.add(homeBtn);
+		uiBtns.add(adventureBtn);
+
+		int buttonPadding = 15;
+		float buttonScale = 1;
+
+		for (TextButton btn : uiBtns) {
+			//btn.setScale(buttonScale);
+			//btn.pad(buttonPadding);
+			// TODO: Not entirely correct. It's scaled down but not to 100px
+			// Temporary as we will replace with pictographs or abbreiviations
+			btn.setWidth(100);
+		}
 
 		uiTable = new Table(game.skin);
 		uiTable.bottom().left();
@@ -137,7 +143,7 @@ public class GameScreen implements Screen {
 
 		GameState.Battle battle = game.state.getBattleState();
 		if (battle == GameState.Battle.active) {
-			game.font.draw(game.batch, "BATTLE ACTIVE", Gdx.graphics.getWidth()/2 - 50.0f, Gdx.graphics.getHeight()/2 + 100.0f);
+			game.font.draw(game.batch, "BATTLE ACTIVE", Gdx.graphics.getWidth()/2 - 120.0f, Gdx.graphics.getHeight()/2 + 200.0f);
 		}
 
 

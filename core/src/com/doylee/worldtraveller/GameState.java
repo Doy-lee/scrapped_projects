@@ -6,6 +6,7 @@ import com.badlogic.gdx.audio.Music;
 import com.badlogic.gdx.audio.Sound;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.Animation;
+import com.badlogic.gdx.graphics.g2d.Sprite;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Rectangle;
@@ -78,7 +79,6 @@ public class GameState {
             }
         }
 
-
         IntMap<Texture> homeAssets = new IntMap<Texture>();
 
         IntMap<Music> homeMusic = new IntMap<Music>();
@@ -121,7 +121,7 @@ public class GameState {
         this.currScene = homeScene;
     }
 
-    private com.doylee.worldtraveller.objects.GameObj loadCoinToGame() {
+    private GameObj loadCoinToGame() {
         // Load Texture
         Texture coinTex = new Texture(Gdx.files.internal("coin.png"));
         TextureRegion coinTexReg = new TextureRegion(coinTex);
@@ -177,10 +177,20 @@ public class GameState {
         heroAnim.put(Hero.States.battle_right.ordinal(), walkRight);
         heroAnim.put(Hero.States.battle_left.ordinal(), walkLeft);
 
+        // Weapon
+        Texture weaponTex = new Texture(Gdx.files.internal("sword.png"));
+        Sprite weapon = new Sprite(weaponTex);
+        weapon.setBounds(rect.x, rect.y, GameState.SPRITE_SIZE,
+                         GameState.SPRITE_SIZE);
+        weapon.setOrigin(0, 0);
+
+        // Hero Sound
         IntMap<Sound> sfx = new IntMap<Sound>();
         Sound attackSound = Gdx.audio.newSound(Gdx.files.internal("slice.mp3"));
         sfx.put(GameObj.SoundFX.attack.ordinal(), attackSound);
-        Hero result = new Hero(rect, heroAnim, sfx, GameObj.Type.hero, GameObj.States.walk_right);
+
+        Hero result = new Hero(rect, heroAnim, sfx, GameObj.Type.hero,
+                               GameObj.States.walk_right, weapon);
         return result;
     }
 
