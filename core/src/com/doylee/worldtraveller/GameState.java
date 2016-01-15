@@ -12,6 +12,8 @@ import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.IntMap;
+import com.doylee.worldtraveller.objects.GameObj;
+import com.doylee.worldtraveller.objects.Hero;
 
 import java.util.Iterator;
 
@@ -38,18 +40,18 @@ public class GameState {
     public static float THIRST_RATE = 0.3f;
 
     public float globalObjectSpeedModifier = 1.0f;
-    public static float globalVolume = 0.1f;
+    public static float globalVolume = 0.0f;
 
-    private IntMap<GameObj> objectList;
+    private IntMap<com.doylee.worldtraveller.objects.GameObj> objectList;
 
-    private Hero hero;
+    private com.doylee.worldtraveller.objects.Hero hero;
     private Scene homeScene;
     private Scene adventureScene;
     private Scene currScene;
 
     private float worldMoveSpeed;
     private Battle battleState;
-    private Battler currBattleMob;
+    private com.doylee.worldtraveller.objects.Battler currBattleMob;
 
     private float monsterSpawnTimer;
     private float coinSpawnTimer;
@@ -60,18 +62,18 @@ public class GameState {
 
     public GameState() {
 
-        this.objectList = new IntMap<GameObj>();
+        this.objectList = new IntMap<com.doylee.worldtraveller.objects.GameObj>();
 
         // TODO: Get rid of, initialise one copy on start up, instantiate the rest
-        objectList.put(GameObj.Type.coin.ordinal(), loadCoinToGame());
-        objectList.put(GameObj.Type.hero.ordinal(), loadHeroToGame());
-        this.hero = (Hero)objectList.get(GameObj.Type.hero.ordinal());
-        objectList.put(GameObj.Type.monster.ordinal(), loadMonsterToGame());
+        objectList.put(com.doylee.worldtraveller.objects.GameObj.Type.coin.ordinal(), loadCoinToGame());
+        objectList.put(com.doylee.worldtraveller.objects.GameObj.Type.hero.ordinal(), loadHeroToGame());
+        this.hero = (com.doylee.worldtraveller.objects.Hero)objectList.get(com.doylee.worldtraveller.objects.GameObj.Type.hero.ordinal());
+        objectList.put(com.doylee.worldtraveller.objects.GameObj.Type.monster.ordinal(), loadMonsterToGame());
 
-        for (GameObj.Type type : GameObj.Type.values()) {
+        for (com.doylee.worldtraveller.objects.GameObj.Type type : com.doylee.worldtraveller.objects.GameObj.Type.values()) {
             // NOTE: If object not initialised yet, then create a skeleton copy of it
             if (!objectList.containsKey(type.ordinal())) {
-                objectList.put(type.ordinal(), new GameObj(type));
+                objectList.put(type.ordinal(), new com.doylee.worldtraveller.objects.GameObj(type));
             }
         }
 
@@ -82,7 +84,7 @@ public class GameState {
         Music homeBackground = Gdx.audio.newMusic(Gdx.files.internal("homeBackground.mp3"));
         homeMusic.put(Scene.ScnMusic.background.ordinal(), homeBackground);
 
-        Array<GameObj> homeObjs = new Array<GameObj>();
+        Array<com.doylee.worldtraveller.objects.GameObj> homeObjs = new Array<com.doylee.worldtraveller.objects.GameObj>();
         homeObjs.add(hero);
 
         Texture homeTex = new Texture(Gdx.files.internal("backdrop.png"));
@@ -90,9 +92,9 @@ public class GameState {
 
         IntMap<Texture> adventAssets = new IntMap<Texture>();
         Texture coinAsset = new Texture(Gdx.files.internal("coin.png"));
-        adventAssets.put(GameObj.Type.coin.ordinal(), coinAsset);
+        adventAssets.put(com.doylee.worldtraveller.objects.GameObj.Type.coin.ordinal(), coinAsset);
 
-        Array<GameObj> adventObjs = new Array<GameObj>();
+        Array<com.doylee.worldtraveller.objects.GameObj> adventObjs = new Array<com.doylee.worldtraveller.objects.GameObj>();
         adventObjs.add(hero);
 
         Music adventBackground = Gdx.audio.newMusic(Gdx.files.internal("adventBackground.mp3"));
@@ -118,7 +120,7 @@ public class GameState {
         this.currScene = homeScene;
     }
 
-    private GameObj loadCoinToGame() {
+    private com.doylee.worldtraveller.objects.GameObj loadCoinToGame() {
         // Load Texture
         Texture coinTex = new Texture(Gdx.files.internal("coin.png"));
         TextureRegion coinTexReg = new TextureRegion(coinTex);
@@ -127,20 +129,20 @@ public class GameState {
         float frameDuration = 0.05f;
         Animation neutral = new Animation(frameDuration, coinTexReg);
         IntMap<Animation> anims = new IntMap<Animation>();
-        anims.put(GameObj.States.neutral.ordinal(), neutral);
+        anims.put(com.doylee.worldtraveller.objects.GameObj.States.neutral.ordinal(), neutral);
 
         // Load Sound
         IntMap<Sound> sfx = new IntMap<Sound>();
         Sound coinSfx = Gdx.audio.newSound(Gdx.files.internal("coin1.wav"));
-        sfx.put(GameObj.SoundFX.hit.ordinal(), coinSfx);
+        sfx.put(com.doylee.worldtraveller.objects.GameObj.SoundFX.hit.ordinal(), coinSfx);
 
         // Set position
         Rectangle coinRect = new Rectangle(0 , 0, SPRITE_SIZE, SPRITE_SIZE);
-        GameObj result = new GameObj(coinRect, anims, sfx, GameObj.Type.coin);
+        com.doylee.worldtraveller.objects.GameObj result = new com.doylee.worldtraveller.objects.GameObj(coinRect, anims, sfx, com.doylee.worldtraveller.objects.GameObj.Type.coin);
         return result;
     }
 
-    private Hero loadHeroToGame() {
+    private com.doylee.worldtraveller.objects.Hero loadHeroToGame() {
         Rectangle baseRect = new Rectangle(0, 0, 16, 16);
         Rectangle rect = new Rectangle((Gdx.graphics.getWidth()/2) - baseRect.getWidth(),
                 Gdx.graphics.getHeight()/2, GameState.SPRITE_SIZE, GameState.SPRITE_SIZE);
@@ -167,21 +169,21 @@ public class GameState {
                 walkLeftStartSprite, 4);
 
         IntMap<Animation> heroAnim = new IntMap<Animation>();
-        heroAnim.put(Hero.States.idle_left.ordinal(), idleLeft);
-        heroAnim.put(Hero.States.idle_right.ordinal(), idleRight);
-        heroAnim.put(Hero.States.walk_right.ordinal(), walkRight);
-        heroAnim.put(Hero.States.walk_left.ordinal(), walkLeft);
-        heroAnim.put(Hero.States.battle_right.ordinal(), walkRight);
-        heroAnim.put(Hero.States.battle_left.ordinal(), walkLeft);
+        heroAnim.put(com.doylee.worldtraveller.objects.Hero.States.idle_left.ordinal(), idleLeft);
+        heroAnim.put(com.doylee.worldtraveller.objects.Hero.States.idle_right.ordinal(), idleRight);
+        heroAnim.put(com.doylee.worldtraveller.objects.Hero.States.walk_right.ordinal(), walkRight);
+        heroAnim.put(com.doylee.worldtraveller.objects.Hero.States.walk_left.ordinal(), walkLeft);
+        heroAnim.put(com.doylee.worldtraveller.objects.Hero.States.battle_right.ordinal(), walkRight);
+        heroAnim.put(com.doylee.worldtraveller.objects.Hero.States.battle_left.ordinal(), walkLeft);
 
         IntMap<Sound> sfx = new IntMap<Sound>();
         Sound attackSound = Gdx.audio.newSound(Gdx.files.internal("slice.mp3"));
-        sfx.put(GameObj.SoundFX.attack.ordinal(), attackSound);
-        Hero result = new Hero(rect, heroAnim, sfx, GameObj.Type.hero, GameObj.States.walk_right);
+        sfx.put(com.doylee.worldtraveller.objects.GameObj.SoundFX.attack.ordinal(), attackSound);
+        com.doylee.worldtraveller.objects.Hero result = new com.doylee.worldtraveller.objects.Hero(rect, heroAnim, sfx, com.doylee.worldtraveller.objects.GameObj.Type.hero, com.doylee.worldtraveller.objects.GameObj.States.walk_right);
         return result;
     }
 
-    private Battler loadMonsterToGame() {
+    private com.doylee.worldtraveller.objects.Battler loadMonsterToGame() {
         Rectangle baseRect = new Rectangle(0, 0, 16, 16);
         Rectangle rect = new Rectangle(0, 0, SPRITE_SIZE, SPRITE_SIZE);
         Texture base = new Texture(Gdx.files.internal("MyCharEnemy.png"));
@@ -207,22 +209,22 @@ public class GameState {
                 walkLeftStartSprite, 4);
 
         IntMap<Animation> monsterAnim = new IntMap<Animation>();
-        monsterAnim.put(Hero.States.idle_left.ordinal(), idleLeft);
-        monsterAnim.put(Hero.States.idle_right.ordinal(), idleRight);
-        monsterAnim.put(Hero.States.walk_right.ordinal(), walkRight);
-        monsterAnim.put(Hero.States.walk_left.ordinal(), walkLeft);
+        monsterAnim.put(com.doylee.worldtraveller.objects.Hero.States.idle_left.ordinal(), idleLeft);
+        monsterAnim.put(com.doylee.worldtraveller.objects.Hero.States.idle_right.ordinal(), idleRight);
+        monsterAnim.put(com.doylee.worldtraveller.objects.Hero.States.walk_right.ordinal(), walkRight);
+        monsterAnim.put(com.doylee.worldtraveller.objects.Hero.States.walk_left.ordinal(), walkLeft);
 
         IntMap<Sound> sfx = new IntMap<Sound>();
         Sound attackSound = Gdx.audio.newSound(Gdx.files.internal("slice.mp3"));
-        sfx.put(GameObj.SoundFX.attack.ordinal(), attackSound);
-        Battler result = new Battler(rect, monsterAnim, sfx,
-                                     GameObj.Type.monster,
-                                     GameObj.States.walk_left);
+        sfx.put(com.doylee.worldtraveller.objects.GameObj.SoundFX.attack.ordinal(), attackSound);
+        com.doylee.worldtraveller.objects.Battler result = new com.doylee.worldtraveller.objects.Battler(rect, monsterAnim, sfx,
+                                     com.doylee.worldtraveller.objects.GameObj.Type.monster,
+                                     com.doylee.worldtraveller.objects.GameObj.States.walk_left);
         return result;
     }
 
     public void update(float delta) {
-        GameObj.States state = hero.getCurrAnimState();
+        com.doylee.worldtraveller.objects.GameObj.States state = hero.getCurrAnimState();
         switch (state) {
             case neutral:
             case idle_left:
@@ -259,8 +261,8 @@ public class GameState {
                 // BATTLE is active, stop objects moving
                 globalObjectSpeedModifier = 0.0f;
 
-                Battler mob = getCurrBattleMob();
-                Battler hero = getHero();
+                com.doylee.worldtraveller.objects.Battler mob = getCurrBattleMob();
+                com.doylee.worldtraveller.objects.Battler hero = getHero();
                 mob.atbUpdateAndAttack(delta, hero);
                 hero.atbUpdateAndAttack(delta, mob);
 
@@ -272,7 +274,7 @@ public class GameState {
                         generateCoin(rect);
                     }
                     battleState = Battle.transitionOut;
-                    hero.setCurrAnimState(GameObj.States.walk_right);
+                    hero.setCurrAnimState(com.doylee.worldtraveller.objects.GameObj.States.walk_right);
 
                     currScene.getSceneObj().removeValue(mob, true);
                     currBattleMob = null;
@@ -314,38 +316,38 @@ public class GameState {
     }
 
     private void checkGameObjectsAndProximity() {
-        Iterator<GameObj> objIterator = currScene.getSceneObj().iterator();
+        Iterator<com.doylee.worldtraveller.objects.GameObj> objIterator = currScene.getSceneObj().iterator();
         while (objIterator.hasNext()) {
-            GameObj obj = objIterator.next();
+            com.doylee.worldtraveller.objects.GameObj obj = objIterator.next();
 
-            if (obj.getType() == GameObj.Type.coin) {
+            if (obj.getType() == com.doylee.worldtraveller.objects.GameObj.Type.coin) {
                 if (battleState == Battle.active) {
                     obj.getSprite().setAlpha(0.0f);
                 } else {
                     if (obj.getSprite().getX() <= hero.getSprite().getX() + hero.getSprite().getWidth() / 2) {
                         hero.addMoney(1);
                         // TODO: revise how to handle hits/gameobject actions and sound fx
-                        obj.playSoundIfExist(GameObj.SoundFX.hit, GameState.globalVolume);
+                        obj.playSoundIfExist(com.doylee.worldtraveller.objects.GameObj.SoundFX.hit, GameState.globalVolume);
                         objIterator.remove();
                     }
                     obj.getSprite().setAlpha(1.0f);
                 }
-            } else if (obj.getType() == GameObj.Type.monster) {
+            } else if (obj.getType() == com.doylee.worldtraveller.objects.GameObj.Type.monster) {
                 if (battleState == Battle.inactive) {
                     float battleThresholdX = currScene.rect.width + (0.15f * currScene.rect.width);
                     if (obj.getSprite().getX() <= battleThresholdX) {
                         battleState = Battle.transitionIn;
-                        currBattleMob = (Battler)obj;
+                        currBattleMob = (com.doylee.worldtraveller.objects.Battler)obj;
                         break;
                     }
                 }
-            } else if (obj.getType() == GameObj.Type.hero) {
+            } else if (obj.getType() == com.doylee.worldtraveller.objects.GameObj.Type.hero) {
                 if (battleState == Battle.transitionIn) {
                     float battleThresholdX = 0.15f * currScene.rect.width;
                     if (obj.getSprite().getX() <= battleThresholdX) {
                         // Stop world moving, battle transition complete
                         battleState = Battle.active;
-                        obj.setCurrAnimState(GameObj.States.battle_right);
+                        obj.setCurrAnimState(com.doylee.worldtraveller.objects.GameObj.States.battle_right);
                     }
                 } else if (battleState == Battle.transitionOut) {
                     float battleThresholdX = currScene.rect.width/2;
@@ -359,8 +361,8 @@ public class GameState {
     }
 
     private void generateCoin(Rectangle rect) {
-        GameObj referenceCoin = objectList.get(GameObj.Type.coin.ordinal());
-        GameObj newCoin = GameObj.newInstance(referenceCoin);
+        com.doylee.worldtraveller.objects.GameObj referenceCoin = objectList.get(com.doylee.worldtraveller.objects.GameObj.Type.coin.ordinal());
+        com.doylee.worldtraveller.objects.GameObj newCoin = com.doylee.worldtraveller.objects.GameObj.newInstance(referenceCoin);
 
         newCoin.getSprite().setBounds(rect.x, rect.y, rect.width, rect.height);
         currScene.getSceneObj().add(newCoin);
@@ -370,8 +372,8 @@ public class GameState {
 
     // TODO: PUBLIC IS TEMPORARY!
     public void generateMonster(Rectangle rect) {
-        Battler referenceMonster = (Battler)objectList.get(GameObj.Type.monster.ordinal());
-        Battler newMonster = Battler.newInstance(referenceMonster);
+        com.doylee.worldtraveller.objects.Battler referenceMonster = (com.doylee.worldtraveller.objects.Battler)objectList.get(GameObj.Type.monster.ordinal());
+        com.doylee.worldtraveller.objects.Battler newMonster = com.doylee.worldtraveller.objects.Battler.newInstance(referenceMonster);
 
         newMonster.getSprite().setBounds(rect.x, rect.y, rect.width, rect.height);
         currScene.getSceneObj().add(newMonster);
@@ -397,7 +399,7 @@ public class GameState {
     public float getWorldMoveSpeed() { return worldMoveSpeed; }
     public Battle getBattleState() { return battleState; }
 
-    public Battler getCurrBattleMob() { return currBattleMob; }
+    public com.doylee.worldtraveller.objects.Battler getCurrBattleMob() { return currBattleMob; }
 
     public void setWorldMoveSpeed(float amount) { this.worldMoveSpeed = amount; }
     public void setCurrScene(Scene scene) {

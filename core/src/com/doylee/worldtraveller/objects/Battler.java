@@ -1,10 +1,11 @@
-package com.doylee.worldtraveller;
+package com.doylee.worldtraveller.objects;
 
 import com.badlogic.gdx.audio.Sound;
 import com.badlogic.gdx.graphics.g2d.Animation;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.utils.IntMap;
+import com.doylee.worldtraveller.GameState;
 
 /**
  * Created by Doyle on 12/01/2016.

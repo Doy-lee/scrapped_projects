@@ -1,4 +1,4 @@
-package com.doylee.worldtraveller;
+package com.doylee.worldtraveller.screens;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Screen;
@@ -12,6 +12,11 @@ import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
+import com.doylee.worldtraveller.objects.Battler;
+import com.doylee.worldtraveller.GameState;
+import com.doylee.worldtraveller.objects.Hero;
+import com.doylee.worldtraveller.Scene;
+import com.doylee.worldtraveller.WorldTraveller;
 
 // TODO: Read this https://github.com/libgdx/libgdx/wiki/Projection,-viewport,-&-cavatarWalkamera
 public class GameScreen implements Screen {
@@ -166,10 +171,7 @@ public class GameScreen implements Screen {
 		DEBUGFont.draw(game.batch, "Monster Spawn Timer: " + game.state.getMonsterSpawnTimer(), 20.0f,
 				(Gdx.graphics.getHeight() - 220.0f));
 
-		DEBUGFont.draw(game.batch, "Money: " + hero.getMoney(), 20.0f,
-				(Gdx.graphics.getHeight() - 160.0f));
-
-		// DEBUG DRAW PLAYER HEALTH
+		// DEBUG DRAW PLAYER HEALTH & ATB
 		DEBUGFont.draw(game.batch, "HP: " + hero.getHealth(), hero.getSprite().getX(), hero.getSprite().getY() + GameState.SPRITE_SIZE + 20);
 		DEBUGFont.draw(game.batch, "ATB: " + (int)hero.getATB(), hero.getSprite().getX(), hero.getSprite().getY() + GameState.SPRITE_SIZE + 40);
 		if (game.state.getCurrBattleMob() != null) {

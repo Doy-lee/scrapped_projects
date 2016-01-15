@@ -1,4 +1,4 @@
-package com.doylee.worldtraveller;
+package com.doylee.worldtraveller.objects;
 
 import com.badlogic.gdx.audio.Sound;
 import com.badlogic.gdx.graphics.g2d.Animation;
