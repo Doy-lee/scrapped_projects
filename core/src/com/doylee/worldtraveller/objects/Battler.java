@@ -15,7 +15,7 @@ import com.doylee.worldtraveller.GameState;
  * Created by Doyle on 12/01/2016.
  */
 public class Battler extends GameObj {
-    private static float BASE_ATB = 100.0f;
+    public static float BASE_ATB = 100.0f;
     private int health;
     private int attack;
     private int money;

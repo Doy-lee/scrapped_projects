@@ -8,6 +8,7 @@ import com.badlogic.gdx.graphics.g2d.Sprite;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureAtlas;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
+import com.doylee.worldtraveller.screens.GameScreen;
 import com.doylee.worldtraveller.screens.HomeScreen;
 
 public class WorldTraveller extends Game {
@@ -27,8 +28,11 @@ public class WorldTraveller extends Game {
 
         font = skin.getFont("default-font");
 
+        // TODO: Temporary to allow for faster debugging, jump straight to game
         this.state = new GameState();
-        this.setScreen(new HomeScreen(this));
+        state.setCurrScene(state.getAdventureScene());
+        //this.setScreen(new HomeScreen(this));
+        this.setScreen(new GameScreen(this));
     }
 
     public void render() {

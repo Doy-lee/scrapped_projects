@@ -7,7 +7,6 @@ import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
-import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.Stage;
@@ -157,11 +156,15 @@ public class GameScreen implements Screen {
 			game.font.draw(game.batch, "BATTLE ACTIVE", Gdx.graphics.getWidth() / 2 - 120.0f, Gdx.graphics.getHeight() / 2 + 200.0f);
 			game.batch.end();
 
+			Vector2 atbBarSize = new Vector2((int)hero.getATB(), 10);
+			float atbBarLengthRatio = (float)GameState.SPRITE_SIZE/Battler.BASE_ATB;
+
 			shapeRenderer.setColor(Color.BLUE);
 			shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
-			Vector2 atbBarSize = new Vector2((int)hero.getATB(), 10);
 			shapeRenderer.rect(hero.getSprite().getX(), hero.getSprite().getY()
-					+ GameState.SPRITE_SIZE + 10, atbBarSize.x, atbBarSize.y);
+					+ GameState.SPRITE_SIZE + 10,
+					atbBarSize.x * atbBarLengthRatio,
+					atbBarSize.y);
 			shapeRenderer.end();
 		}
 
@@ -197,8 +200,8 @@ public class GameScreen implements Screen {
 				(Gdx.graphics.getHeight() - 220.0f));
 
 		// DEBUG DRAW PLAYER HEALTH & ATB
-		DEBUGFont.draw(game.batch, "HP: " + hero.getHealth(), hero.getSprite().getX(), hero.getSprite().getY() + GameState.SPRITE_SIZE + 20);
-		DEBUGFont.draw(game.batch, "ATB: " + (int)hero.getATB(), hero.getSprite().getX(), hero.getSprite().getY() + GameState.SPRITE_SIZE + 40);
+		DEBUGFont.draw(game.batch, "HP: " + hero.getHealth(), hero.getSprite().getX(), hero.getSprite().getY() + GameState.SPRITE_SIZE + 40);
+		DEBUGFont.draw(game.batch, "ATB: " + (int)hero.getATB(), hero.getSprite().getX(), hero.getSprite().getY() + GameState.SPRITE_SIZE + 60);
 		if (game.state.getCurrBattleMob() != null) {
 			Battler mob = game.state.getCurrBattleMob();
 			DEBUGFont.draw(game.batch, "HP: " + mob.getHealth(), mob.getSprite().getX(), mob.getSprite().getY() + GameState.SPRITE_SIZE + 20);

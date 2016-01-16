@@ -33,7 +33,8 @@ public class GameState {
     public static final int SPRITE_SIZE = 16 * SPRITE_SCALE;
     public static final Rectangle BASE_RECT = new Rectangle(0, 0, 16, 16);
 
-    public static final float MONSTER_SPAWN_TIME = 8.0f;
+    // TODO: Switch back to 8 seconds
+    public static final float MONSTER_SPAWN_TIME = 4.0f;
     public static final float COIN_SPAWN_TIME = 1.0f;
 
     // NOTE: Units of 'need' to deplete per second
