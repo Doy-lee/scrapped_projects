@@ -7,6 +7,7 @@ import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.IntMap;
+import com.doylee.worldtraveller.objects.GameObj;
 
 /**
  * Created by Doyle on 10/01/2016.
@@ -18,14 +19,14 @@ public class Scene {
     public Rectangle rect;
     private IntMap<Texture> assets;
     private IntMap<Music> music;
-    private Array<com.doylee.worldtraveller.objects.GameObj> sceneObjs;
+    private Array<GameObj> sceneObjs;
     private boolean isAnimated;
 
     public enum ScnMusic {
         background, battle
     }
 
-    public Scene(Texture backdrop, IntMap<Texture> assets, Array<com.doylee.worldtraveller.objects.GameObj> sceneObjs, IntMap<Music> music, boolean isAnimated) {
+    public Scene(Texture backdrop, IntMap<Texture> assets, Array<GameObj> sceneObjs, IntMap<Music> music, boolean isAnimated) {
         this.backdrop = backdrop;
         this.rect = new Rectangle(0, 0, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
         this.assets = assets;
@@ -43,8 +44,8 @@ public class Scene {
             float worldMoveSpeed = state.getWorldMoveSpeed();
             float totalMoveDelta = worldMoveSpeed * state.globalObjectSpeedModifier * delta;
 
-            for (com.doylee.worldtraveller.objects.GameObj obj : sceneObjs) {
-                if (obj.getType() != com.doylee.worldtraveller.objects.GameObj.Type.hero) {
+            for (GameObj obj : sceneObjs) {
+                if (obj.getType() != GameObj.Type.hero) {
                     obj.getSprite().setX(obj.getSprite().getX() - totalMoveDelta);
                 } else {
                     // TODO: Should we tie the hero movement to stage and then counteract stage moving?
@@ -58,7 +59,6 @@ public class Scene {
                             break;
                     }
                 }
-                obj.update(delta);
             }
 
             if (isAnimated) {
@@ -77,6 +77,10 @@ public class Scene {
                 currSong = music.get(ScnMusic.battle.ordinal());
             }
         }
+
+        for (GameObj obj : sceneObjs) {
+            obj.update(delta);
+        }
     }
 
     public void render(SpriteBatch batch, float volume) {
@@ -91,7 +95,7 @@ public class Scene {
             currSong.play();
         }
 
-       for (com.doylee.worldtraveller.objects.GameObj obj : sceneObjs) {
+       for (GameObj obj : sceneObjs) {
            obj.render(batch);
        }
     }
@@ -101,6 +105,6 @@ public class Scene {
 
     public Music getCurrSong() { return currSong; }
 
-    public Array<com.doylee.worldtraveller.objects.GameObj> getSceneObj() { return sceneObjs; }
+    public Array<GameObj> getSceneObj() { return sceneObjs; }
 
 }

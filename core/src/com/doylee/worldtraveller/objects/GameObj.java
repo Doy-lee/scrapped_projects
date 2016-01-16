@@ -15,7 +15,7 @@ public class GameObj {
     protected IntMap<Animation> anims;
     private Sprite sprite;
 
-    private States currAnimState;
+    protected States currAnimState;
     private Animation currAnim;
     private TextureRegion currFrame;
     private float stateTime;

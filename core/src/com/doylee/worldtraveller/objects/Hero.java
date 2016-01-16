@@ -18,6 +18,7 @@ public class Hero extends Battler {
     private float energy;
 
     private boolean triggerAttackArc;
+    private float attackEndPause;
     private Sprite weapon;
 
     public Hero(Rectangle rect, IntMap<Animation> anims, IntMap<Sound> sfx, Type type, States animState, Sprite weapon) {
@@ -28,6 +29,7 @@ public class Hero extends Battler {
         this.energy = 100;
 
         triggerAttackArc = false;
+        attackEndPause = 0.5f;
         this.weapon = weapon;
     }
 
@@ -42,18 +44,7 @@ public class Hero extends Battler {
         super.render(batch);
 
         if (triggerAttackArc) {
-            weapon.setX(this.getSprite().getX() + GameState.SPRITE_SIZE);
-            weapon.setY(this.getSprite().getY() + GameState.SPRITE_SIZE);
             weapon.draw(batch);
-
-            float currRotation = weapon.getRotation();
-            if (currRotation >= -96.0f) {
-                currRotation -= 8.0f;
-                weapon.setRotation(currRotation);
-            } else {
-                triggerAttackArc = false;
-                weapon.setRotation(0);
-            }
         }
     }
 
@@ -71,5 +62,31 @@ public class Hero extends Battler {
         if (this.energy >= 0) this.energy -= GameState.ENERGY_RATE * delta;
         if (this.hunger >= 0) this.hunger -= GameState.HUNGER_RATE * delta;
         if (this.thirst >= 0) this.thirst -= GameState.THIRST_RATE * delta;
+
+        if (triggerAttackArc) {
+            weapon.setX(this.getSprite().getX() + GameState.SPRITE_SIZE);
+            weapon.setY(this.getSprite().getY() + GameState.SPRITE_SIZE);
+
+            float currRotation = weapon.getRotation();
+            float endRotation = 30.0f;
+            float rotationStep = endRotation * 10.0f;
+
+            if (currAnimState == States.battle_right) {
+                endRotation = -endRotation;
+                rotationStep = -rotationStep;
+            }
+
+            if (currRotation >= endRotation) {
+                currRotation += rotationStep * delta;
+                weapon.setRotation(currRotation);
+            } else {
+                attackEndPause -= delta;
+                if ((attackEndPause -= delta) <= 0) {
+                    triggerAttackArc = false;
+                    weapon.setRotation(0);
+                    attackEndPause = 0.5f;
+                }
+            }
+        }
     }
 }

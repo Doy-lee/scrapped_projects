@@ -49,7 +49,6 @@ public class Battler extends GameObj {
 
     public void atbUpdateAndAttack(float delta, Battler target) {
         // NOTE: Super updates animation key frames
-        super.update(delta);
         atb -= (delta * speed);
         if (atb <= 0) {
             attack(target);
