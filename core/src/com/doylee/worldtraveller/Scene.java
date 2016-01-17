@@ -20,6 +20,7 @@ public class Scene {
     private IntMap<Texture> assets;
     private IntMap<Music> music;
     private Array<GameObj> sceneObjs;
+    private Array<GameObj> battleObjs;
     private boolean isAnimated;
 
     public enum ScnMusic {

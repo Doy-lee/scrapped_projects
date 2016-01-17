@@ -37,12 +37,14 @@ public class Util {
         return result;
     }
 
-    static public double tween(float durationInSeconds, float tweenValue, float deltaInSeconds,
-                              float startingValue, float endingValue) {
-        // Tween between range [0-1]
-        float tweenStep = 1.0f/durationInSeconds;
-        System.out.println("tween difference: " + tweenStep*deltaInSeconds);
-        float result = tweenValue - (tweenStep * deltaInSeconds);
+    static public float abs(float value) {
+        float result;
+        if (value <= 0) {
+           result = -value;
+        } else {
+            result = value;
+        }
+
         return result;
     }
 }

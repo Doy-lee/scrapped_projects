@@ -13,6 +13,7 @@ import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.IntMap;
+import com.doylee.worldtraveller.objects.Attack;
 import com.doylee.worldtraveller.objects.Battler;
 import com.doylee.worldtraveller.objects.GameObj;
 import com.doylee.worldtraveller.objects.Hero;
@@ -180,10 +181,14 @@ public class GameState {
 
         // Weapon
         Texture weaponTex = new Texture(Gdx.files.internal("sword.png"));
-        Sprite weapon = new Sprite(weaponTex);
-        weapon.setBounds(rect.x, rect.y, GameState.SPRITE_SIZE,
-                         GameState.SPRITE_SIZE);
-        weapon.setOrigin(0, 0);
+        TextureRegion weaponTexReg = new TextureRegion(weaponTex);
+
+        // TODO: Revise weapon sounds, take away from hero add to swords?
+        Rectangle weaponRect = new Rectangle(0, 0, GameState.SPRITE_SIZE, GameState.SPRITE_SIZE);
+        Animation weaponAnim = new Animation(frameDuration, weaponTexReg);
+        IntMap<Animation> weaponAnims = new IntMap<Animation>(1);
+        weaponAnims.put(GameObj.States.neutral.ordinal(), weaponAnim);
+        Attack weaponObj = new Attack(weaponRect, weaponAnims, null, GameObj.Type.attack, 0.3f);
 
         // Hero Sound
         IntMap<Sound> sfx = new IntMap<Sound>();
@@ -191,7 +196,7 @@ public class GameState {
         sfx.put(GameObj.SoundFX.attack.ordinal(), attackSound);
 
         Hero result = new Hero(rect, heroAnim, sfx, GameObj.Type.hero,
-                               GameObj.States.walk_right, weapon);
+                               GameObj.States.walk_right, weaponObj);
         return result;
     }
 
@@ -226,12 +231,23 @@ public class GameState {
         monsterAnim.put(GameObj.States.walk_right.ordinal(), walkRight);
         monsterAnim.put(GameObj.States.walk_left.ordinal(), walkLeft);
 
+        // Weapon
+        Texture weaponTex = new Texture(Gdx.files.internal("sword.png"));
+        TextureRegion weaponTexReg = new TextureRegion(weaponTex);
+
+        // TODO: Revise weapon sounds, take away from hero add to swords?
+        Rectangle weaponRect = new Rectangle(0, 0, GameState.SPRITE_SIZE, GameState.SPRITE_SIZE);
+        Animation weaponAnim = new Animation(frameDuration, weaponTexReg);
+        IntMap<Animation> weaponAnims = new IntMap<Animation>(1);
+        weaponAnims.put(GameObj.States.neutral.ordinal(), weaponAnim);
+        Attack weaponObj = new Attack(weaponRect, weaponAnims, null, GameObj.Type.attack, 0.3f);
+
         IntMap<Sound> sfx = new IntMap<Sound>();
         Sound attackSound = Gdx.audio.newSound(Gdx.files.internal("slice.mp3"));
         sfx.put(GameObj.SoundFX.attack.ordinal(), attackSound);
         Battler result = new Battler(rect, monsterAnim, sfx,
                                      GameObj.Type.monster,
-                                     GameObj.States.walk_left);
+                                     GameObj.States.walk_left, weaponObj);
         return result;
     }
 
@@ -269,6 +285,7 @@ public class GameState {
 
         // Proximity detection
         if (currScene.equals(adventureScene)) {
+            checkGameObjectsAndProximity();
             if (battleState == Battle.active) {
                 // BATTLE is active, stop objects moving
                 globalObjectSpeedModifier = 0.0f;
@@ -293,7 +310,6 @@ public class GameState {
                 }
 
             } else {
-                checkGameObjectsAndProximity();
                 if (battleState == Battle.inactive) {
                     globalObjectSpeedModifier = 1.0f;
 
@@ -323,6 +339,7 @@ public class GameState {
                 }
             }
         }
+
         currScene.update(this, delta);
 
     }

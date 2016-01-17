@@ -32,7 +32,7 @@ public class GameObj {
     }
 
     public enum Type {
-        coin, hero, monster
+        coin, hero, monster, attack
     }
 
     public enum SoundFX {
