@@ -75,9 +75,6 @@ public class GameObj {
         this.initialised = false;
     }
 
-    public void act() {
-    }
-
     public void playSoundIfExist(SoundFX sfx, float volume) {
        if (this.sfx.containsKey(sfx.ordinal())) {
             this.sfx.get(sfx.ordinal()).play(volume);

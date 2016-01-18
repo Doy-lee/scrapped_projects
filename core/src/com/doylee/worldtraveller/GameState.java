@@ -6,17 +6,19 @@ import com.badlogic.gdx.audio.Music;
 import com.badlogic.gdx.audio.Sound;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.Animation;
-import com.badlogic.gdx.graphics.g2d.Sprite;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.IntMap;
-import com.doylee.worldtraveller.objects.Attack;
+import com.badlogic.gdx.utils.Queue;
+import com.doylee.worldtraveller.objects.skills.Attack;
 import com.doylee.worldtraveller.objects.Battler;
 import com.doylee.worldtraveller.objects.GameObj;
 import com.doylee.worldtraveller.objects.Hero;
+import com.doylee.worldtraveller.objects.skills.DefaultAttack;
+import com.doylee.worldtraveller.objects.skills.Fireball;
 
 import java.util.Iterator;
 
@@ -188,7 +190,22 @@ public class GameState {
         Animation weaponAnim = new Animation(frameDuration, weaponTexReg);
         IntMap<Animation> weaponAnims = new IntMap<Animation>(1);
         weaponAnims.put(GameObj.States.neutral.ordinal(), weaponAnim);
-        Attack weaponObj = new Attack(weaponRect, weaponAnims, null, GameObj.Type.attack, 0.3f);
+        DefaultAttack weaponObj = new DefaultAttack(weaponRect, weaponAnims, null, GameObj.Type.attack, 0.3f, 1.0f);
+
+        // Fireball
+        Texture fireballTex = new Texture(Gdx.files.internal("fireball.png"));
+        TextureRegion fireballTexReg[][] = TextureRegion.split(fireballTex, 64, 16);
+
+        Vector2 fireballStartSprite = new Vector2(0, 0);
+        Rectangle fireballRect = new Rectangle(0, 0, 64, 16);
+        Animation fireballAnim = Util.extractAnim(fireballTexReg, 0.05f, fireballStartSprite, 8);
+        IntMap<Animation> fireballAnims = new IntMap<Animation>(1);
+        fireballAnims.put(GameObj.States.neutral.ordinal(), fireballAnim);
+        Fireball fireball = new Fireball(fireballRect, fireballAnims, null, GameObj.Type.attack, 1.5f);
+
+        Queue attackList = new Queue();
+        attackList.addLast(weaponObj);
+        attackList.addLast(fireball);
 
         // Hero Sound
         IntMap<Sound> sfx = new IntMap<Sound>();
@@ -196,7 +213,7 @@ public class GameState {
         sfx.put(GameObj.SoundFX.attack.ordinal(), attackSound);
 
         Hero result = new Hero(rect, heroAnim, sfx, GameObj.Type.hero,
-                               GameObj.States.walk_right, weaponObj);
+                               GameObj.States.walk_right, attackList);
         return result;
     }
 
@@ -230,6 +247,8 @@ public class GameState {
         monsterAnim.put(GameObj.States.idle_right.ordinal(), idleRight);
         monsterAnim.put(GameObj.States.walk_right.ordinal(), walkRight);
         monsterAnim.put(GameObj.States.walk_left.ordinal(), walkLeft);
+        monsterAnim.put(GameObj.States.battle_right.ordinal(), walkRight);
+        monsterAnim.put(GameObj.States.battle_left.ordinal(), walkLeft);
 
         // Weapon
         Texture weaponTex = new Texture(Gdx.files.internal("sword.png"));
@@ -240,14 +259,17 @@ public class GameState {
         Animation weaponAnim = new Animation(frameDuration, weaponTexReg);
         IntMap<Animation> weaponAnims = new IntMap<Animation>(1);
         weaponAnims.put(GameObj.States.neutral.ordinal(), weaponAnim);
-        Attack weaponObj = new Attack(weaponRect, weaponAnims, null, GameObj.Type.attack, 0.3f);
+        DefaultAttack weaponObj = new DefaultAttack(weaponRect, weaponAnims, null, GameObj.Type.attack, 0.3f, 1.0f);
+
+        Queue attackList = new Queue();
+        attackList.addLast(weaponObj);
 
         IntMap<Sound> sfx = new IntMap<Sound>();
         Sound attackSound = Gdx.audio.newSound(Gdx.files.internal("slice.mp3"));
         sfx.put(GameObj.SoundFX.attack.ordinal(), attackSound);
         Battler result = new Battler(rect, monsterAnim, sfx,
                                      GameObj.Type.monster,
-                                     GameObj.States.walk_left, weaponObj);
+                                     GameObj.States.walk_left, attackList);
         return result;
     }
 
@@ -366,6 +388,7 @@ public class GameState {
                     float battleThresholdX = currScene.rect.width + (0.15f * currScene.rect.width);
                     if (obj.getSprite().getX() <= battleThresholdX) {
                         battleState = Battle.transitionIn;
+                        obj.setCurrAnimState(GameObj.States.battle_left);
                         currBattleMob = (Battler)obj;
                         break;
                     }
