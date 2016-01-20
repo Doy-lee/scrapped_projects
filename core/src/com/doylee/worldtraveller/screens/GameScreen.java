@@ -20,6 +20,7 @@ import com.doylee.worldtraveller.GameState;
 import com.doylee.worldtraveller.objects.Hero;
 import com.doylee.worldtraveller.Scene;
 import com.doylee.worldtraveller.WorldTraveller;
+import com.doylee.worldtraveller.objects.skills.Attack;
 
 // TODO: Read this https://github.com/libgdx/libgdx/wiki/Projection,-viewport,-&-cavatarWalkamera
 public class GameScreen implements Screen {
@@ -169,6 +170,7 @@ public class GameScreen implements Screen {
 		}
 
 		game.batch.begin();
+
 		// DEBUG
         DEBUGFont.draw(game.batch, "Gdx DeltaTime():  " + Gdx.graphics.getDeltaTime(),
                 20.0f, (Gdx.graphics.getHeight() - 20.0f));
@@ -198,6 +200,19 @@ public class GameScreen implements Screen {
 				(Gdx.graphics.getHeight() - 200.0f));
 		DEBUGFont.draw(game.batch, "Monster Spawn Timer: " + game.state.getMonsterSpawnTimer(), 20.0f,
 				(Gdx.graphics.getHeight() - 220.0f));
+
+		DEBUGFont.draw(game.batch, "Hero AttackList: " + hero.getAttackList(), 20.0f,
+				(Gdx.graphics.getHeight() - 240.0f));
+
+		DEBUGFont.draw(game.batch, "Hero Attack Queue: " + hero.getQueuedAttacks(), 20.0f,
+				(Gdx.graphics.getHeight() - 260.0f));
+
+		float pos = 280;
+		for (int i = 0; i < hero.getAttackList().size; ++i) {
+			Attack skill = hero.getAttackList().get(i);
+			DEBUGFont.draw(game.batch, skill + " Cooldown: " + skill.getCooldownTimer(), 20.0f, Gdx.graphics.getHeight() - pos);
+			pos += 20;
+		}
 
 		// DEBUG DRAW PLAYER HEALTH & ATB
 		DEBUGFont.draw(game.batch, "HP: " + hero.getHealth(), hero.getSprite().getX(), hero.getSprite().getY() + GameState.SPRITE_SIZE + 40);

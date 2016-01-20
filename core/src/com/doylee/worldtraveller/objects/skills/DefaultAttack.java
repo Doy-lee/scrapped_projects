@@ -12,12 +12,12 @@ import com.doylee.worldtraveller.objects.Battler;
  * Created by Doyle on 19/01/2016.
  */
 public class DefaultAttack extends Attack {
-    public DefaultAttack(Rectangle rect, IntMap<Animation> anims, IntMap<Sound> sfx, Type type, float powerMultiplier) {
-        super(rect, anims, sfx, type, powerMultiplier);
+    public DefaultAttack(Rectangle rect, IntMap<Animation> anims, IntMap<Sound> sfx, Type type, float powerMultiplier, float cooldown) {
+        super(rect, anims, sfx, type, powerMultiplier, cooldown);
     }
 
-    public DefaultAttack(Rectangle rect, IntMap<Animation> anims, IntMap<Sound> sfx, Type type, float endPause, float powerMultiplier) {
-        super(rect, anims, sfx, type, endPause, powerMultiplier);
+    public DefaultAttack(Rectangle rect, IntMap<Animation> anims, IntMap<Sound> sfx, Type type, float endPause, float powerMultiplier, float cooldown) {
+        super(rect, anims, sfx, type, endPause, powerMultiplier, cooldown);
     }
 
     public void update(float delta, Battler battler) {
@@ -48,7 +48,6 @@ public class DefaultAttack extends Attack {
                 complete = true;
             }
         }
-
     }
 
     public String toString() {

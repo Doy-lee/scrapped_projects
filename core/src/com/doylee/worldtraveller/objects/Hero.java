@@ -5,9 +5,11 @@ import com.badlogic.gdx.graphics.g2d.Animation;
 import com.badlogic.gdx.graphics.g2d.Sprite;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.math.Rectangle;
+import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.IntMap;
 import com.badlogic.gdx.utils.Queue;
 import com.doylee.worldtraveller.*;
+import com.doylee.worldtraveller.objects.skills.Attack;
 
 /**
  * Created by Doyle on 9/01/2016.
@@ -19,7 +21,7 @@ public class Hero extends Battler {
     private float energy;
 
 
-    public Hero(Rectangle rect, IntMap<Animation> anims, IntMap<Sound> sfx, Type type, States animState, Queue attackList) {
+    public Hero(Rectangle rect, IntMap<Animation> anims, IntMap<Sound> sfx, Type type, States animState, Array<Attack> attackList) {
         super(rect, anims, sfx, type, animState, attackList);
 
         this.hunger = 100;

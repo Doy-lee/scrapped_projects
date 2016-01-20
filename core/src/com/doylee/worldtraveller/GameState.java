@@ -190,7 +190,7 @@ public class GameState {
         Animation weaponAnim = new Animation(frameDuration, weaponTexReg);
         IntMap<Animation> weaponAnims = new IntMap<Animation>(1);
         weaponAnims.put(GameObj.States.neutral.ordinal(), weaponAnim);
-        DefaultAttack weaponObj = new DefaultAttack(weaponRect, weaponAnims, null, GameObj.Type.attack, 0.3f, 1.0f);
+        DefaultAttack weaponObj = new DefaultAttack(weaponRect, weaponAnims, null, GameObj.Type.attack, 0.3f, 1.0f, 0f);
 
         // Fireball
         Texture fireballTex = new Texture(Gdx.files.internal("fireball.png"));
@@ -201,11 +201,11 @@ public class GameState {
         Animation fireballAnim = Util.extractAnim(fireballTexReg, 0.05f, fireballStartSprite, 8);
         IntMap<Animation> fireballAnims = new IntMap<Animation>(1);
         fireballAnims.put(GameObj.States.neutral.ordinal(), fireballAnim);
-        Fireball fireball = new Fireball(fireballRect, fireballAnims, null, GameObj.Type.attack, 1.5f);
+        Fireball fireball = new Fireball(fireballRect, fireballAnims, null, GameObj.Type.attack, 1.5f, 3f);
 
-        Queue attackList = new Queue();
-        attackList.addLast(weaponObj);
-        attackList.addLast(fireball);
+        Array<Attack> attackList = new Array<Attack>();
+        attackList.add(weaponObj);
+        attackList.add(fireball);
 
         // Hero Sound
         IntMap<Sound> sfx = new IntMap<Sound>();
@@ -261,8 +261,8 @@ public class GameState {
         weaponAnims.put(GameObj.States.neutral.ordinal(), weaponAnim);
         DefaultAttack weaponObj = new DefaultAttack(weaponRect, weaponAnims, null, GameObj.Type.attack, 0.3f, 1.0f);
 
-        Queue attackList = new Queue();
-        attackList.addLast(weaponObj);
+        Array<Attack> attackList = new Array<Attack>();
+        attackList.add(weaponObj);
 
         IntMap<Sound> sfx = new IntMap<Sound>();
         Sound attackSound = Gdx.audio.newSound(Gdx.files.internal("slice.mp3"));

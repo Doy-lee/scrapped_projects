@@ -5,6 +5,7 @@ import com.badlogic.gdx.graphics.g2d.Animation;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Rectangle;
+import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.IntMap;
 import com.badlogic.gdx.utils.Queue;
 import com.doylee.worldtraveller.GameState;
@@ -26,9 +27,10 @@ public class Battler extends GameObj {
 
     private boolean triggerAttack;
     private Attack currAttack;
-    private Queue attackList;
+    private Array<Attack> attackList;
+    private Queue queuedAttacks;
 
-    public Battler(Rectangle rect, IntMap<Animation> anims, IntMap<Sound> sfx, Type type, States animState, Queue attackList) {
+    public Battler(Rectangle rect, IntMap<Animation> anims, IntMap<Sound> sfx, Type type, States animState, Array<Attack> attackList) {
         super(rect, anims, sfx, type, animState);
 
         this.health = 100;
@@ -42,6 +44,7 @@ public class Battler extends GameObj {
         triggerAttack = false;
         this.currAttack = null;
         this.attackList = attackList;
+        this.queuedAttacks = new Queue();
     }
 
     protected void attack(Battler target) {
@@ -54,7 +57,7 @@ public class Battler extends GameObj {
             target.setHealth(0);
         }
 
-        System.out.println("DEBUG: " + this.getType().toString() + " has attacked " + target.getType().toString() + " for " + damage + " damage.");
+        System.out.println("DEBUG: " + this.getType().toString() + " has attacked " + target.getType().toString() + " with " + currAttack + " for " + damage + " damage.");
     }
 
     public void atbUpdateAndAttack(float delta, Battler target) {
@@ -62,17 +65,21 @@ public class Battler extends GameObj {
         atb -= (delta * speed);
         if (atb <= 0) {
 
-            Iterator attackIt = attackList.iterator();
-            Attack bestAttack = (Attack)attackList.first();
-            while (attackIt.hasNext()) {
-                Attack skill = (Attack)attackIt.next();
-                if (skill.getPowerMultiplier() >= bestAttack.getPowerMultiplier()) {
-                    bestAttack = skill;
+            Attack bestAttack = null;
+            for (int i = 0; i < attackList.size; ++i) {
+                Attack atk = attackList.get(i);
+                if (bestAttack == null) {
+                    bestAttack = atk;
+                } else {
+                    if (!(atk.needsCooldown()) && (atk.getPowerMultiplier() >=
+                            bestAttack.getPowerMultiplier())) {
+                        bestAttack = atk;
+                    }
                 }
             }
 
-            currAttack = bestAttack;
-            System.out.println("currAttack: " + currAttack.toString());
+            queuedAttacks.addLast(bestAttack);
+            currAttack = (Attack)queuedAttacks.first();
 
             attack(target);
             atb = BASE_ATB;
@@ -96,6 +103,17 @@ public class Battler extends GameObj {
             if (currAttack.isComplete()) {
                 currAttack.setComplete(false);
                 triggerAttack = false;
+                currAttack.setNeedsCooldown(true);
+
+                if (queuedAttacks.size > 0) {
+                    queuedAttacks.removeFirst();
+                }
+            }
+        }
+
+        for (int i = 0; i < attackList.size; ++i) {
+            if (attackList.get(i).needsCooldown()) {
+                attackList.get(i).updateCooldown(delta);
             }
         }
     }
@@ -103,7 +121,8 @@ public class Battler extends GameObj {
     public int getHealth() { return health; }
     public float getATB() { return atb; }
     public int getMoney() { return this.money; }
-    public Queue getAttackList() { return this.attackList; }
+    public Array<Attack> getAttackList() { return this.attackList; }
+    public Queue getQueuedAttacks() { return this.queuedAttacks; }
 
     public void addMoney(float amount) { this.money += amount; }
     public void setHealth(int amount) { this.health = amount; }

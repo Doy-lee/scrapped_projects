@@ -7,6 +7,7 @@ import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.IntMap;
+import com.doylee.worldtraveller.objects.Battler;
 import com.doylee.worldtraveller.objects.GameObj;
 
 /**
@@ -59,6 +60,10 @@ public class Scene {
                             obj.getSprite().setX(obj.getSprite().getX() + totalMoveDelta);
                             break;
                     }
+                }
+
+                if (obj.getType() == GameObj.Type.hero || obj.getType() == GameObj.Type.monster) {
+                    ((Battler)obj).getQueuedAttacks().clear();
                 }
             }
 
