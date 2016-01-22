@@ -11,8 +11,6 @@ import com.badlogic.gdx.utils.Queue;
 import com.doylee.worldtraveller.GameState;
 import com.doylee.worldtraveller.objects.skills.Attack;
 
-import java.util.Iterator;
-
 /**
  * Created by Doyle on 12/01/2016.
  */

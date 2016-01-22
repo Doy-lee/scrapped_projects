@@ -12,12 +12,12 @@ import com.doylee.worldtraveller.objects.Battler;
  * Created by Doyle on 19/01/2016.
  */
 public class DefaultAttack extends Attack {
+    private static final float END_PAUSE_TIME = 0.5f;
+    private float endPauseTimer;
+
     public DefaultAttack(Rectangle rect, IntMap<Animation> anims, IntMap<Sound> sfx, Type type, float powerMultiplier, float cooldown) {
         super(rect, anims, sfx, type, powerMultiplier, cooldown);
-    }
-
-    public DefaultAttack(Rectangle rect, IntMap<Animation> anims, IntMap<Sound> sfx, Type type, float endPause, float powerMultiplier, float cooldown) {
-        super(rect, anims, sfx, type, endPause, powerMultiplier, cooldown);
+        this.endPauseTimer = END_PAUSE_TIME;
     }
 
     public void update(float delta, Battler battler) {
@@ -31,7 +31,6 @@ public class DefaultAttack extends Attack {
             this.getSprite().setX(battler.getSprite().getX() - GameState.SPRITE_SIZE);
         }
 
-
         // NOTE: LibGDX default rotation is counter-clockwise, so to move
         // clockwise we need to use negative degrees
         float currRotation = getSprite().getRotation();
@@ -42,9 +41,9 @@ public class DefaultAttack extends Attack {
             currRotation -= (rotationStep * delta);
             getSprite().setRotation(currRotation);
         } else {
-            if ((attackEndPause -= delta) <= 0) {
+            if ((endPauseTimer -= delta) <= 0) {
                 getSprite().setRotation(0);
-                attackEndPause = attackEndPauseTime;
+                endPauseTimer = END_PAUSE_TIME;
                 complete = true;
             }
         }

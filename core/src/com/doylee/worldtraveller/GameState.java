@@ -55,7 +55,6 @@ public class GameState {
     private Scene adventureScene;
     private Scene currScene;
 
-    private float worldMoveSpeed;
     private Battle battleState;
     private Battler currBattleMob;
 
@@ -115,7 +114,6 @@ public class GameState {
 
         this.adventureScene = new Scene(adventTex, adventAssets, adventObjs, adventMusic, true);
 
-        worldMoveSpeed = 0.0f;
         battleState = Battle.inactive;
         currBattleMob = null;
 
@@ -190,7 +188,7 @@ public class GameState {
         Animation weaponAnim = new Animation(frameDuration, weaponTexReg);
         IntMap<Animation> weaponAnims = new IntMap<Animation>(1);
         weaponAnims.put(GameObj.States.neutral.ordinal(), weaponAnim);
-        DefaultAttack weaponObj = new DefaultAttack(weaponRect, weaponAnims, null, GameObj.Type.attack, 0.3f, 1.0f, 0f);
+        DefaultAttack weaponObj = new DefaultAttack(weaponRect, weaponAnims, null, GameObj.Type.attack, 1.0f, 0);
 
         // Fireball
         Texture fireballTex = new Texture(Gdx.files.internal("fireball.png"));
@@ -275,34 +273,6 @@ public class GameState {
 
     public void update(float delta) {
         GameObj.States state = hero.getCurrAnimState();
-        switch (state) {
-            case neutral:
-            case idle_left:
-            case idle_right:
-                worldMoveSpeed = 0.0f;
-                break;
-
-            case walk_right:
-                worldMoveSpeed = RUN_SPEED_IN_PIXELS;
-            break;
-
-            case walk_left:
-                worldMoveSpeed = -RUN_SPEED_IN_PIXELS;
-                break;
-
-            case battle_left:
-                worldMoveSpeed = 0.0f;
-                break;
-
-            case battle_right:
-                worldMoveSpeed = 0.0f;
-                break;
-
-            default:
-                System.err.println("ERROR: Unexpected GameObj.State given");
-                break;
-        }
-
         // TODO: Move this out of gamestate? Maybe have a game master
 
         // Proximity detection
@@ -359,7 +329,72 @@ public class GameState {
                 } else if (battleState == Battle.transitionIn || battleState == Battle.transitionOut) {
                     globalObjectSpeedModifier = 0.75f;
                 }
+
+                if (battleState != GameState.Battle.active) {
+
+                    float sceneScrollSpeed = 0;
+                    switch (hero.getCurrAnimState()) {
+                        case walk_right:
+                            sceneScrollSpeed = GameState.RUN_SPEED_IN_PIXELS;
+                            break;
+
+                        case walk_left:
+                            sceneScrollSpeed = -GameState.RUN_SPEED_IN_PIXELS;
+                            break;
+
+                        case battle_left:
+                        case battle_right:
+                        case neutral:
+                        case idle_left:
+                        case idle_right:
+                        default:
+                            sceneScrollSpeed = 0.0f;
+                            break;
+                    }
+
+                    float totalMoveDelta = sceneScrollSpeed * globalObjectSpeedModifier * delta;
+
+                    for (GameObj obj : currScene.getSceneObj()) {
+                        if (obj.getType() != GameObj.Type.hero) {
+                            obj.getSprite().setX(obj.getSprite().getX() - totalMoveDelta);
+                        } else {
+                            // TODO: Should we tie the hero movement to stage and then counteract stage moving?
+                            // TODO: Otherwise the hero is in actuality stationary until we need to shift him to battle mode
+                            switch (battleState) {
+                                case transitionIn:
+                                    obj.getSprite().setX(obj.getSprite().getX() - totalMoveDelta);
+                                    break;
+                                case transitionOut:
+                                    obj.getSprite().setX(obj.getSprite().getX() + totalMoveDelta);
+                                    break;
+                            }
+                        }
+
+                        if (obj.getType() == GameObj.Type.hero || obj.getType() == GameObj.Type.monster) {
+                            ((Battler)obj).getQueuedAttacks().clear();
+                        }
+                    }
+
+                    if (currScene.isAnimated()) {
+                        currScene.rect.x -= sceneScrollSpeed * delta;
+                        if (currScene.rect.x <= -currScene.rect.width) currScene.rect.x = 0;
+                    }
+
+                    if (currScene.getCurrSong() != currScene.getMusic().get(Scene.ScnMusic.background.ordinal())) {
+                        currScene.getCurrSong().stop();
+                        currScene.setCurrSong(currScene.getMusic().get(Scene.ScnMusic.background.ordinal()));
+                    }
+                } else {
+                    // battle active
+                    if (currScene.getCurrSong() != currScene.getMusic().get(Scene.ScnMusic.battle.ordinal())) {
+                        currScene.getCurrSong().stop();
+                        currScene.setCurrSong(currScene.getMusic().get(Scene.ScnMusic.battle.ordinal()));
+                    }
+                }
+
             }
+        } else if (currScene == homeScene) {
+
         }
 
         currScene.update(this, delta);
@@ -448,12 +483,10 @@ public class GameState {
     // TODO: Get rid of timer access, temporary only
     public float getMonsterSpawnTimer() { return monsterSpawnTimer; }
 
-    public float getWorldMoveSpeed() { return worldMoveSpeed; }
     public Battle getBattleState() { return battleState; }
 
     public Battler getCurrBattleMob() { return currBattleMob; }
 
-    public void setWorldMoveSpeed(float amount) { this.worldMoveSpeed = amount; }
     public void setCurrScene(Scene scene) {
         // TODO: Don't allow people in battle to change scene?
         if (currScene != scene && (battleState != Battle.active && battleState != Battle.transitionIn && battleState != Battle.transitionOut)) {

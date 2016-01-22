@@ -21,7 +21,6 @@ public class Scene {
     private IntMap<Texture> assets;
     private IntMap<Music> music;
     private Array<GameObj> sceneObjs;
-    private Array<GameObj> battleObjs;
     private boolean isAnimated;
 
     public enum ScnMusic {
@@ -30,60 +29,16 @@ public class Scene {
 
     public Scene(Texture backdrop, IntMap<Texture> assets, Array<GameObj> sceneObjs, IntMap<Music> music, boolean isAnimated) {
         this.backdrop = backdrop;
+        this.currSong = music.get(ScnMusic.background.ordinal());
+
         this.rect = new Rectangle(0, 0, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
         this.assets = assets;
         this.music = music;
         this.sceneObjs = sceneObjs;
         this.isAnimated = isAnimated;
-
-        this.currSong = music.get(ScnMusic.background.ordinal());
     }
 
     public void update(GameState state, float delta) {
-        GameState.Battle battleState = state.getBattleState();
-        if (battleState != GameState.Battle.active) {
-
-            float worldMoveSpeed = state.getWorldMoveSpeed();
-            float totalMoveDelta = worldMoveSpeed * state.globalObjectSpeedModifier * delta;
-
-            for (GameObj obj : sceneObjs) {
-                if (obj.getType() != GameObj.Type.hero) {
-                    obj.getSprite().setX(obj.getSprite().getX() - totalMoveDelta);
-                } else {
-                    // TODO: Should we tie the hero movement to stage and then counteract stage moving?
-                    // TODO: Otherwise the hero is in actuality stationary until we need to shift him to battle mode
-                    switch (battleState) {
-                        case transitionIn:
-                            obj.getSprite().setX(obj.getSprite().getX() - totalMoveDelta);
-                            break;
-                        case transitionOut:
-                            obj.getSprite().setX(obj.getSprite().getX() + totalMoveDelta);
-                            break;
-                    }
-                }
-
-                if (obj.getType() == GameObj.Type.hero || obj.getType() == GameObj.Type.monster) {
-                    ((Battler)obj).getQueuedAttacks().clear();
-                }
-            }
-
-            if (isAnimated) {
-                rect.x -= worldMoveSpeed * delta;
-                if (rect.x <= -rect.width) rect.x = 0;
-            }
-
-            if (currSong != music.get(ScnMusic.background.ordinal())) {
-                currSong.stop();
-                currSong = music.get(ScnMusic.background.ordinal());
-            }
-        } else {
-            // battle active
-            if (currSong != music.get(ScnMusic.battle.ordinal())) {
-                currSong.stop();
-                currSong = music.get(ScnMusic.battle.ordinal());
-            }
-        }
-
         for (GameObj obj : sceneObjs) {
             obj.update(delta);
         }
@@ -110,6 +65,9 @@ public class Scene {
     }
 
     public Music getCurrSong() { return currSong; }
+    public void setCurrSong(Music song) { currSong = song; }
+    public IntMap<Music> getMusic() { return music; }
+    public boolean isAnimated() { return isAnimated; }
 
     public Array<GameObj> getSceneObj() { return sceneObjs; }
 

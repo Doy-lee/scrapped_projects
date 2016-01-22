@@ -15,8 +15,6 @@ import com.doylee.worldtraveller.objects.GameObj;
 
 public abstract class Attack extends GameObj {
 
-    protected float attackEndPauseTime;
-    protected float attackEndPause;
     protected boolean complete;
     private float powerMultiplier;
     private float cooldown;
@@ -25,18 +23,6 @@ public abstract class Attack extends GameObj {
 
     public Attack(Rectangle rect, IntMap<Animation> anims, IntMap<Sound> sfx, Type type, float powerMultiplier, float cooldown) {
         super(rect, anims, sfx, type);
-        this.attackEndPause = 0.0f;
-        this.complete = false;
-        this.powerMultiplier = powerMultiplier;
-        this.cooldown = cooldown;
-        this.cooldownTimer = cooldown;
-        this.needsCooldown = false;
-    }
-
-    public Attack(Rectangle rect, IntMap<Animation> anims, IntMap<Sound> sfx, Type type, float endPause, float powerMultiplier, float cooldown) {
-        super(rect, anims, sfx, type);
-        this.attackEndPause = endPause;
-        this.attackEndPauseTime = endPause;
         this.complete = false;
         this.powerMultiplier = powerMultiplier;
         this.cooldown = cooldown;

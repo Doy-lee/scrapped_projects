@@ -16,10 +16,6 @@ public class Fireball extends Attack {
         super(rect, anims, sfx, type, powerMultiplier, cooldown);
     }
 
-    public Fireball(Rectangle rect, IntMap<Animation> anims, IntMap<Sound> sfx, Type type, float endPause, float powerMultiplier, float cooldown) {
-        super(rect, anims, sfx, type, endPause, powerMultiplier, cooldown);
-    }
-
     public void update(float delta, Battler battler) {
         super.update(delta, battler);
 

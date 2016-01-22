@@ -37,8 +37,6 @@ public class GameScreen implements Screen {
 	public GameScreen(final WorldTraveller wtGame) {
 		game = wtGame;
 
-		// Assets
-
 		// Display configuration
 		DEBUGFont = new BitmapFont();
 		DEBUGFont.setColor(Color.GREEN);
@@ -196,8 +194,6 @@ public class GameScreen implements Screen {
 
 		DEBUGFont.draw(game.batch, "Battle State:  " + game.state.getBattleState().toString(), 20.0f,
 				(Gdx.graphics.getHeight() - 180.0f));
-		DEBUGFont.draw(game.batch, "World Move Speed: " + game.state.getWorldMoveSpeed(), 20.0f,
-				(Gdx.graphics.getHeight() - 200.0f));
 		DEBUGFont.draw(game.batch, "Monster Spawn Timer: " + game.state.getMonsterSpawnTimer(), 20.0f,
 				(Gdx.graphics.getHeight() - 220.0f));
 

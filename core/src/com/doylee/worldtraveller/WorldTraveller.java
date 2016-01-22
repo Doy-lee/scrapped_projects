@@ -30,9 +30,7 @@ public class WorldTraveller extends Game {
 
         // TODO: Temporary to allow for faster debugging, jump straight to game
         this.state = new GameState();
-        state.setCurrScene(state.getAdventureScene());
-        //this.setScreen(new HomeScreen(this));
-        this.setScreen(new GameScreen(this));
+        this.setScreen(new HomeScreen(this));
     }
 
     public void render() {
