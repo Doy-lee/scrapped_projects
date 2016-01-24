@@ -17,7 +17,7 @@ public class HomeScreen implements Screen {
     private OrthographicCamera camera;
 
     private Sprite logoSplash;
-    private TweenManager tweenManager;
+    //private TweenManager tweenManager;
 
     public HomeScreen(final WorldTraveller wtGame) {
         game = wtGame;
@@ -31,12 +31,12 @@ public class HomeScreen implements Screen {
         logoSplash = new Sprite(logoTex);
         logoSplash.setBounds(0, 0, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
 
-        Tween.registerAccessor(Sprite.class, new SpriteAccessor());
-        tweenManager = new TweenManager();
-        int tweenDuration = 1;
-        Tween.set(logoSplash, SpriteAccessor.ALPHA).target(0).start(tweenManager);
-        Tween.to(logoSplash, SpriteAccessor.ALPHA, tweenDuration).target(1)
-                .repeatYoyo(1, 2).start(tweenManager);
+        //Tween.registerAccessor(Sprite.class, new SpriteAccessor());
+        //tweenManager = new TweenManager();
+        //int tweenDuration = 1;
+        //Tween.set(logoSplash, SpriteAccessor.ALPHA).target(0).start(tweenManager);
+        //Tween.to(logoSplash, SpriteAccessor.ALPHA, tweenDuration).target(1)
+        //        .repeatYoyo(1, 2).start(tweenManager);
 
     }
 
@@ -49,15 +49,22 @@ public class HomeScreen implements Screen {
         Gdx.gl.glClearColor(0, 0, 0.0f, 1);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
 
-        tweenManager.update(delta);
+        // TODO: Tween manager crashes android
+        //tweenManager.update(delta);
 
         game.batch.begin();
-        if (tweenManager.getRunningTweensCount() == 0 || Gdx.input.isTouched()) {
+        if (Gdx.input.isTouched()) {
             game.setScreen(new GameScreen(game));
             dispose();
         } else {
             logoSplash.draw(game.batch);
         }
+        //if (tweenManager.getRunningTweensCount() == 0 || Gdx.input.isTouched()) {
+        //     game.setScreen(new GameScreen(game));
+        //    dispose();
+        //} else {
+        //    logoSplash.draw(game.batch);
+        // }
         game.batch.end();
 
     }

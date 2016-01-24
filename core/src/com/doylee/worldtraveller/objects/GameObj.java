@@ -107,7 +107,8 @@ public class GameObj {
         assert(anims.containsKey(state.ordinal()));
         this.currAnimState = state;
         this.currAnim = anims.get(currAnimState.ordinal());
-        stateTime = 0.0f;
+        // TODO: Possible bug if we don't reset state time? But this allows animations in home screen to rapidly change and still look good
+        //stateTime = 0.0f;
     }
 
     public static GameObj newInstance(GameObj object) {

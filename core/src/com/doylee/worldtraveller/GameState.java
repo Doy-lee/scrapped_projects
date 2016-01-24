@@ -45,6 +45,8 @@ public class GameState {
     public static float HUNGER_RATE = 0.3f;
     public static float THIRST_RATE = 0.3f;
 
+    public static float HERO_PERSIST_MOVE = 1.2f;
+
     public float globalObjectSpeedModifier = 1.0f;
     public static float globalVolume = 0.0f;
 
@@ -54,6 +56,9 @@ public class GameState {
     private Scene homeScene;
     private Scene adventureScene;
     private Scene currScene;
+
+    private float heroPersistMoveTimer;
+    private int lastChoice;
 
     private Battle battleState;
     private Battler currBattleMob;
@@ -113,6 +118,9 @@ public class GameState {
         Texture adventTex = new Texture(Gdx.files.internal("forest_night_1.png"));
 
         this.adventureScene = new Scene(adventTex, adventAssets, adventObjs, adventMusic, true);
+
+        heroPersistMoveTimer = HERO_PERSIST_MOVE;
+        lastChoice = -1;
 
         battleState = Battle.inactive;
         currBattleMob = null;
@@ -273,10 +281,9 @@ public class GameState {
 
     public void update(float delta) {
         GameObj.States state = hero.getCurrAnimState();
-        // TODO: Move this out of gamestate? Maybe have a game master
 
-        // Proximity detection
         if (currScene.equals(adventureScene)) {
+            // TODO: Rewrite
             checkGameObjectsAndProximity();
             if (battleState == Battle.active) {
                 // BATTLE is active, stop objects moving
@@ -394,7 +401,37 @@ public class GameState {
 
             }
         } else if (currScene == homeScene) {
+            if (lastChoice == -1) {
+                lastChoice = MathUtils.random(0, 3);
+            }
 
+            float maxMoveDistance = 0f;
+            float absoluteMaxMoveDistance = 100f;
+            switch(lastChoice) {
+                case 0:
+                    hero.setCurrAnimState(GameObj.States.idle_left);
+                    break;
+                case 1:
+                    hero.setCurrAnimState(GameObj.States.idle_right);
+                    break;
+                case 2:
+                    hero.setCurrAnimState(GameObj.States.walk_left);
+                    maxMoveDistance = Util.min(-hero.getSprite().getX(), absoluteMaxMoveDistance);
+                    hero.moveSpriteInX(MathUtils.random(0, maxMoveDistance) * delta);
+                    break;
+                case 3:
+                    hero.setCurrAnimState(GameObj.States.walk_right);
+                    maxMoveDistance = Util.min(Gdx.graphics.getWidth() - hero.getSprite().getX(), absoluteMaxMoveDistance);
+                    hero.moveSpriteInX(MathUtils.random(0, maxMoveDistance) * delta);
+                    break;
+            }
+
+
+            heroPersistMoveTimer -= delta;
+            if (heroPersistMoveTimer <= 0) {
+                heroPersistMoveTimer = HERO_PERSIST_MOVE;
+                lastChoice = -1;
+            }
         }
 
         currScene.update(this, delta);

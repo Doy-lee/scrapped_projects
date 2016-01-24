@@ -116,6 +116,21 @@ public class Battler extends GameObj {
         }
     }
 
+    public void moveSpriteInX(float distance) {
+        float originX = getSprite().getX();
+        getSprite().setX(originX + distance);
+        if (distance < 0) {
+            setCurrAnimState(States.walk_left);
+        } else {
+            setCurrAnimState(States.walk_right);
+        }
+    }
+
+    public void moveSpriteInY(float distance) {
+        float originX = getSprite().getX();
+        getSprite().setY(originX + distance);
+    }
+
     public int getHealth() { return health; }
     public float getATB() { return atb; }
     public int getMoney() { return this.money; }

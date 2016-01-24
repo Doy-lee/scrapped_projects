@@ -17,6 +17,7 @@ import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
 import com.doylee.worldtraveller.objects.Battler;
 import com.doylee.worldtraveller.GameState;
+import com.doylee.worldtraveller.objects.GameObj;
 import com.doylee.worldtraveller.objects.Hero;
 import com.doylee.worldtraveller.Scene;
 import com.doylee.worldtraveller.WorldTraveller;
@@ -91,7 +92,10 @@ public class GameScreen implements Screen {
 		adventureBtn.addListener(new ChangeListener() {
 			@Override
 			public void changed(ChangeEvent event, Actor actor) {
-				game.state.setCurrScene(game.state.getAdventureScene());
+				if (game.state.getCurrScene() != game.state.getAdventureScene()) {
+					game.state.setCurrScene(game.state.getAdventureScene());
+					game.state.getHero().setCurrAnimState(GameObj.States.walk_right);
+				}
 			}
 		});
 

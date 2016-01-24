@@ -47,4 +47,18 @@ public class Util {
 
         return result;
     }
+
+    static public float min(float a, float b) {
+        float result;
+        if (a < b) result = a;
+        else result = b;
+        return result;
+    }
+
+    static public float max(float a, float b) {
+        float result;
+        if (a < b) result = b;
+        else result = a;
+        return result;
+    }
 }
