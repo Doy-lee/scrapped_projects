@@ -4,7 +4,7 @@ REM Build process for text editor spell checker prototype
 IF NOT EXIST ..\build mkdir ..\build
 pushd ..\build
 
-set SDL2Folder=F:\workspace\libraries\SDL2-2.0.3
+set SDL2Folder=F:\workspace\libraries\SDL2-2.0.4
 set SDL2ImageFolder=F:\workspace\libraries\SDL2_image-2.0.0
 
 REM Zi - debug information
