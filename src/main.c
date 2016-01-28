@@ -183,6 +183,12 @@ typedef struct BmpBitfieldMasks {
 } BmpBitfieldMasks;
 #pragma pack(pop)
 
+typedef struct BmpHeaders {
+	BmpFileHeader *fileHeader;
+	BmpBitmapHeader *bitmapHeader;
+	u32 *data;
+} BmpHeaders;
+
 internal void initialiseArena(MemoryArena *arena, u32 size, u8 *base) {
 	arena->size = size;
 	arena->base = base;
@@ -399,13 +405,14 @@ internal void processEventLoop(ProgramState *state) {
 			// TODO: Complete return key implementation
 			case SDLK_RETURN:
 				if (event.key.type == SDL_KEYDOWN) {
-					u32 lenToEndOfLine =
-						screen->sizeInGlyphs.w -
-						(caret->rawPos % (u32)screen->sizeInGlyphs.w) ;
-					caret->rawPos += screen->sizeInGlyphs.w;
+					// NOTE: Insert CR(12) LF(10) to indicate new line
+					textBuffer->memory[caret->rawPos++] = 12;
+					textBuffer->memory[caret->rawPos++] = 10;
+					caret->rawPos += 2;
 				}
 				break;
 
+			// PARSE input text
 			default:
 				printf("Key code: %d\n", code);
 				input->key = event.key;
@@ -466,7 +473,35 @@ internal void processEventLoop(ProgramState *state) {
 	}
 }
 
-int main(int argc, char* argv[]) {
+void drawCharacter(ScreenData *screen, FontSheet *fontSheet, char input,
+                   v2 onScreenPos, BmpHeaders *bmp, SDL_PixelFormat *format) {
+	v2 charCoords = convertRawPosToVec2(input, fontSheet->glyphsPerRow);
+	Rect srcBmpRect = {0};
+	srcBmpRect.pos = mulV2(fontSheet->glyphSize, charCoords);
+	srcBmpRect.pos.x += fontSheet->paddingWidth * charCoords.x;
+	srcBmpRect.size = fontSheet->glyphSize;
+
+	if (onScreenPos.x >= screen->sizeInGlyphs.w &&
+			onScreenPos.y >= screen->sizeInGlyphs.h) {
+		// Stop printing out chars, can't display anymore in buffer
+		return;
+	} else if (onScreenPos.x >= screen->sizeInGlyphs.w) {
+		onScreenPos.x = 0;
+		onScreenPos.y++;
+	}
+
+	if (onScreenPos.y > screen->sizeInGlyphs.h) {
+		return;
+	}
+
+	Rect destBmpRect = {0};
+	destBmpRect.pos = mulV2(onScreenPos, fontSheet->glyphSize);
+	destBmpRect.size = srcBmpRect.size;
+	drawBitmap(srcBmpRect, destBmpRect, bmp->data, *bmp->fileHeader,
+	           *bmp->bitmapHeader, screen, format);
+}
+
+int main(int argc, const char* argv[]) {
 	SDL_Init(SDL_INIT_VIDEO);
 
 	// Program initialisation
@@ -483,22 +518,22 @@ int main(int argc, char* argv[]) {
 	                (u8 *)memory.block + sizeof(ProgramState));
 
 	// Load BMP
-	char *filePath = "../content/xterm613.bmp";
-	u32 *bmpFile = loadBmpFile(filePath,
-	                           (u32 *)(state->arena.base + state->arena.used));
-	u32 *bmpScanner = bmpFile;
+	const char *filePath = "../content/xterm613.bmp";
+	BmpHeaders bmp = {0};
+	bmp.data = loadBmpFile(filePath,
+	                       (u32 *)(state->arena.base + state->arena.used));
+	u32 *bmpScanner = bmp.data;
 
-	BmpFileHeader fileHeader = {0};
-	BmpBitmapHeader fileBitmapHeader = {0};
-	BmpBitfieldMasks fileBitfieldMasks = {0};
-	fileHeader = *((BmpFileHeader *) bmpScanner)++;
 	// NOTE: If bmpBitmapHeader.size is 40 then we have a BMP v3.x
 	// http://www.fileformat.info/format/bmp/egff.htm
-	fileBitmapHeader = *((BmpBitmapHeader *) bmpScanner)++;
+	bmp.fileHeader = ((BmpFileHeader *) bmpScanner)++;
+	bmp.bitmapHeader = ((BmpBitmapHeader *) bmpScanner)++;
+
+	BmpBitfieldMasks fileBitfieldMasks = {0};
 	fileBitfieldMasks = *((BmpBitfieldMasks *) bmpScanner);
 
 	// Update arena manually because size of BMP is determined post file load
-	pushSize(&state->arena, fileHeader.fileSize);
+	pushSize(&state->arena, bmp.fileHeader->fileSize);
 
 	FontSheet fontSheet = state->fontSheet;
 	fontSheet.glyphSize = (v2) {6, 13};
@@ -568,37 +603,23 @@ int main(int argc, char* argv[]) {
 		caret->rect.pos.y = caret->gridPos.y * fontSheet.glyphSize.h;
 
 		// TODO: Input has lag
-		v2 textBufferPos = {0};
+		v2 onScreenPos = {0};
 		for (int i = 0; i < textBuffer->size; i++) {
 			u32 input = textBuffer->memory[i];
 			if (input >= SDLK_SPACE && input <= '~') {
-				v2 charCoords = convertRawPosToVec2(input, fontSheet.glyphsPerRow);
-				// TODO: Abstract/clean up here
-				Rect srcBmpRect = {0};
-				srcBmpRect.pos = mulV2(fontSheet.glyphSize, charCoords);
-				srcBmpRect.pos.x += fontSheet.paddingWidth * charCoords.x;
-				srcBmpRect.size = fontSheet.glyphSize;
+				drawCharacter(screen, &fontSheet, input, onScreenPos, &bmp, format);
+			// else if CRLF
+			} else if (input == 12) {
+				input = textBuffer->memory[i+1];
+				if (input == 10) { //if LF
+					i++;
 
-				if (textBufferPos.x >= screen->sizeInGlyphs.w &&
-						textBufferPos.y >= screen->sizeInGlyphs.h) {
-					// Stop printing out chars, can't display anymore in buffer
-					break;
-				} else if (textBufferPos.x >= screen->sizeInGlyphs.w) {
-					textBufferPos.x = 0;
-					textBufferPos.y++;
+					u32 lenToEndOfLine =
+						screen->sizeInGlyphs.w -
+						(caret->rawPos % (u32)screen->sizeInGlyphs.w);
 				}
-
-				if (textBufferPos.y > screen->sizeInGlyphs.h) {
-					break;
-				}
-
-				Rect destBmpRect = {0};
-				destBmpRect.pos = mulV2(textBufferPos, fontSheet.glyphSize);
-				destBmpRect.size = srcBmpRect.size;
-				drawBitmap(srcBmpRect, destBmpRect, bmpFile, fileHeader,
-						fileBitmapHeader, screen, format);
 			}
-			textBufferPos.x++;
+			onScreenPos.x++;
 		}
 
 		// Draw screen caret
