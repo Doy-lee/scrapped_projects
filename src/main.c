@@ -50,38 +50,38 @@ typedef struct Rect {
 } Rect;
 
 
-inline internal v2 addV2(v2 a, v2 b) {
+inline  v2 addV2(v2 a, v2 b) {
 	v2 result;
 	result.x = a.x + b.x;
 	result.y = a.y + b.y;
 	return result;
 }
 
-inline internal v2 subV2(v2 a, v2 b) {
+inline  v2 subV2(v2 a, v2 b) {
 	v2 result;
 	result.x = a.x - b.x;
 	result.y = a.y - b.y;
 	return result;
 }
 
-inline internal v2 mulV2(v2 a, v2 b) {
+inline  v2 mulV2(v2 a, v2 b) {
 	v2 result;
 	result.x = a.x * b.x;
 	result.y = a.y * b.y;
 	return result;
 }
 
-inline internal v2 convertRawPosToVec2(u32 pos, u32 width) {
+inline  v2 convertRawPosToVec2(u32 pos, u32 width) {
 	v2 result = {0};
-	result.x = pos % width;
-	result.y = pos / width;
+	result.x = (r32)(pos % width);
+	result.y = (r32)(pos / width);
 	return result;
 }
 
-inline internal u32 convertVec2ToRawPos(v2 pos, u32 width) {
+inline  u32 convertVec2ToRawPos(v2 pos, u32 width) {
 	u32 result;
-	result = width * pos.y;
-	result += pos.x;
+	result = (u32)((r32)width * pos.y);
+	result += (u32)pos.x;
 	return result;
 }
 
@@ -132,9 +132,9 @@ typedef struct MemoryArena {
 
 typedef struct TextBuffer {
 	char *memory;
-	u32 pos;
-	u32 size;
-	u32 lastCharPos;
+	i32 pos;
+	i32 size;
+	i32 lastCharPos;
 } TextBuffer;
 
 typedef struct ProgramMemory {
@@ -190,7 +190,7 @@ typedef struct BmpHeaders {
 	u32 *data;
 } BmpHeaders;
 
-internal void initialiseArena(MemoryArena *arena, u32 size, u8 *base) {
+ void initialiseArena(MemoryArena *arena, u32 size, u8 *base) {
 	arena->size = size;
 	arena->base = base;
 	arena->used = 0;
@@ -206,7 +206,7 @@ void *pushSize(MemoryArena *arena, u32 size) {
 	return(result);
 }
 
-internal void DrawRectangle (Rect rect, u32 pixel_color,
+void DrawRectangle (Rect rect, u32 pixel_color,
                              ScreenData *screen) {
 	assert(screen);
 
@@ -231,7 +231,7 @@ internal void DrawRectangle (Rect rect, u32 pixel_color,
 }
 
 // TODO: Clean up parameters
-internal void drawBitmap(Rect srcRect, Rect destRect, u32 *bmpFile, BmpFileHeader fileHeader, BmpBitmapHeader fileBitmapHeader, ScreenData *screen, SDL_PixelFormat *format) {
+void drawBitmap(Rect srcRect, Rect destRect, u32 *bmpFile, BmpFileHeader fileHeader, BmpBitmapHeader fileBitmapHeader, ScreenData *screen, SDL_PixelFormat *format) {
 
 	(u8 *) bmpFile += (u8) fileHeader.bitmapOffset;
 	u32 bytesPerPixel = fileBitmapHeader.bitsPerPixel / 8;
@@ -241,8 +241,8 @@ internal void drawBitmap(Rect srcRect, Rect destRect, u32 *bmpFile, BmpFileHeade
 	// 4 byte boundary padding for each scan line
 	numBytesInScanLine += (fileBitmapHeader.width % 4);
 
-	for (int y = srcRect.size.h; y >= 0; y--) {
-		for (int x = 0; x < srcRect.size.w; x++) {
+	for (i32 y = (i32)srcRect.size.h; y >= 0; y--) {
+		for (i32 x = 0; x < (i32)srcRect.size.w; x++) {
 			// NOTE: BMP is stored from left to right, bottom to top
 			//       BB GG RR | 24 bits per pixel
 
@@ -255,11 +255,11 @@ internal void drawBitmap(Rect srcRect, Rect destRect, u32 *bmpFile, BmpFileHeade
 			// Find the position in BMP data where our source rect begins
 			// As BMP stores bottom to top and rects are supplied in top-bottom
 			// we need to convert from one coordinate system to another
-			u32 yRectToBMP = ((fileBitmapHeader.height - srcRect.pos.y - y) *
-			            numBytesInScanLine);
-			u32 xRectToBMP = (srcRect.pos.x + x) * bytesPerPixel;
+			i32 yRectToBMP = ((fileBitmapHeader.height - (i32)srcRect.pos.y - y)
+			                  * numBytesInScanLine);
+			i32 xRectToBMP = ((i32)srcRect.pos.x + x) * bytesPerPixel;
 
-			u32 pos = yRectToBMP + xRectToBMP;
+			i32 pos = yRectToBMP + xRectToBMP;
 
 			u8 blue = ((u8 *) bmpFile)[pos];
 			u8 green = ((u8 *) bmpFile)[pos+1];
@@ -278,7 +278,7 @@ internal void drawBitmap(Rect srcRect, Rect destRect, u32 *bmpFile, BmpFileHeade
 	}
 }
 
-internal u32 *loadBmpFile(char *filePath, u32 *buffer) {
+u32 *loadBmpFile(char *filePath, u32 *buffer) {
 	HANDLE fileHandle =
 		CreateFile(filePath, // lpFileName
 		           GENERIC_READ,           // dwDesiredAccess
@@ -293,7 +293,8 @@ internal u32 *loadBmpFile(char *filePath, u32 *buffer) {
 		LARGE_INTEGER fileSize = {0};
 
 		if (GetFileSizeEx(fileHandle, &fileSize)) {
-			u32 fileSize32bit = fileSize.QuadPart;
+			// TODO: Assumes file size < 32bit
+			u32 fileSize32bit = (u32)fileSize.QuadPart;
 			u32 numBytesRead = 0;
 
 			if (ReadFile(fileHandle, buffer, fileSize32bit, &numBytesRead,
@@ -315,7 +316,7 @@ inline i32 getLastCharInBuffer(TextBuffer buffer) {
 	// Get the last displayable character in the buffer, the caret can't pass
 	// the last char
 	i32 result = 0;
-	for (int i = 0; i < buffer.size-1; i++) {
+	for (i32 i = 0; i < buffer.size-1; i++) {
 		if (buffer.memory[i] == 0 && buffer.memory[i-1] != 0) {
 			result = i;
 		}
@@ -323,10 +324,10 @@ inline i32 getLastCharInBuffer(TextBuffer buffer) {
 	return result;
 }
 
-internal inline void canonicaliseCaretPos(TextCaret *caret, TextBuffer buffer,
+inline void canonicaliseCaretPos(TextCaret *caret, TextBuffer buffer,
                                           ScreenData screen) {
 
-	u32 lastCharInBuffer = getLastCharInBuffer(buffer);
+	i32 lastCharInBuffer = getLastCharInBuffer(buffer);
 
 	if (caret->rawPos <= 0) {
 		caret->rawPos = 0;
@@ -339,9 +340,9 @@ internal inline void canonicaliseCaretPos(TextCaret *caret, TextBuffer buffer,
 	                                     (u32)screen.sizeInGlyphs.w);
 }
 
-inline void canonicalisePosToBuffer(u32 *pos, TextBuffer buffer) {
+inline void canonicalisePosToBuffer(i32 *pos, TextBuffer buffer) {
 
-	u32 lastCharInBuffer = getLastCharInBuffer(buffer);
+	i32 lastCharInBuffer = getLastCharInBuffer(buffer);
 
 	if (*pos <= 0) {
 		*pos = 0;
@@ -352,10 +353,9 @@ inline void canonicalisePosToBuffer(u32 *pos, TextBuffer buffer) {
 }
 
 
-internal void processEventLoop(ProgramState *state) {
+void processEventLoop(ProgramState *state) {
 	Input *input = &state->input;
 	TextCaret *caret = state->caret;
-	FontSheet fontSheet = state->fontSheet;
 	ScreenData *screen = state->screen;
 	TextBuffer *textBuffer = state->buffer;
 
@@ -377,8 +377,9 @@ internal void processEventLoop(ProgramState *state) {
 
 		if (event.type == SDL_MOUSEBUTTONDOWN) {
 			input->mouse = event.button;
-			caret->gridPos.x = (u32)(input->mouse.x / fontSheet.glyphSize.w);
-			caret->gridPos.y = (u32)(input->mouse.y / fontSheet.glyphSize.h);
+			// TODO: redo
+			//caret->gridPos.x = (u32)(input->mouse.x / fontSheet.glyphSize.w);
+			//caret->gridPos.y = (u32)(input->mouse.y / fontSheet.glyphSize.h);
 		}
 
 		// Extract key state
@@ -395,7 +396,7 @@ internal void processEventLoop(ProgramState *state) {
 					// NOTE: Special case where if we are at the top of the
 					// document, pressing up should not move the caret
 					if (textBuffer->pos - (i32)screen->sizeInGlyphs.w >= 0) {
-						textBuffer->pos -= screen->sizeInGlyphs.w;
+						textBuffer->pos -= (i32)screen->sizeInGlyphs.w;
 					}
 				}
 				break;
@@ -403,7 +404,7 @@ internal void processEventLoop(ProgramState *state) {
 			case SDLK_DOWN:
 				input->arrowDown = event.key;
 				if (input->arrowDown.type == SDL_KEYDOWN) {
-					textBuffer->pos += screen->sizeInGlyphs.w;
+					textBuffer->pos += (i32)screen->sizeInGlyphs.w;
 				}
 				break;
 
@@ -440,7 +441,7 @@ internal void processEventLoop(ProgramState *state) {
 						canonicalisePosToBuffer(&textBuffer->pos, *textBuffer);
 
 						textBuffer->memory[textBuffer->pos] = 0;
-						for (int i = textBuffer->pos; i < textBuffer->size; i++) {
+						for (i32 i = textBuffer->pos; i < textBuffer->size; i++) {
 							textBuffer->memory[i] = textBuffer->memory[i+1];
 						}
 					} else if (code == SDLK_SPACE ||
@@ -450,7 +451,7 @@ internal void processEventLoop(ProgramState *state) {
 						// Bruteforce shift all array elements after out
 						// current caret pos by 1
 						if (textBuffer->memory[textBuffer->pos] != 0) {
-							for (int i = textBuffer->size-1; i > textBuffer->pos; i--) {
+							for (i32 i = textBuffer->size-1; i > textBuffer->pos; i--) {
 								textBuffer->memory[i] = textBuffer->memory[i-1];
 							}
 						}
@@ -555,7 +556,7 @@ int main(int argc, char* argv[]) {
 	FontSheet fontSheet = state->fontSheet;
 	fontSheet.glyphSize = (v2) {6, 13};
 	fontSheet.glyphsPerRow = 16;
-	fontSheet.paddingWidth = 1 * fontSheet.glyphSize.w;
+	fontSheet.paddingWidth = 1 * (i32)fontSheet.glyphSize.w;
 
 	// Initialise screen
 	state->screen = pushStruct(&state->arena, ScreenData);
@@ -563,14 +564,12 @@ int main(int argc, char* argv[]) {
 	screen->size = (v2) {990, 720};
 	screen->bytesPerPixel = 4;
 	// Allocate size for screen backbuffer
-	screen->backBuffer =
-		pushSize(&state->arena,
-				 (u32)screen->size.w * (u32)screen->size.h * screen->bytesPerPixel);
+	screen->backBuffer = pushSize(&state->arena,
+	                              (u32)screen->size.w * (u32)screen->size.h *
+	                              screen->bytesPerPixel);
 
-	screen->sizeInGlyphs.w = (u32)(screen->size.w/fontSheet.glyphSize.w);
-	screen->sizeInGlyphs.h = (u32)(screen->size.h/fontSheet.glyphSize.h);
-	screen->sizeInGlyphs.w = 5;
-	screen->sizeInGlyphs.h = 5;
+	screen->sizeInGlyphs.w = (r32)((u32)(screen->size.w/fontSheet.glyphSize.w));
+	screen->sizeInGlyphs.h = (r32)((u32)(screen->size.h/fontSheet.glyphSize.h));
 
 	// Initialise caret
 	state->caret = pushStruct(&state->arena, TextCaret);
@@ -582,21 +581,24 @@ int main(int argc, char* argv[]) {
 	// Create the onscreen text buffer
 	state->onScreenBuffer = pushStruct(&state->arena, TextBuffer);
 	TextBuffer *onScreenBuffer = state->onScreenBuffer;
-	onScreenBuffer->size = screen->sizeInGlyphs.w * screen->sizeInGlyphs.h;
+	onScreenBuffer->size = (i32)screen->sizeInGlyphs.w *
+	                       (i32)screen->sizeInGlyphs.h;
 	onScreenBuffer->memory = pushSize(&state->arena, onScreenBuffer->size);
 
 	// Use remaining space for text buffer
 	state->buffer = pushStruct(&state->arena, TextBuffer);
 	TextBuffer *textBuffer = state->buffer;
-	textBuffer->size = screen->sizeInGlyphs.w * screen->sizeInGlyphs.h;
+	textBuffer->size = (i32)screen->sizeInGlyphs.w *
+	                   (i32)screen->sizeInGlyphs.h;
 	textBuffer->memory = pushSize(&state->arena, textBuffer->size);
 	textBuffer->pos = 0;
 
 
 	// SDL Initialisation
 	SDL_Window *win = SDL_CreateWindow("Text Editor", SDL_WINDOWPOS_UNDEFINED,
-	                                   SDL_WINDOWPOS_UNDEFINED, screen->size.w,
-	                                   screen->size.h, 0);
+	                                   SDL_WINDOWPOS_UNDEFINED,
+	                                   (i32)screen->size.w,
+	                                   (i32)screen->size.h, 0);
 	assert(win);
 	SDL_Renderer *renderer = SDL_CreateRenderer(win, 0, SDL_RENDERER_SOFTWARE);
 	assert(renderer);
@@ -604,7 +606,8 @@ int main(int argc, char* argv[]) {
 	SDL_PixelFormat *format = SDL_AllocFormat(SDL_PIXELFORMAT_RGBA8888);
 	SDL_Texture *screenTex = SDL_CreateTexture(renderer, format->format,
 	                                           SDL_TEXTUREACCESS_STREAMING,
-	                                           screen->size.w, screen->size.h);
+	                                           (i32)screen->size.w,
+	                                           (i32)screen->size.h);
 	assert(screenTex);
 
 	u32 pixelColor =  SDL_MapRGBA(format, 0, 0, 255, 255);
@@ -619,11 +622,18 @@ int main(int argc, char* argv[]) {
 		// TODO: Dirty clear screen e.g. only clear areas that have changed
 		// Clear screen
 		memset(screen->backBuffer, 0,
-		       screen->size.w * screen->size.h * screen->bytesPerPixel);
+		       (i32)screen->size.w * (i32)screen->size.h
+		       * screen->bytesPerPixel);
 
 		processEventLoop(state);
-		canonicaliseCaretPos(state->caret, *state->onScreenBuffer, *state->screen);
 
+		static i32 pos;
+		if (pos != textBuffer->pos) {
+			pos = textBuffer->pos;
+			printf("textBuffer->pos: %d\n", textBuffer->pos);
+		}
+
+		canonicalisePosToBuffer(&textBuffer->pos, *state->buffer);
 		// Convert text buffer to onscreen buffer
 		assert(onScreenBuffer->size <= textBuffer->size);
 		i32 screenBufferIndex = 0;
@@ -634,19 +644,17 @@ int main(int argc, char* argv[]) {
 				if (textBuffer->memory[textBufferIndex+1] == 10) {
 					textBufferIndex += 2;
 
-					u32 lenToEndOfLine = screen->sizeInGlyphs.w -
-					                     (screenBufferIndex % (u32)screen->sizeInGlyphs.w);
+					i32 lenToEndOfLine = (i32)screen->sizeInGlyphs.w -
+					                     (screenBufferIndex %
+					                     (u32)screen->sizeInGlyphs.w);
 
 					if (!((screenBufferIndex + lenToEndOfLine) > onScreenBuffer->size)) {
 						for (i32 i = 0; i < lenToEndOfLine; i++) {
-							onScreenBuffer->memory[screenBufferIndex++] = '-';
+							onScreenBuffer->memory[screenBufferIndex++] = ' ';
 						}
 					}
 				}
 			} else {
-				if (textBuffer->memory[textBufferIndex] >= SDLK_SPACE) {
-					printf("hello");
-				}
 				onScreenBuffer->memory[screenBufferIndex++] = textBuffer->memory[textBufferIndex++];
 			}
 
@@ -661,13 +669,11 @@ int main(int argc, char* argv[]) {
 			   (i+1) < textBuffer->size) {
 
 				if (textBuffer->memory[i+1] == 10) {
-					v2 pos = convertRawPosToVec2(caret->rawPos, screen->sizeInGlyphs.w);
-					i32 lenToEndOfLine = screen->sizeInGlyphs.w - pos.x;
-
+					v2 pos = convertRawPosToVec2(caret->rawPos,
+					                             (u32)screen->sizeInGlyphs.w);
+					i32 lenToEndOfLine = (i32)screen->sizeInGlyphs.w -
+					                     (i32)pos.x;
 					caret->rawPos += (lenToEndOfLine);
-
-					printf("lenToEndOfLine %d\n", lenToEndOfLine);
-					printf("caret->rawPos %d\n", caret->rawPos);
 					i++;
 				} else {
 					caret->rawPos++;
@@ -676,13 +682,11 @@ int main(int argc, char* argv[]) {
 				caret->rawPos++;
 			}
 		}
-		u32 lastCharInBuffer = getLastCharInBuffer(*state->onScreenBuffer);
-		printf("lastCharInBuffer is %d\n", lastCharInBuffer);
 		canonicaliseCaretPos(state->caret, *state->onScreenBuffer, *state->screen);
 
 		// TODO: Input has lag
 		v2 onScreenPos = {0};
-		for (int i = 0; i < onScreenBuffer->size; i++) {
+		for (i32 i = 0; i < onScreenBuffer->size; i++) {
 			u32 input = onScreenBuffer->memory[i];
 			if (input >= SDLK_SPACE && input <= '~') {
 				drawCharacter(screen, &fontSheet, input, &onScreenPos, &bmp, format);
@@ -716,7 +720,7 @@ int main(int argc, char* argv[]) {
 
 
 		SDL_UpdateTexture(screenTex, NULL, screen->backBuffer,
-		                  screen->size.w*sizeof(u32));
+		                  (i32)screen->size.w*sizeof(i32));
 		SDL_RenderClear(renderer);
 		SDL_RenderCopy(renderer, screenTex, NULL, NULL);
 

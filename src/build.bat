@@ -9,7 +9,7 @@ set SDL2ImageFolder=F:\workspace\libraries\SDL2_image-2.0.0
 
 REM Zi - debug information
 REM MDd - debug mode
-set compileFlags=/MDd /Zi
+set compileFlags=/MDd /Zi /W3
 
 REM Include the header files to use function prototypes
 set includeFlags=/I %SDL2Folder%\include /I %SDL2ImageFolder%\include
