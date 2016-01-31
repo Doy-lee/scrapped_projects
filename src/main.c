@@ -524,7 +524,7 @@ void drawString(ScreenData *screen, FontSheet *fontSheet, v2 *onScreenPos,
                 i32 stringLen) {
 	// NOTE: String length must be inclusive of null terminator at end
 	assert(string[stringLen-1] == 0);
-	for (i32 i = 0; i < stringLen; i++) {
+	for (i32 i = 0; i < stringLen-1; i++) {
 		drawCharacter(screen, fontSheet, onScreenPos, bmp, format, string[i]);
 		onScreenPos->x += fontSheet->glyphSize.w;
 	}
