@@ -50,35 +50,35 @@ typedef struct Rect {
 } Rect;
 
 
-inline  v2 addV2(v2 a, v2 b) {
+inline v2 addV2(v2 a, v2 b) {
 	v2 result;
 	result.x = a.x + b.x;
 	result.y = a.y + b.y;
 	return result;
 }
 
-inline  v2 subV2(v2 a, v2 b) {
+inline v2 subV2(v2 a, v2 b) {
 	v2 result;
 	result.x = a.x - b.x;
 	result.y = a.y - b.y;
 	return result;
 }
 
-inline  v2 mulV2(v2 a, v2 b) {
+inline v2 mulV2(v2 a, v2 b) {
 	v2 result;
 	result.x = a.x * b.x;
 	result.y = a.y * b.y;
 	return result;
 }
 
-inline  v2 convertRawPosToVec2(u32 pos, u32 width) {
+inline v2 convertRawPosToVec2(u32 pos, u32 width) {
 	v2 result = {0};
 	result.x = (r32)(pos % width);
 	result.y = (r32)(pos / width);
 	return result;
 }
 
-inline  u32 convertVec2ToRawPos(v2 pos, u32 width) {
+inline u32 convertVec2ToRawPos(v2 pos, u32 width) {
 	u32 result;
 	result = (u32)((r32)width * pos.y);
 	result += (u32)pos.x;
@@ -440,10 +440,23 @@ void processEventLoop(ProgramState *state) {
 						textBuffer->pos--;
 						canonicalisePosToBuffer(&textBuffer->pos, *textBuffer);
 
-						textBuffer->memory[textBuffer->pos] = 0;
-						for (i32 i = textBuffer->pos; i < textBuffer->size; i++) {
-							textBuffer->memory[i] = textBuffer->memory[i+1];
+						if (textBuffer->memory[textBuffer->pos] == 10) {
+							textBuffer->pos--;
+							canonicalisePosToBuffer(&textBuffer->pos, *textBuffer);
+							if (textBuffer->memory[textBuffer->pos] == 13) {
+								textBuffer->memory[textBuffer->pos] = 0;
+								textBuffer->memory[textBuffer->pos+1] = 0;
+							}
+							for (i32 i = textBuffer->pos; i < textBuffer->size; i++) {
+								textBuffer->memory[i] = textBuffer->memory[i+2];
+							}
+						} else {
+							textBuffer->memory[textBuffer->pos] = 0;
+							for (i32 i = textBuffer->pos; i < textBuffer->size; i++) {
+								textBuffer->memory[i] = textBuffer->memory[i+1];
+							}
 						}
+
 					} else if (code == SDLK_SPACE ||
 							(code >= SDLK_SPACE && code <= '~') ||
 							(code >= '0' && code <= '9')) {
@@ -570,6 +583,8 @@ int main(int argc, char* argv[]) {
 
 	screen->sizeInGlyphs.w = (r32)((u32)(screen->size.w/fontSheet.glyphSize.w));
 	screen->sizeInGlyphs.h = (r32)((u32)(screen->size.h/fontSheet.glyphSize.h));
+	screen->sizeInGlyphs.w = 5.0f;
+	screen->sizeInGlyphs.h = 5.0f;
 
 	// Initialise caret
 	state->caret = pushStruct(&state->arena, TextCaret);
