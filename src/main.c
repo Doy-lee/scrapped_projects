@@ -315,7 +315,7 @@ u32 *loadBmpFile(char *filePath, u32 *buffer) {
 inline i32 getLastCharInBuffer(TextBuffer buffer) {
 	// Get the last displayable character in the buffer, the caret can't pass
 	// the last char
-	i32 result = 0;
+	i32 result = buffer.size-1;
 	for (i32 i = 0; i < buffer.size-1; i++) {
 		if (buffer.memory[i] != 0 && buffer.memory[i+1] == 0) {
 			result = i+1;
