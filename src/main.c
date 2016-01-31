@@ -430,22 +430,24 @@ void processEventLoop(ProgramState *state) {
 					if (code == SDLK_BACKSPACE) {
 						textBuffer->pos--;
 						canonicalisePosToBuffer(&textBuffer->pos, *textBuffer);
-
+						i32 shiftAmount = 0;
+						
+						// If CRLF found, backspace must remove both bytes
 						if (textBuffer->memory[textBuffer->pos] == 10) {
 							textBuffer->pos--;
 							canonicalisePosToBuffer(&textBuffer->pos, *textBuffer);
 							if (textBuffer->memory[textBuffer->pos] == 13) {
-								textBuffer->memory[textBuffer->pos] = 0;
-								textBuffer->memory[textBuffer->pos+1] = 0;
-							}
-							for (i32 i = textBuffer->pos; i < textBuffer->size; i++) {
-								textBuffer->memory[i] = textBuffer->memory[i+2];
+								shiftAmount = 2;
+							} else {
+								// TODO: An unmatched CR/LF has been found
+								assert(true);
 							}
 						} else {
-							textBuffer->memory[textBuffer->pos] = 0;
-							for (i32 i = textBuffer->pos; i < textBuffer->size; i++) {
-								textBuffer->memory[i] = textBuffer->memory[i+1];
-							}
+							shiftAmount = 1;
+						}
+
+						for (i32 i = textBuffer->pos; i < textBuffer->size; i++) {
+							textBuffer->memory[i] = textBuffer->memory[i+shiftAmount];
 						}
 
 					} else if (code == SDLK_SPACE ||
@@ -574,8 +576,8 @@ int main(int argc, char* argv[]) {
 
 	screen->sizeInGlyphs.w = (r32)((i32)(screen->size.w/fontSheet.glyphSize.w));
 	screen->sizeInGlyphs.h = (r32)((i32)(screen->size.h/fontSheet.glyphSize.h));
-	screen->sizeInGlyphs.w = 2.0f;
-	screen->sizeInGlyphs.h = 2.0f;
+	screen->sizeInGlyphs.w = 5.0f;
+	screen->sizeInGlyphs.h = 5.0f;
 
 	// Initialise caret
 	state->caret = pushStruct(&state->arena, TextCaret);
