@@ -317,27 +317,11 @@ inline i32 getLastCharInBuffer(TextBuffer buffer) {
 	// the last char
 	i32 result = 0;
 	for (i32 i = 0; i < buffer.size-1; i++) {
-		if (buffer.memory[i] == 0 && buffer.memory[i-1] != 0) {
-			result = i;
+		if (buffer.memory[i] != 0 && buffer.memory[i+1] == 0) {
+			result = i+1;
 		}
 	}
 	return result;
-}
-
-inline void canonicaliseCaretPos(TextCaret *caret, TextBuffer buffer,
-                                          ScreenData screen) {
-
-	i32 lastCharInBuffer = getLastCharInBuffer(buffer);
-
-	if (caret->rawPos <= 0) {
-		caret->rawPos = 0;
-// TODO: Undefined behaviour when text is greater than displayable buffer
-	} else if (caret->rawPos >= lastCharInBuffer) {
-		caret->rawPos = lastCharInBuffer;
-	}
-
-	caret->gridPos = convertRawPosToVec2(caret->rawPos,
-	                                     (u32)screen.sizeInGlyphs.w);
 }
 
 inline void canonicalisePosToBuffer(i32 *pos, TextBuffer buffer) {
@@ -352,6 +336,13 @@ inline void canonicalisePosToBuffer(i32 *pos, TextBuffer buffer) {
 	}
 }
 
+inline void canonicaliseCaretPos(TextCaret *caret, TextBuffer buffer,
+                                          ScreenData screen) {
+
+	canonicalisePosToBuffer(&caret->rawPos, buffer);
+	caret->gridPos = convertRawPosToVec2(caret->rawPos,
+	                                     (i32)screen.sizeInGlyphs.w);
+}
 
 void processEventLoop(ProgramState *state) {
 	Input *input = &state->input;
@@ -378,8 +369,8 @@ void processEventLoop(ProgramState *state) {
 		if (event.type == SDL_MOUSEBUTTONDOWN) {
 			input->mouse = event.button;
 			// TODO: redo
-			//caret->gridPos.x = (u32)(input->mouse.x / fontSheet.glyphSize.w);
-			//caret->gridPos.y = (u32)(input->mouse.y / fontSheet.glyphSize.h);
+			//caret->gridPos.x = (i32)(input->mouse.x / fontSheet.glyphSize.w);
+			//caret->gridPos.y = (i32)(input->mouse.y / fontSheet.glyphSize.h);
 		}
 
 		// Extract key state
@@ -470,7 +461,7 @@ void processEventLoop(ProgramState *state) {
 						}
 
 						if (input->key.keysym.mod & KMOD_SHIFT) {
-							u32 offset = 0;
+							i32 offset = 0;
 							if (code >= 'a' && code <= 'z') offset = 'a' -'A';
 							else if (code == '`') offset = '`' - '~';
 							else if (code == '0') offset = '0' - ')';
@@ -578,13 +569,13 @@ int main(int argc, char* argv[]) {
 	screen->bytesPerPixel = 4;
 	// Allocate size for screen backbuffer
 	screen->backBuffer = pushSize(&state->arena,
-	                              (u32)screen->size.w * (u32)screen->size.h *
+	                              (i32)screen->size.w * (i32)screen->size.h *
 	                              screen->bytesPerPixel);
 
-	screen->sizeInGlyphs.w = (r32)((u32)(screen->size.w/fontSheet.glyphSize.w));
-	screen->sizeInGlyphs.h = (r32)((u32)(screen->size.h/fontSheet.glyphSize.h));
-	screen->sizeInGlyphs.w = 5.0f;
-	screen->sizeInGlyphs.h = 5.0f;
+	screen->sizeInGlyphs.w = (r32)((i32)(screen->size.w/fontSheet.glyphSize.w));
+	screen->sizeInGlyphs.h = (r32)((i32)(screen->size.h/fontSheet.glyphSize.h));
+	screen->sizeInGlyphs.w = 2.0f;
+	screen->sizeInGlyphs.h = 2.0f;
 
 	// Initialise caret
 	state->caret = pushStruct(&state->arena, TextCaret);
@@ -661,7 +652,7 @@ int main(int argc, char* argv[]) {
 
 					i32 lenToEndOfLine = (i32)screen->sizeInGlyphs.w -
 					                     (screenBufferIndex %
-					                     (u32)screen->sizeInGlyphs.w);
+					                     (i32)screen->sizeInGlyphs.w);
 
 					if (!((screenBufferIndex + lenToEndOfLine) > onScreenBuffer->size)) {
 						for (i32 i = 0; i < lenToEndOfLine; i++) {
@@ -685,7 +676,7 @@ int main(int argc, char* argv[]) {
 
 				if (textBuffer->memory[i+1] == 10) {
 					v2 pos = convertRawPosToVec2(caret->rawPos,
-					                             (u32)screen->sizeInGlyphs.w);
+					                             (i32)screen->sizeInGlyphs.w);
 					i32 lenToEndOfLine = (i32)screen->sizeInGlyphs.w -
 					                     (i32)pos.x;
 					caret->rawPos += (lenToEndOfLine);
