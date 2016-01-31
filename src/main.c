@@ -416,6 +416,13 @@ void processEventLoop(ProgramState *state) {
 			// TODO: Complete return key implementation
 			case SDLK_RETURN:
 				if (event.key.type == SDL_KEYDOWN) {
+
+					if (textBuffer->memory[textBuffer->pos] != 0) {
+						for (i32 i = textBuffer->size-2; i > textBuffer->pos; i--) {
+							textBuffer->memory[i] = textBuffer->memory[i-2];
+						}
+					}
+
 					// NOTE: Insert CR(12) LF(10) to indicate new line
 					textBuffer->memory[textBuffer->pos++] = 13;
 					textBuffer->memory[textBuffer->pos++] = 10;
@@ -497,32 +504,63 @@ void processEventLoop(ProgramState *state) {
 	}
 }
 
-void drawCharacter(ScreenData *screen, FontSheet *fontSheet, char input,
-                   v2 *onScreenPos, BmpHeaders *bmp, SDL_PixelFormat *format) {
+void drawCharacter(ScreenData *screen, FontSheet *fontSheet, v2 *onScreenPos,
+                   BmpHeaders *bmp, SDL_PixelFormat *format, char input) {
 	v2 charCoords = convertRawPosToVec2(input, fontSheet->glyphsPerRow);
 	Rect srcBmpRect = {0};
 	srcBmpRect.pos = mulV2(fontSheet->glyphSize, charCoords);
 	srcBmpRect.pos.x += fontSheet->paddingWidth * charCoords.x;
 	srcBmpRect.size = fontSheet->glyphSize;
 
-	if (onScreenPos->x >= screen->sizeInGlyphs.w &&
-		onScreenPos->y >= screen->sizeInGlyphs.h) {
-		// Stop printing out chars, can't display anymore in buffer
-		return;
-	} else if (onScreenPos->x >= screen->sizeInGlyphs.w) {
-		onScreenPos->x = 0;
-		onScreenPos->y++;
-	}
-
-	if (onScreenPos->y > screen->sizeInGlyphs.h) {
-		return;
-	}
-
 	Rect destBmpRect = {0};
-	destBmpRect.pos = mulV2(*onScreenPos, fontSheet->glyphSize);
+	destBmpRect.pos = *onScreenPos;
 	destBmpRect.size = srcBmpRect.size;
 	drawBitmap(srcBmpRect, destBmpRect, bmp->data, *bmp->fileHeader,
 	           *bmp->bitmapHeader, screen, format);
+}
+
+void drawString(ScreenData *screen, FontSheet *fontSheet, v2 *onScreenPos,
+                BmpHeaders *bmp, SDL_PixelFormat *format, char* string, i32 stringLen) {
+	// NOTE: String length must be inclusive of null terminator at end
+	assert(string[stringLen-1] == 0);
+	for (i32 i = 0; i < stringLen; i++) {
+		drawCharacter(screen, fontSheet, onScreenPos, bmp, format, string[i]);
+		onScreenPos->x += fontSheet->glyphSize.w;
+	}
+}
+
+void advanceCharacterPos(ScreenData *screen, v2 glyphSize, v2 *onScreenPos) {
+	i32 maxX = (i32)screen->sizeInGlyphs.w * (i32)glyphSize.w;
+	i32 maxY = (i32)screen->sizeInGlyphs.h * (i32)glyphSize.h;
+	
+	onScreenPos->x += glyphSize.w;
+
+	if (onScreenPos->x >= maxX &&
+		onScreenPos->y >= maxY) {
+		// Stop printing out chars, can't display anymore in buffer
+		return;
+	} else if (onScreenPos->x >= maxX) {
+		onScreenPos->x = 0;
+		onScreenPos->y += glyphSize.h;
+	}
+
+	if (onScreenPos->y > maxY) {
+		return;
+	}
+}
+
+i32 tx_strlen(char *string) {
+	i32 i = 0;
+	i32 result = 0;
+
+	while (string[i++] != 0) {
+		result++;
+	}
+
+	// Include null-terminator as part of length
+	result++;
+
+	return result;
 }
 
 int main(int argc, char* argv[]) {
@@ -576,8 +614,8 @@ int main(int argc, char* argv[]) {
 
 	screen->sizeInGlyphs.w = (r32)((i32)(screen->size.w/fontSheet.glyphSize.w));
 	screen->sizeInGlyphs.h = (r32)((i32)(screen->size.h/fontSheet.glyphSize.h));
-	screen->sizeInGlyphs.w = 5.0f;
-	screen->sizeInGlyphs.h = 5.0f;
+	//screen->sizeInGlyphs.w = 3.0f;
+	//screen->sizeInGlyphs.h = 3.0f;
 
 	// Initialise caret
 	state->caret = pushStruct(&state->arena, TextCaret);
@@ -600,7 +638,6 @@ int main(int argc, char* argv[]) {
 	                   (i32)screen->sizeInGlyphs.h;
 	textBuffer->memory = pushSize(&state->arena, textBuffer->size);
 	textBuffer->pos = 0;
-
 
 	// SDL Initialisation
 	SDL_Window *win = SDL_CreateWindow("Text Editor", SDL_WINDOWPOS_UNDEFINED,
@@ -640,6 +677,10 @@ int main(int argc, char* argv[]) {
 			pos = textBuffer->pos;
 			printf("textBuffer->pos: %d\n", textBuffer->pos);
 		}
+
+		v2 DEBUG_onScreenPos = (v2){10, 10};
+		char *str = "this is a test";
+		drawString(screen, &fontSheet, &DEBUG_onScreenPos, &bmp, format, str, tx_strlen(str));
 
 		canonicalisePosToBuffer(&textBuffer->pos, *state->buffer);
 		// Convert text buffer to onscreen buffer
@@ -697,9 +738,9 @@ int main(int argc, char* argv[]) {
 		for (i32 i = 0; i < onScreenBuffer->size; i++) {
 			u32 input = onScreenBuffer->memory[i];
 			if (input >= SDLK_SPACE && input <= '~') {
-				drawCharacter(screen, &fontSheet, input, &onScreenPos, &bmp, format);
+				drawCharacter(screen, &fontSheet, &onScreenPos, &bmp, format, input);
+				advanceCharacterPos(screen, fontSheet.glyphSize, &onScreenPos);
 			}
-			onScreenPos.x++;
 		}
 
 		// Draw screen caret
