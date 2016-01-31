@@ -206,7 +206,7 @@ void *pushSize(MemoryArena *arena, u32 size) {
 	return(result);
 }
 
-void DrawRectangle (Rect rect, u32 pixel_color,
+void drawRectangle (Rect rect, u32 pixel_color,
                              ScreenData *screen) {
 	assert(screen);
 
@@ -520,12 +520,25 @@ void drawCharacter(ScreenData *screen, FontSheet *fontSheet, v2 *onScreenPos,
 }
 
 void drawString(ScreenData *screen, FontSheet *fontSheet, v2 *onScreenPos,
-                BmpHeaders *bmp, SDL_PixelFormat *format, char* string, i32 stringLen) {
+                BmpHeaders *bmp, SDL_PixelFormat *format, char* string,
+                i32 stringLen) {
 	// NOTE: String length must be inclusive of null terminator at end
 	assert(string[stringLen-1] == 0);
 	for (i32 i = 0; i < stringLen; i++) {
 		drawCharacter(screen, fontSheet, onScreenPos, bmp, format, string[i]);
 		onScreenPos->x += fontSheet->glyphSize.w;
+	}
+}
+
+void drawStringArr(ScreenData *screen, FontSheet *fontSheet, v2 *onScreenPos,
+                BmpHeaders *bmp, SDL_PixelFormat *format, char *string[],
+                i32 stringLen[], i32 numStrings) {
+
+	r32 originalXPos = onScreenPos->x;
+	for (i32 i = 0; i < numStrings; i++) {
+		drawString(screen, fontSheet, onScreenPos, bmp, format, string[i], stringLen[i]);
+		onScreenPos->y += fontSheet->glyphSize.h;
+		onScreenPos->x = originalXPos;
 	}
 }
 
@@ -561,6 +574,22 @@ i32 tx_strlen(char *string) {
 	result++;
 
 	return result;
+}
+
+void DEBUG_renderText(ScreenData *screen, FontSheet *fontSheet,
+                      BmpHeaders *bmp, SDL_PixelFormat format) {
+
+	v2 DEBUG_onScreenPos = (v2){screen->size.w - 100, 10};
+	char *DEBUG_str[] = {"DEBUG",
+	                     "TEST"};
+	i32 DEBUG_strLen[2];
+
+	for (i32 i = 0; i < 2; i++) {
+		DEBUG_strLen[i] = tx_strlen(DEBUG_str[i]);
+	}
+
+	drawStringArr(screen, fontSheet, &DEBUG_onScreenPos, bmp, &format,
+	              DEBUG_str, DEBUG_strLen, 2);
 }
 
 int main(int argc, char* argv[]) {
@@ -678,10 +707,6 @@ int main(int argc, char* argv[]) {
 			printf("textBuffer->pos: %d\n", textBuffer->pos);
 		}
 
-		v2 DEBUG_onScreenPos = (v2){10, 10};
-		char *str = "this is a test";
-		drawString(screen, &fontSheet, &DEBUG_onScreenPos, &bmp, format, str, tx_strlen(str));
-
 		canonicalisePosToBuffer(&textBuffer->pos, *state->buffer);
 		// Convert text buffer to onscreen buffer
 		assert(onScreenBuffer->size <= textBuffer->size);
@@ -750,7 +775,7 @@ int main(int argc, char* argv[]) {
 		caret->rect.pos.x = caret->gridPos.x * fontSheet.glyphSize.w;
 		caret->rect.pos.y = caret->gridPos.y * fontSheet.glyphSize.h;
 
-		DrawRectangle(caret->rect, caretColor, screen);
+		drawRectangle(caret->rect, caretColor, screen);
 
 		// Draw grid line
 		//u32 lineThickness = 1;
@@ -758,15 +783,16 @@ int main(int argc, char* argv[]) {
 		//for (int x = 0; x < screen->sizeInGlyphs.w; x++) {
 		//	Rect verticalLine = {x * fontSheet.glyphSize.w, 0, lineThickness,
 		//	                     screen->size.h};
-		//	DrawRectangle(verticalLine, gridColour, screen);
+		//	drawRectangle(verticalLine, gridColour, screen);
 		//}
 
 		//for (int y = 0; y < screen->sizeInGlyphs.h; y++) {
 		//	Rect horizontalLine = {0, y * fontSheet.glyphSize.h,
 		//	                       screen->size.w, lineThickness};
-		//	DrawRectangle(horizontalLine, gridColour, screen);
+		//	drawRectangle(horizontalLine, gridColour, screen);
 		//}
 
+		DEBUG_renderText(screen, &fontSheet, &bmp, *format);
 
 		SDL_UpdateTexture(screenTex, NULL, screen->backBuffer,
 		                  (i32)screen->size.w*sizeof(i32));
