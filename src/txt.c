@@ -3,194 +3,12 @@
 #include <SDL.h>
 #include <Windows.h>
 
-#define TRUE 1
-#define FALSE 0
-
-#define Kilobytes(Value) ((Value)*1024LL)
-#define Megabytes(Value) (Kilobytes(Value)*1024LL)
-#define Gigabytes(Value) (Megabytes(Value)*1024LL)
-#define Terabytes(Value) (Gigabytes(Value)*1024LL)
-
-#define internal static
-#define globalVariable static
-#define inline __inline
-
-// TODO: Split into platform layer and independant layer
-
-typedef int8_t i8;
-typedef int16_t i16;
-typedef int32_t i32;
-typedef int64_t i64;
-typedef i32 b32;
-
-typedef uint8_t u8;
-typedef uint16_t u16;
-typedef uint32_t u32;
-typedef uint64_t u64;
-
-typedef float r32;
-typedef double r64;
+#include "txt.h"
+#include "txt_math.h"
 
 globalVariable b32 globalRunning = TRUE;
 
-typedef struct v2 {
-	union {
-		r32 x;
-		r32 w;
-	};
-	union {
-		r32 y;
-		r32 h;
-	};
-} v2;
-
-typedef struct Rect {
-	v2 pos;
-	v2 size;
-} Rect;
-
-
-inline v2 addV2(v2 a, v2 b) {
-	v2 result;
-	result.x = a.x + b.x;
-	result.y = a.y + b.y;
-	return result;
-}
-
-inline v2 subV2(v2 a, v2 b) {
-	v2 result;
-	result.x = a.x - b.x;
-	result.y = a.y - b.y;
-	return result;
-}
-
-inline v2 mulV2(v2 a, v2 b) {
-	v2 result;
-	result.x = a.x * b.x;
-	result.y = a.y * b.y;
-	return result;
-}
-
-inline v2 convertRawPosToVec2(u32 pos, u32 width) {
-	v2 result = {0};
-	result.x = (r32)(pos % width);
-	result.y = (r32)(pos / width);
-	return result;
-}
-
-inline u32 convertVec2ToRawPos(v2 pos, u32 width) {
-	u32 result;
-	result = (u32)((r32)width * pos.y);
-	result += (u32)pos.x;
-	return result;
-}
-
-
-typedef struct FileReadResult {
-	void *contents;
-	u32 size;
-} FileReadResult;
-
-typedef struct ScreenData {
-	u32 *backBuffer;
-	u32 bytesPerPixel;
-
-	v2 size;
-	v2 sizeInGlyphs;
-} ScreenData;
-
-typedef struct TextCaret {
-	Rect rect;
-	v2 gridPos;
-	i32 rawPos;
-} TextCaret;
-
-typedef union Input {
-	SDL_KeyboardEvent keys[7];
-	struct {
-		SDL_KeyboardEvent escape;
-		SDL_KeyboardEvent arrowUp;
-		SDL_KeyboardEvent arrowDown;
-		SDL_KeyboardEvent arrowLeft;
-		SDL_KeyboardEvent arrowRight;
-		SDL_KeyboardEvent key;
-		SDL_MouseButtonEvent mouse;
-	};
-} Input;
-
-typedef struct FontSheet {
-	v2 glyphSize;
-	u32 glyphsPerRow;
-	u32 paddingWidth;
-} FontSheet;
-
-typedef struct MemoryArena {
-	u32 size;
-	u8 *base;
-	u32 used;
-} MemoryArena;
-
-typedef struct TextBuffer {
-	char *memory;
-	i32 pos;
-	i32 size;
-	i32 lastCharPos;
-} TextBuffer;
-
-typedef struct ProgramMemory {
-	void *block;
-	u32 size;
-	b32 initialised;
-} ProgramMemory;
-
-typedef struct ProgramState {
-	ScreenData *screen;
-	TextBuffer *buffer;
-	TextBuffer *onScreenBuffer;
-	TextCaret *caret;
-	FontSheet fontSheet;
-	MemoryArena arena;
-	Input input;
-} ProgramState;
-
-#pragma pack(push)
-#pragma pack(2)
-typedef struct BmpFileHeader {
-	u16 fileType;     /* File type, always 4D42h ("BM") */
-	u32 fileSize;     /* Size of the file in bytes */
-	u16 reserved1;    /* Always 0 */
-	u16 reserved2;    /* Always 0 */
-	u32 bitmapOffset; /* Starting position of image data in bytes */
-} BmpFileHeader;
-
-typedef struct BmpBitmapHeader {
-	u32 size;            /* Size of this header in bytes */
-	i32 width;           /* Image width in pixels */
-	i32 height;          /* Image height in pixels */
-	u16 planes;          /* Number of color planes */
-	u16 bitsPerPixel;    /* Number of bits per pixel */
-	u32 compression;     /* Compression methods used */
-	u32 sizeOfBitmap;    /* Size of bitmap in bytes */
-	i32 horzResolution;  /* Horizontal resolution in pixels per meter */
-	i32 vertResolution;  /* Vertical resolution in pixels per meter */
-	u16 colorsUsed;      /* Number of colors in the image */
-	u32 colorsImportant; /* Minimum number of important colors */
-} BmpBitmapHeader;
-
-typedef struct BmpBitfieldMasks {
-	u32 redMask;         /* Mask identifying bits of red component */
-	u32 greenMask;       /* Mask identifying bits of green component */
-	u32 blueMask;        /* Mask identifying bits of blue component */
-} BmpBitfieldMasks;
-#pragma pack(pop)
-
-typedef struct BmpHeaders {
-	BmpFileHeader *fileHeader;
-	BmpBitmapHeader *bitmapHeader;
-	u32 *data;
-} BmpHeaders;
-
- void initialiseArena(MemoryArena *arena, u32 size, u8 *base) {
+void initialiseArena(MemoryArena *arena, u32 size, u8 *base) {
 	arena->size = size;
 	arena->base = base;
 	arena->used = 0;
@@ -384,11 +202,33 @@ void processEventLoop(ProgramState *state) {
 			case SDLK_UP:
 				input->arrowUp = event.key;
 				if (input->arrowUp.type == SDL_KEYDOWN) {
-					// NOTE: Special case where if we are at the top of the
-					// document, pressing up should not move the caret
-					if (textBuffer->pos - (i32)screen->sizeInGlyphs.w >= 0) {
-						textBuffer->pos -= (i32)screen->sizeInGlyphs.w;
+					i32 bufferMoveAmount = 0;
+
+					i32 numCharsToStartOfLine = textBuffer->pos %
+					                            (i32)screen->sizeInGlyphs.w;
+					i32 prevLineLen = 0;
+					i32 prevLineIndex = textBuffer->pos;
+					prevLineIndex -= numCharsToStartOfLine;
+					
+					i32 limiter = prevLineIndex - (i32)screen->sizeInGlyphs.w;
+					if (limiter <= 0) limiter = 0;
+
+					// NOTE: Count backwards from current position until we hit
+					// CRLF or buffer move amount is length of a full line
+					for (i32 i = prevLineIndex; i > limiter; i--) {
+						if (textBuffer->memory[i] == 10 &&
+						    (i-1) >= 0) {
+							if (textBuffer->memory[i-1] == 13) {
+								prevLineLen += 2;
+							}
+						} else {
+							prevLineLen++;
+						}
 					}
+
+					bufferMoveAmount = numCharsToStartOfLine + 1;
+					//textBuffer->pos -= (i32)screen->sizeInGlyphs.w;
+					textBuffer->pos -= bufferMoveAmount;
 				}
 				break;
 
@@ -447,7 +287,7 @@ void processEventLoop(ProgramState *state) {
 								shiftAmount = 2;
 							} else {
 								// TODO: An unmatched CR/LF has been found
-								assert(true);
+								assert(TRUE);
 							}
 						} else {
 							shiftAmount = 1;
@@ -643,8 +483,8 @@ int main(int argc, char* argv[]) {
 
 	screen->sizeInGlyphs.w = (r32)((i32)(screen->size.w/fontSheet.glyphSize.w));
 	screen->sizeInGlyphs.h = (r32)((i32)(screen->size.h/fontSheet.glyphSize.h));
-	//screen->sizeInGlyphs.w = 3.0f;
-	//screen->sizeInGlyphs.h = 3.0f;
+	screen->sizeInGlyphs.w = 5.0f;
+	screen->sizeInGlyphs.h = 5.0f;
 
 	// Initialise caret
 	state->caret = pushStruct(&state->arena, TextCaret);
@@ -701,6 +541,7 @@ int main(int argc, char* argv[]) {
 
 		processEventLoop(state);
 
+		// DEBUG TEXT
 		static i32 pos;
 		if (pos != textBuffer->pos) {
 			pos = textBuffer->pos;
