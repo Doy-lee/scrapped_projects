@@ -116,26 +116,17 @@ i32 main(i32 argc, const char *argv[]) {
 #define MAX_SWITCH_LENGTH 32508
 	// Max switch is 32768 - MAX_PATH as derived from WINAPI
 	char cmdArgs[MAX_SWITCH_LENGTH] = { 0 };
-	char *cmdArgsFormat = "%s %s %s ";
+	char *cmdArgsFormat = "%s %s %s";
 	StringCchPrintf(cmdArgs, MAX_SWITCH_LENGTH, cmdArgsFormat, "7za", switches, absOutput);
-	                
 
 	// Append input files to command line
+	char *inputFileFormat = "%s \"%s\"";
 	for (i32 i = 0; i < numFilesToBackup; i++) {
-		if (SUCCEEDED(StringCchCat(cmdArgs, MAX_PATH, filesToSync[i]))) {
-			// If appended last file to string, don't add whitespace (trailing)
-			if (i + 1 < numFilesToBackup) {
-				if (SUCCEEDED(StringCchCat(cmdArgs, MAX_PATH, " "))) {
-				} else {
-					return FALSE;
-				}
-			}
-		} else {
-			return FALSE;
-		}
+		StringCchPrintf(cmdArgs, MAX_PATH, inputFileFormat, cmdArgs, filesToSync[i]);
 	}
 
 	// Execute the 7zip command
+	printf("%s\n", cmdArgs);
 	
 	STARTUPINFO startInfo = { 0 };
 	PROCESS_INFORMATION procInfo = { 0 };
