@@ -19,6 +19,16 @@
 typedef int32_t i32;
 typedef i32 b32;
 
+#define MAX_TOKEN_LEN 20
+//#define 7Z_COMPRESSION 0
+#define MAX_SWITCH_LENGTH 32508
+
+typedef struct CFGToken {
+	i32 option;
+	char *value;
+	i32 valueLen;
+} CFGToken;
+
 char *getDirectoryName(char *absPath) {
 	size_t absPathSize = 0;
 	if (SUCCEEDED(StringCchLength(absPath, MAX_PATH, &absPathSize))) {
@@ -65,7 +75,7 @@ i32 main(i32 argc, const char *argv[]) {
 	                     FILE_ATTRIBUTE_NORMAL,
 	                     NULL);
 
-	if(GetLastError() == ERROR_ALREADY_EXISTS) {
+	if (GetLastError() == ERROR_ALREADY_EXISTS) {
 		// Parse existing cfg file
 		DWORD cfgSize = GetFileSize(cfgFile, NULL);
 		DWORD bytesRead = 0;
@@ -74,12 +84,84 @@ i32 main(i32 argc, const char *argv[]) {
 		assert(cfgSize <= Megabytes(1));
 
 		char *cfgBuffer = { 0 };
-		cfgBuffer = (char *) malloc(sizeof(char) * cfgSize);
+		cfgBuffer = (char *) calloc(cfgSize, sizeof(char));
 		ReadFile(cfgFile, cfgBuffer, cfgSize, &bytesRead, NULL);
 		assert(cfgSize == bytesRead);
 
 		// TODO: File is in memory, start parsing
+		// TODO: Create a struct that contains the config option and value to
+		// group the data together
+		i32 initialNumOfTokens = 10;
+		i32 optionIndex = 0;
+		CFGToken *options = (CFGToken *)
+		                    calloc(initialNumOfTokens, sizeof(CFGToken));
 
+		char *cfgLine = NULL;
+		b32 ignoreLine = FALSE;
+		for (i32 i = 0; i < (i32)cfgSize; i++) {
+			if (ignoreLine) {
+				// Check for CRLF which resets ignoreLine flag
+				if (cfgBuffer[i] == '\n') {
+					if (cfgBuffer[i-1] == '\r') {
+						// CRLF found
+						ignoreLine = FALSE;
+					}
+				}
+			} else {
+				// Check if # found, if so, start ignoring line
+				if (cfgBuffer[i] == '#') {
+					ignoreLine = TRUE;
+				} else if (cfgBuffer[i] == '[') {
+					// Extract config token
+					char tokenString[MAX_TOKEN_LEN] = { 0 };
+					i32 strIndex = 0;
+					b32 syntaxValidToken = FALSE;
+
+					// Copy token string to memory 
+					while (cfgBuffer[++i] != ']' && i < (i32)cfgSize) {
+						tokenString[strIndex++] = cfgBuffer[i];
+					}
+					tokenString[strIndex] = '\0';
+
+					if (cfgBuffer[++i] == '=' && 
+						cfgBuffer[i-1] == ']' && 
+						i < (i32)cfgSize) {
+						syntaxValidToken = TRUE;
+					}
+					
+					char tokenValue[MAX_SWITCH_LENGTH] = { 0 };
+					i32 valIndex = 0;
+					// Extract config value
+					if (syntaxValidToken) {
+						while (cfgBuffer[++i] != '\n' && i < (i32)cfgSize) {
+							tokenValue[valIndex++] = cfgBuffer[i];
+						}
+
+						// NOTE: CRLF is 2 bytes. We check for the LF part
+						// first. Then check that the previosu character is CR.
+						// This means we copy over the CR whilst extracting the
+						// token value. This method prevents array out of bounds
+						// checking if we check for CR first then LF.
+						if (cfgBuffer[i] == '\n') {
+							tokenValue[--valIndex] = '\0';
+						}
+
+						// Store token into memory
+						// NOTE: valIndex as a side effect tracks the length of
+						// the token
+						options[optionIndex].valueLen = valIndex;
+						options[optionIndex].value = (char *) calloc(valIndex, sizeof(char));
+						memcpy_s(options[optionIndex].value, valIndex,
+						         tokenValue, valIndex);
+
+						optionIndex++;
+						// TODO: Realloc memory for more tokens 
+						assert(optionIndex <= initialNumOfTokens);
+					}
+				}
+			}
+
+		}
 		free(cfgBuffer);
 	} else {
 		// Create one
@@ -188,7 +270,6 @@ i32 main(i32 argc, const char *argv[]) {
 	char *cmdFormat = "%s%s ";
 	StringCchPrintf(cmd, MAX_PATH, cmdFormat, programDir, zipExeName);
 
-#define MAX_SWITCH_LENGTH 32508
 	// Max switch is 32768 - MAX_PATH as derived from WINAPI
 	char cmdArgs[MAX_SWITCH_LENGTH] = { 0 };
 	char *cmdArgsFormat = "%s %s %s";
