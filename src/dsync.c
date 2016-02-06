@@ -16,6 +16,8 @@
 #define Gigabytes(Value) (Megabytes(Value)*1024LL)
 #define Terabytes(Value) (Gigabytes(Value)*1024LL)
 
+#define inline __inline
+
 typedef int32_t i32;
 typedef i32 b32;
 
@@ -38,8 +40,60 @@ typedef struct CFGToken {
 } CFGToken;
 
 typedef struct ProgramState {
-	char *compression;
+	char **backupLocations;
 } ProgramState;
+
+inline i32 trimAroundStr(char *src, i32 srcLen, const char charsToTrim[],
+                         const i32 charsToTrimSize) {
+
+	// TODO: Implement early exit? Check if first/last char has any of the chars
+	// we want to trim, if not, then early exit?
+	assert(srcLen > 0 && charsToTrimSize > 0);
+
+	// srcLen-1 as arrays start from 0, if we want to look at last char
+	i32 index = srcLen-1;
+	b32 matched = FALSE;
+	i32 newLen = 0;
+
+	// Starting from EOL if any chars match for trimming, remove and update
+	// string length
+	for (i32 i = index; i > 0; i--) {
+		for (i32 j = 0; j < charsToTrimSize; j++) {
+			if (src[i] == charsToTrim[j]) {
+				src[i] = 0;
+				matched = TRUE;
+				break;
+			}
+		}
+		newLen = i + 1;
+		if (!matched) break;
+		else matched = FALSE;
+	}
+
+	matched = FALSE;
+	// Count the number of leading characters to remove
+	i32 numLeading = 0;
+	for (i32 i = 0; i < newLen; i++) {
+		for (i32 j = 0; j < charsToTrimSize; j++) {
+			if (src[i] == charsToTrim[j]) {
+				numLeading++;
+				matched = TRUE;
+				break;
+			}
+		}
+		if (!matched) break;
+		else matched = FALSE;
+	}
+
+	if (numLeading > 0) {
+		// Shift all chars back how many trash leading elements there are
+		for (i32 i = 0; i < newLen; i++) {
+			src[i] = src[i + numLeading];
+		}
+		newLen -= numLeading;
+	}
+	return newLen;
+}
 
 CFGToken *parseCFGFile(char *cfgBuffer, i32 cfgSize, i32 *numTokens) {
 	const char *optionStrings[NUM_TYPES] = { 0 };
@@ -75,15 +129,15 @@ CFGToken *parseCFGFile(char *cfgBuffer, i32 cfgSize, i32 *numTokens) {
 				i32 strIndex = 0;
 				b32 syntaxValidToken = FALSE;
 
-				// Copy token string to memory 
+				// Copy token string to memory
 				while (cfgBuffer[++i] != ']' && i < (i32)cfgSize) {
 					tokenString[strIndex++] = cfgBuffer[i];
 				}
 				tokenString[strIndex] = '\0';
 
 				if (cfgBuffer[++i] == '=' &&
-						cfgBuffer[i-1] == ']' &&
-						i < (i32)cfgSize) {
+				    cfgBuffer[i-1] == ']' &&
+				    i < (i32)cfgSize) {
 					syntaxValidToken = TRUE;
 				}
 
@@ -115,11 +169,16 @@ CFGToken *parseCFGFile(char *cfgBuffer, i32 cfgSize, i32 *numTokens) {
 
 							// NOTE: valIndex as a side effect tracks the length
 							// of the token
-							options[optionIndex].valueLen = valIndex;
+							i32 tokenLen = valIndex;
+							const char charsToTrim[] = {'"', ' '};
+							tokenLen = trimAroundStr(tokenValue, tokenLen,
+							                         charsToTrim, 2);
 
-							options[optionIndex].value = (char *) calloc(valIndex, sizeof(char));
-							memcpy_s(options[optionIndex].value, valIndex,
-									tokenValue, valIndex);
+							options[optionIndex].valueLen = tokenLen;
+							options[optionIndex].value =
+							                 (char *) calloc(tokenLen, sizeof(char));
+							memcpy_s(options[optionIndex].value, tokenLen,
+							         tokenValue, tokenLen);
 
 							optionIndex++;
 							// TODO: Realloc memory for more tokens
@@ -159,10 +218,23 @@ i32 main(i32 argc, const char *argv[]) {
 
 #if DSYNC_DEBUG
 	const char *backupLocA = "F:\\";
+
+	//// DEBUG TEST ////
+	const char trim[] = {'"', ' '};
+	char brokenString_1[] = "       F:\\test        ";
+	char brokenString_2[] = " C:\\   \"   ";
+
+	trimAroundStr(brokenString_1, 22, trim, 2);
+	assert(strcmp(brokenString_1, "F:\\test") == 0);
+
+	trimAroundStr(brokenString_2, 11, trim, 2);
+	assert(strcmp(brokenString_2, "C:\\") == 0);
 #else
 	const char *backupLocA = "F:\\workspace\\GoogleDrive\\dsync\\";
 #endif
 	const char *backupLocB = "F:\\workspace\\Dropbox\\Apps\\dsync\\";
+
+	ProgramState state = { 0 };
 
 	// Load CFG file
 	char programDir[MAX_PATH] = { 0 };
@@ -202,6 +274,13 @@ i32 main(i32 argc, const char *argv[]) {
 		CFGToken *cfgOptions = { 0 };
 		i32 numOptions = 0;
 		cfgOptions = parseCFGFile(cfgBuffer, cfgSize, &numOptions);
+
+		state.backupLocations = malloc(sizeof(char*) * numOptions);
+		
+		for (i32 i = 0; i < numOptions; i++) {
+			if (cfgOptions->option = (enum CFGTypes)BACKUP_LOC) {
+			}
+		}
 
 		free(cfgOptions);
 		free(cfgBuffer);
