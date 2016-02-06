@@ -23,11 +23,122 @@ typedef i32 b32;
 //#define 7Z_COMPRESSION 0
 #define MAX_SWITCH_LENGTH 32508
 
+enum CFGTypes {
+	INVALID = 0,
+	COMPRESSION,
+	BACKUP_LOC,
+	NUM_TYPES
+};
+
 typedef struct CFGToken {
-	i32 option;
+	enum CFGTypes option;
 	char *value;
 	i32 valueLen;
+	b32 initialised;
 } CFGToken;
+
+typedef struct ProgramState {
+	char *compression;
+} ProgramState;
+
+CFGToken *parseCFGFile(char *cfgBuffer, i32 cfgSize, i32 *numTokens) {
+	const char *optionStrings[NUM_TYPES] = { 0 };
+	optionStrings[(enum CFGTypes)COMPRESSION] = "7Z_COMPRESSION";
+	optionStrings[(enum CFGTypes)BACKUP_LOC] = "BACKUP_LOCATION";
+
+	// TODO: File is in memory, start parsing
+	// TODO: Create a struct that contains the config option and value to
+	// group the data together
+	i32 initialNumOfTokens = 10;
+	i32 optionIndex = 0;
+	CFGToken *options = (CFGToken *)
+	                    calloc(initialNumOfTokens, sizeof(CFGToken));
+
+	char *cfgLine = NULL;
+	b32 ignoreLine = FALSE;
+	for (i32 i = 0; i < (i32)cfgSize; i++) {
+		if (ignoreLine) {
+			// Check for CRLF which resets ignoreLine flag
+			if (cfgBuffer[i] == '\n') {
+				if (cfgBuffer[i-1] == '\r') {
+					// CRLF found
+					ignoreLine = FALSE;
+				}
+			}
+		} else {
+			// Check if # found, if so, start ignoring line
+			if (cfgBuffer[i] == '#') {
+				ignoreLine = TRUE;
+			} else if (cfgBuffer[i] == '[') {
+				// Extract config token
+				char tokenString[MAX_TOKEN_LEN] = { 0 };
+				i32 strIndex = 0;
+				b32 syntaxValidToken = FALSE;
+
+				// Copy token string to memory 
+				while (cfgBuffer[++i] != ']' && i < (i32)cfgSize) {
+					tokenString[strIndex++] = cfgBuffer[i];
+				}
+				tokenString[strIndex] = '\0';
+
+				if (cfgBuffer[++i] == '=' &&
+						cfgBuffer[i-1] == ']' &&
+						i < (i32)cfgSize) {
+					syntaxValidToken = TRUE;
+				}
+
+				char tokenValue[MAX_SWITCH_LENGTH] = { 0 };
+				i32 valIndex = 0;
+				// Extract config value
+				if (syntaxValidToken) {
+					while (cfgBuffer[++i] != '\n' && i < (i32)cfgSize) {
+						tokenValue[valIndex++] = cfgBuffer[i];
+					}
+
+					// NOTE: CRLF is 2 bytes. We check for the LF part
+					// first. Then check that the previosu character is CR.
+					// This means we copy over the CR whilst extracting the
+					// token value. This method prevents array out of bounds
+					// checking if we check for CR first then LF.
+					if (cfgBuffer[i] == '\n') {
+						tokenValue[--valIndex] = '\0';
+					}
+
+					// Store token into memory
+					// TODO: We force CFGTypes to start from 1, is having an 
+					// invalid option a good idea?
+					for(enum CFGTypes i = 1; i < (enum CFGTypes)NUM_TYPES; 
+					    i++) {
+						if (strcmp(tokenString, optionStrings[i]) == 0) {
+
+							options[optionIndex].option = i;
+
+							// NOTE: valIndex as a side effect tracks the length
+							// of the token
+							options[optionIndex].valueLen = valIndex;
+
+							options[optionIndex].value = (char *) calloc(valIndex, sizeof(char));
+							memcpy_s(options[optionIndex].value, valIndex,
+									tokenValue, valIndex);
+
+							optionIndex++;
+							// TODO: Realloc memory for more tokens
+							assert(optionIndex <= initialNumOfTokens);
+							break;
+						}
+					}
+
+
+				}
+			}
+		}
+
+	}
+
+	// NOTE: optionIndex as a side effect tracks the number of parsed options
+	*numTokens = optionIndex;
+	return options;
+}
 
 char *getDirectoryName(char *absPath) {
 	size_t absPathSize = 0;
@@ -88,80 +199,11 @@ i32 main(i32 argc, const char *argv[]) {
 		ReadFile(cfgFile, cfgBuffer, cfgSize, &bytesRead, NULL);
 		assert(cfgSize == bytesRead);
 
-		// TODO: File is in memory, start parsing
-		// TODO: Create a struct that contains the config option and value to
-		// group the data together
-		i32 initialNumOfTokens = 10;
-		i32 optionIndex = 0;
-		CFGToken *options = (CFGToken *)
-		                    calloc(initialNumOfTokens, sizeof(CFGToken));
+		CFGToken *cfgOptions = { 0 };
+		i32 numOptions = 0;
+		cfgOptions = parseCFGFile(cfgBuffer, cfgSize, &numOptions);
 
-		char *cfgLine = NULL;
-		b32 ignoreLine = FALSE;
-		for (i32 i = 0; i < (i32)cfgSize; i++) {
-			if (ignoreLine) {
-				// Check for CRLF which resets ignoreLine flag
-				if (cfgBuffer[i] == '\n') {
-					if (cfgBuffer[i-1] == '\r') {
-						// CRLF found
-						ignoreLine = FALSE;
-					}
-				}
-			} else {
-				// Check if # found, if so, start ignoring line
-				if (cfgBuffer[i] == '#') {
-					ignoreLine = TRUE;
-				} else if (cfgBuffer[i] == '[') {
-					// Extract config token
-					char tokenString[MAX_TOKEN_LEN] = { 0 };
-					i32 strIndex = 0;
-					b32 syntaxValidToken = FALSE;
-
-					// Copy token string to memory 
-					while (cfgBuffer[++i] != ']' && i < (i32)cfgSize) {
-						tokenString[strIndex++] = cfgBuffer[i];
-					}
-					tokenString[strIndex] = '\0';
-
-					if (cfgBuffer[++i] == '=' && 
-						cfgBuffer[i-1] == ']' && 
-						i < (i32)cfgSize) {
-						syntaxValidToken = TRUE;
-					}
-					
-					char tokenValue[MAX_SWITCH_LENGTH] = { 0 };
-					i32 valIndex = 0;
-					// Extract config value
-					if (syntaxValidToken) {
-						while (cfgBuffer[++i] != '\n' && i < (i32)cfgSize) {
-							tokenValue[valIndex++] = cfgBuffer[i];
-						}
-
-						// NOTE: CRLF is 2 bytes. We check for the LF part
-						// first. Then check that the previosu character is CR.
-						// This means we copy over the CR whilst extracting the
-						// token value. This method prevents array out of bounds
-						// checking if we check for CR first then LF.
-						if (cfgBuffer[i] == '\n') {
-							tokenValue[--valIndex] = '\0';
-						}
-
-						// Store token into memory
-						// NOTE: valIndex as a side effect tracks the length of
-						// the token
-						options[optionIndex].valueLen = valIndex;
-						options[optionIndex].value = (char *) calloc(valIndex, sizeof(char));
-						memcpy_s(options[optionIndex].value, valIndex,
-						         tokenValue, valIndex);
-
-						optionIndex++;
-						// TODO: Realloc memory for more tokens 
-						assert(optionIndex <= initialNumOfTokens);
-					}
-				}
-			}
-
-		}
+		free(cfgOptions);
 		free(cfgBuffer);
 	} else {
 		// Create one
