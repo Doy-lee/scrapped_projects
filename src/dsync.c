@@ -96,61 +96,74 @@ CFGToken *parseCFGFile(char *cfgBuffer, i32 cfgSize, i32 *numTokens) {
 				}
 				tokenString[strIndex] = '\0';
 
-				if (cfgBuffer[++i] == '=' &&
-				    cfgBuffer[i-1] == ']' &&
-				    i < (i32)cfgSize) {
-					syntaxValidToken = TRUE;
+				// Check that each the token is closed using the ] delimiter and
+				// is followed directly by an equal sign
+				if (!(cfgBuffer[++i] == '=' &&
+				      cfgBuffer[i-1] == ']' &&
+				      i < (i32)cfgSize)) {
+					break;
 				}
 
-				char tokenValue[MAX_SWITCH_LENGTH] = { 0 };
+				char tokenValue[MAX_PATH] = { 0 };
 				i32 valIndex = 0;
 				// Extract config value
-				if (syntaxValidToken) {
-					while (cfgBuffer[++i] != '\n' && i < (i32)cfgSize) {
-						tokenValue[valIndex++] = cfgBuffer[i];
-					}
+				while (cfgBuffer[++i] != '\n' && i < (i32)cfgSize) {
+					tokenValue[valIndex++] = cfgBuffer[i];
+				}
 
-					// NOTE: CRLF is 2 bytes. We check for the LF part
-					// first. Then check that the previosu character is CR.
-					// This means we copy over the CR whilst extracting the
-					// token value. This method prevents array out of bounds
-					// checking if we check for CR first then LF.
-					if (cfgBuffer[i] == '\n') {
-						tokenValue[--valIndex] = '\0';
-					}
+				// NOTE: CRLF is 2 bytes. We check for the LF part
+				// first. Then check that the previosu character is CR.
+				// This means we copy over the CR whilst extracting the
+				// token value. This method prevents array out of bounds
+				// checking if we check for CR first then LF.
+				if (cfgBuffer[i] == '\n') {
+					tokenValue[--valIndex] = '\0';
+				}
 
-					// Store token into memory
-					// TODO: We force CFGTypes to start from 1, is having an
-					// invalid option a good idea?
-					for(enum CFGTypes i = 1; i < (enum CFGTypes)NUM_TYPES;
-					    i++) {
-						if (strcmp(tokenString, optionStrings[i]) == 0) {
+				// Store token into memory
+				// TODO: We force CFGTypes to start from 1, is having an
+				// invalid option a good idea?
+				for(enum CFGTypes i = 1; i < (enum CFGTypes)NUM_TYPES;
+						i++) {
+					if (strcmp(tokenString, optionStrings[i]) == 0) {
 
-							options[optionIndex].option = i;
+						options[optionIndex].option = i;
 
-							// NOTE: valIndex as a side effect tracks the length
-							// of the token not incl. null terminate
-							i32 tokenLen = valIndex;
-							const char charsToTrim[] = {'"', ' '};
-							tokenLen = trimAroundStr(tokenValue, tokenLen,
-							                         charsToTrim, 2);
+						// NOTE: valIndex as a side effect tracks the length
+						// of the token not incl. null terminate
+						i32 tokenLen = valIndex;
+						const char charsToTrim[] = {'"', ' '};
+						tokenLen = trimAroundStr(tokenValue, tokenLen,
+						                         charsToTrim, 2);
 
-							options[optionIndex].valueLen = tokenLen;
-							// NOTE: Allocate 1 extra byte for null-terminate
-							// Calloc zeros memory eg. null-term char is set
-							options[optionIndex].value =
-							                 (char *) calloc(tokenLen+1, sizeof(char));
-							memcpy_s(options[optionIndex].value, tokenLen+1,
-							         tokenValue, tokenLen);
+						// if token is a backup location; do some path checking
+						if (i == (enum CFGTypes)BACKUP_LOC) {
+							// Append a \ if not at end of string so Windows
+							// treats it as a path
+							if (tokenValue[tokenLen] != '\\') {
+								tokenValue[tokenLen++] = '\\';
+							}
 
-							optionIndex++;
-							// TODO: Realloc memory for more tokens
-							assert(optionIndex <= initialNumOfTokens);
-							break;
+							if(!PathIsDirectory(tokenValue)) {
+								printf("Error: Backup path not found omitting from program %s\n", tokenValue);
+								break;
+							}
 						}
+
+
+						options[optionIndex].valueLen = tokenLen;
+						// NOTE: Allocate 1 extra byte for null-terminate
+						// Calloc zeros memory eg. null-term char is set
+						options[optionIndex].value =
+							(char *) calloc(tokenLen+1, sizeof(char));
+						memcpy_s(options[optionIndex].value, tokenLen+1,
+						         tokenValue, tokenLen);
+
+						optionIndex++;
+						// TODO: Realloc memory for more tokens
+						assert(optionIndex <= initialNumOfTokens);
+						break;
 					}
-
-
 				}
 			}
 		}
