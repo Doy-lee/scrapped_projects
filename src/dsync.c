@@ -59,11 +59,51 @@ inline i32 trimAroundStr(char *src, i32 srcLen, const char charsToTrim[],
 	return newLen;
 }
 
-CFGToken *parseCFGFile(char *cfgBuffer, i32 cfgSize, i32 *numTokens) {
-	const char *optionStrings[NUM_TYPES] = { 0 };
+CFGToken generateTokenIfValid(char *tokenString, char *tokenValue, i32 tokenLen) {
+	const char *optionStrings[(enum CFGTypes)NUM_TYPES] = { 0 };
 	optionStrings[(enum CFGTypes)COMPRESSION] = "7Z_COMPRESSION";
 	optionStrings[(enum CFGTypes)BACKUP_LOC] = "BACKUP_LOCATION";
 
+	CFGToken result = { 0 };
+
+	b32 isValid = FALSE;
+	// TODO: We force CFGTypes to start from 1, is having an
+	// invalid option a good idea?
+	for (enum CFGTypes type = 1; type < (enum CFGTypes)NUM_TYPES; type++) {
+		if (strcmp(tokenString, optionStrings[type]) == 0) {
+			const char charsToTrim[] = {'"', ' '};
+			tokenLen = trimAroundStr(tokenValue, tokenLen,
+			                          charsToTrim, 2);
+
+			// if token is a backup location; do some path checking
+			if (type == (enum CFGTypes)BACKUP_LOC) {
+				// Append a \ if not at end of string so Windows
+				// treats it as a path
+				if (tokenValue[tokenLen] != '\\') {
+					tokenValue[tokenLen++] = '\\';
+				}
+
+				if(!PathIsDirectory(tokenValue)) {
+					printf("Error: Backup path not found omitting from program %s\n", tokenValue);
+					break;
+				}
+			}
+
+			// Apply values to token
+			result.option = type;
+			result.valueLen = tokenLen;
+
+			// NOTE: Allocate 1 extra byte for null-terminate
+			// Calloc zeros memory eg. null-term char is set
+			result.value = (char *) calloc(tokenLen+1, sizeof(char));
+			memcpy_s(result.value, tokenLen+1, tokenValue, tokenLen);
+		}
+	}
+
+	return result;
+}
+
+CFGToken *parseCFGFile(char *cfgBuffer, i32 cfgSize, i32 *numTokens) {
 	i32 initialNumOfTokens = 10;
 	i32 optionIndex = 0;
 	CFGToken *options = (CFGToken *)
@@ -104,9 +144,9 @@ CFGToken *parseCFGFile(char *cfgBuffer, i32 cfgSize, i32 *numTokens) {
 					break;
 				}
 
+				// Extract token value
 				char tokenValue[MAX_PATH] = { 0 };
 				i32 valIndex = 0;
-				// Extract config value
 				while (cfgBuffer[++i] != '\n' && i < (i32)cfgSize) {
 					tokenValue[valIndex++] = cfgBuffer[i];
 				}
@@ -120,50 +160,17 @@ CFGToken *parseCFGFile(char *cfgBuffer, i32 cfgSize, i32 *numTokens) {
 					tokenValue[--valIndex] = '\0';
 				}
 
-				// Store token into memory
-				// TODO: We force CFGTypes to start from 1, is having an
-				// invalid option a good idea?
-				for(enum CFGTypes i = 1; i < (enum CFGTypes)NUM_TYPES;
-						i++) {
-					if (strcmp(tokenString, optionStrings[i]) == 0) {
+				// NOTE: valIndex as a side effect tracks the length
+				// of the token not incl. null terminate
+				i32 tokenLen = valIndex;
 
-						options[optionIndex].option = i;
-
-						// NOTE: valIndex as a side effect tracks the length
-						// of the token not incl. null terminate
-						i32 tokenLen = valIndex;
-						const char charsToTrim[] = {'"', ' '};
-						tokenLen = trimAroundStr(tokenValue, tokenLen,
-						                         charsToTrim, 2);
-
-						// if token is a backup location; do some path checking
-						if (i == (enum CFGTypes)BACKUP_LOC) {
-							// Append a \ if not at end of string so Windows
-							// treats it as a path
-							if (tokenValue[tokenLen] != '\\') {
-								tokenValue[tokenLen++] = '\\';
-							}
-
-							if(!PathIsDirectory(tokenValue)) {
-								printf("Error: Backup path not found omitting from program %s\n", tokenValue);
-								break;
-							}
-						}
-
-
-						options[optionIndex].valueLen = tokenLen;
-						// NOTE: Allocate 1 extra byte for null-terminate
-						// Calloc zeros memory eg. null-term char is set
-						options[optionIndex].value =
-							(char *) calloc(tokenLen+1, sizeof(char));
-						memcpy_s(options[optionIndex].value, tokenLen+1,
-						         tokenValue, tokenLen);
-
-						optionIndex++;
-						// TODO: Realloc memory for more tokens
-						assert(optionIndex <= initialNumOfTokens);
-						break;
-					}
+				// Store token into memory if valid
+				CFGToken token = { 0 };
+				token = generateTokenIfValid(tokenString, tokenValue, tokenLen);
+				if (token.option != (enum CFGTypes)INVALID) {
+					options[optionIndex++] = token;
+					// TODO: Realloc memory for more tokens
+					assert(optionIndex <= initialNumOfTokens);
 				}
 			}
 		}

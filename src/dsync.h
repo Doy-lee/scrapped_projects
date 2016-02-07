@@ -28,6 +28,8 @@ typedef struct ProgramState {
 
 inline i32 trimAroundStr(char *src, i32 srcLen, const char charsToTrim[],
                          const i32 charsToTrimSize);
+CFGToken generateTokenIfValid(char *tokenString, char *tokenValue,
+                              i32 tokenLen);
 CFGToken *parseCFGFile(char *cfgBuffer, i32 cfgSize, i32 *numTokens);
 char *getDirectoryName(char *absPath);
 
