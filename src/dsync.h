@@ -19,11 +19,11 @@ typedef struct CFGToken {
 	enum CFGTypes option;
 	char *value;
 	i32 valueLen;
-	b32 initialised;
 } CFGToken;
 
 typedef struct ProgramState {
-	char **backupLocations;
+	char **backupPaths;
+	i32 numBackupPaths;
 } ProgramState;
 
 inline i32 trimAroundStr(char *src, i32 srcLen, const char charsToTrim[],

@@ -129,16 +129,18 @@ CFGToken *parseCFGFile(char *cfgBuffer, i32 cfgSize, i32 *numTokens) {
 							options[optionIndex].option = i;
 
 							// NOTE: valIndex as a side effect tracks the length
-							// of the token
+							// of the token not incl. null terminate
 							i32 tokenLen = valIndex;
 							const char charsToTrim[] = {'"', ' '};
 							tokenLen = trimAroundStr(tokenValue, tokenLen,
 							                         charsToTrim, 2);
 
 							options[optionIndex].valueLen = tokenLen;
+							// NOTE: Allocate 1 extra byte for null-terminate
+							// Calloc zeros memory eg. null-term char is set
 							options[optionIndex].value =
-							                 (char *) calloc(tokenLen, sizeof(char));
-							memcpy_s(options[optionIndex].value, tokenLen,
+							                 (char *) calloc(tokenLen+1, sizeof(char));
+							memcpy_s(options[optionIndex].value, tokenLen+1,
 							         tokenValue, tokenLen);
 
 							optionIndex++;
@@ -178,8 +180,6 @@ char *getDirectoryName(char *absPath) {
 i32 main(i32 argc, const char *argv[]) {
 
 #if DSYNC_DEBUG
-	const char *backupLocA = "F:\\";
-
 	//// DEBUG TEST ////
 	const char trim[] = {'"', ' '};
 	char brokenString_1[] = "       F:\\test        ";
@@ -191,9 +191,7 @@ i32 main(i32 argc, const char *argv[]) {
 	trimAroundStr(brokenString_2, 11, trim, 2);
 	assert(strcmp(brokenString_2, "C:\\") == 0);
 #else
-	const char *backupLocA = "F:\\workspace\\GoogleDrive\\dsync\\";
 #endif
-	const char *backupLocB = "F:\\workspace\\Dropbox\\Apps\\dsync\\";
 
 	ProgramState state = { 0 };
 
@@ -234,13 +232,37 @@ i32 main(i32 argc, const char *argv[]) {
 
 		CFGToken *cfgOptions = { 0 };
 		i32 numOptions = 0;
+
+		// TODO: Probably count how many backup paths there are during parsing
+		// so we don't have to search through all tokens twice, 1 for finding
+		// out how many backup tokens we have, and then copying them into memory
+		// TODO: Pass program state in? Because atm memcpy is used twice and
+		// each time we're manually adding null-terminator
+		// TODO: Validate paths
+		// - E:\temp makes a file like temp<archive_name> when it should go into
+		//   temp folder
+		// - E:\doesnt exist does the same, if a directory doesn't exist we
+		//   should omit from backup
 		cfgOptions = parseCFGFile(cfgBuffer, cfgSize, &numOptions);
 
-		//TODO: Store backup locations
-		state.backupLocations = malloc(sizeof(char*) * numOptions);
-		
+		// Count how many backup locations in the CFG
 		for (i32 i = 0; i < numOptions; i++) {
-			if (cfgOptions->option = (enum CFGTypes)BACKUP_LOC) {
+			if (cfgOptions[i].option = (enum CFGTypes)BACKUP_LOC) {
+				state.numBackupPaths++;
+			}
+		}
+
+		// Allocate the exact amount of backup locations
+		// TODO: Free this memory
+		state.backupPaths = calloc(state.numBackupPaths, sizeof(char*));
+		i32 backupIndex = 0;
+		for (i32 i = 0; i < numOptions; i++) {
+			if (cfgOptions[i].option = (enum CFGTypes)BACKUP_LOC) {
+				CFGToken token = cfgOptions[i];
+				state.backupPaths[backupIndex] =
+				                 (char *) calloc(token.valueLen+1, sizeof(char));
+				memcpy_s(state.backupPaths[backupIndex++], token.valueLen+1,
+				         token.value, token.valueLen);
 			}
 		}
 
@@ -292,8 +314,8 @@ i32 main(i32 argc, const char *argv[]) {
 	if (argc == 1) {
 		// TODO: We don't free this memory, but do we need to? The program is so
 		// short that we can arguably leave GC to the OS
-		filesToSync = (char **)malloc(sizeof(char*));
-		filesToSync[0] = (char *)malloc(sizeof(char) * MAX_PATH);
+		filesToSync = (char **)calloc(1, sizeof(char*));
+		filesToSync[0] = (char *)calloc(MAX_PATH, sizeof(char));
 		*filesToSync = currDir;
 	} else {
 		filesToSync = &argv[1];
@@ -342,7 +364,17 @@ i32 main(i32 argc, const char *argv[]) {
 	// Generate the absolute path for the output zip
 	char *absOutputFormat = "%s%s_%s.7z";
 	char absOutput[MAX_PATH] = { 0 };
-	StringCchPrintf(absOutput, MAX_PATH, absOutputFormat, backupLocA,
+
+	// Check if a backup location has been specified. If not then just store the
+	// zip in current directory, else use the first backup path
+	char *backupPath;
+	if (state.numBackupPaths == 0) {
+		backupPath = currDir;
+	} else {
+		backupPath = state.backupPaths[0];
+	}
+
+	StringCchPrintf(absOutput, MAX_PATH, absOutputFormat, backupPath,
 	                archiveName, timestamp);
 
 	// Generate the command line string
@@ -376,18 +408,26 @@ i32 main(i32 argc, const char *argv[]) {
 		CloseHandle(procInfo.hProcess);
 		CloseHandle(procInfo.hThread);
 
-		// After completing backup, hard-link to secondary path
-		// TODO: Hard link doesn't work if alternate backup is on different
-		// drive
-		char altAbsOutput[MAX_PATH] = { 0 };
-		StringCchPrintf(altAbsOutput, MAX_PATH, absOutputFormat, backupLocB,
-		                archiveName, timestamp);
-#if DSYNC_DEBUG
-#else
-		if (!(CreateHardLink(altAbsOutput, absOutput, NULL))) {
-			// TODO: Hardlink failed
+		if (state.numBackupPaths > 1) {
+
+			printf("\n\nDSYNC REDUNDANCY BACKUP\n");
+			printf("Now copying backup to alternate locations ..\n");
+			// TODO: Use hard-link where possible, otherwise copy file
+			// NOTE: We use the first backup path in the initial backup
+			// So start from the 2nd backup location and iterate
+			for (i32 i = 1; i < state.numBackupPaths; i++) {
+				char altAbsOutput[MAX_PATH] = { 0 };
+				StringCchPrintf(altAbsOutput, MAX_PATH, absOutputFormat, 
+				                state.backupPaths[i], archiveName, timestamp);
+				if(!CopyFile(absOutput, altAbsOutput, TRUE)) {
+					// TODO: Format error message using getLastError(),
+					// formatMessage()
+					printf("- Failed file copy to: %s\n", altAbsOutput);
+				} else {
+					printf("- Copied file to: %s\n", altAbsOutput);
+				}
+			}
 		}
-#endif
 	} else {
 		// TODO: CreateProcess failed
 	}
