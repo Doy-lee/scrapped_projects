@@ -210,7 +210,6 @@ char *getDirectoryName(char *absPath) {
 			if (absPath[i] == '\\') {
 				assert((i + 1) < (i32)absPathSize);
 				return &absPath[i+1];
-				break;
 			}
 		}
 	}
@@ -296,9 +295,9 @@ i32 main(i32 argc, const char *argv[]) {
 				if (cfgOptions[i].option == (enum CFGTypes)BACKUP_LOC) {
 					CFGToken token = cfgOptions[i];
 					state.backupPaths[backupIndex] =
-						(char *) calloc(token.valueLen+1, sizeof(char));
+					            (char *) calloc(token.valueLen+1, sizeof(char));
 					memcpy_s(state.backupPaths[backupIndex++], token.valueLen+1,
-							token.value, token.valueLen);
+					         token.value, token.valueLen);
 				}
 			}
 		}
@@ -466,14 +465,21 @@ i32 main(i32 argc, const char *argv[]) {
 			// So start from the 2nd backup location and iterate
 			for (i32 i = 1; i < state.numBackupPaths; i++) {
 				char altAbsOutput[MAX_PATH] = { 0 };
-				StringCchPrintf(altAbsOutput, MAX_PATH, absOutputFormat, 
+				StringCchPrintf(altAbsOutput, MAX_PATH, absOutputFormat,
 				                state.backupPaths[i], archiveName, timestamp);
-				if(!CopyFile(absOutput, altAbsOutput, TRUE)) {
-					// TODO: Format error message using getLastError(),
-					// formatMessage()
-					printf("- Failed file copy to: %s\n", altAbsOutput);
+
+				// TODO: Let user choose between hard-link and non-hardlink
+				if (CreateHardLink(altAbsOutput, absOutput, NULL)) {
+					printf("- Hard-linked file to: %s\n", altAbsOutput);
 				} else {
-					printf("- Copied file to: %s\n", altAbsOutput);
+					printf("- Hard-link failed, maybe destination is on a different drive, try copying ..\n");
+					if (CopyFile(absOutput, altAbsOutput, TRUE)) {
+						printf("- Copied file to: %s\n", altAbsOutput);
+					} else {
+						// TODO: Format error message using getLastError(),
+						// formatMessage()
+						printf("- Failed file copy to: %s\n", altAbsOutput);
+					}
 				}
 			}
 
