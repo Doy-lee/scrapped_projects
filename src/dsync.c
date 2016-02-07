@@ -7,6 +7,13 @@
 
 #define DSYNC_DEBUG TRUE
 
+/**
+	TODO: Verbose mode option in cfg file
+	TODO: Logging to file
+	TODO: Compression values from cfg file
+	TODO: Unit tests
+*/
+
 inline i32 trimAroundStr(char *src, i32 srcLen, const char charsToTrim[],
                          const i32 charsToTrimSize) {
 
@@ -59,7 +66,8 @@ inline i32 trimAroundStr(char *src, i32 srcLen, const char charsToTrim[],
 	return newLen;
 }
 
-CFGToken generateTokenIfValid(char *tokenString, char *tokenValue, i32 tokenLen) {
+CFGToken generateTokenIfValid(char *tokenString, char *tokenValue,
+                              i32 tokenLen) {
 	const char *optionStrings[(enum CFGTypes)NUM_TYPES] = { 0 };
 	optionStrings[(enum CFGTypes)COMPRESSION] = "7Z_COMPRESSION";
 	optionStrings[(enum CFGTypes)BACKUP_LOC] = "BACKUP_LOCATION";
@@ -79,12 +87,13 @@ CFGToken generateTokenIfValid(char *tokenString, char *tokenValue, i32 tokenLen)
 			if (type == (enum CFGTypes)BACKUP_LOC) {
 				// Append a \ if not at end of string so Windows
 				// treats it as a path
-				if (tokenValue[tokenLen] != '\\') {
+				if (tokenValue[tokenLen-1] != '\\') {
 					tokenValue[tokenLen++] = '\\';
 				}
 
 				if(!PathIsDirectory(tokenValue)) {
-					printf("Error: Backup path not found omitting from program %s\n", tokenValue);
+					printf("Error: Backup path not found omitting: %s\n",
+					       tokenValue);
 					break;
 				}
 			}
@@ -104,10 +113,9 @@ CFGToken generateTokenIfValid(char *tokenString, char *tokenValue, i32 tokenLen)
 }
 
 CFGToken *parseCFGFile(char *cfgBuffer, i32 cfgSize, i32 *numTokens) {
-	i32 initialNumOfTokens = 10;
+	i32 numOfTokens = 10;
 	i32 optionIndex = 0;
-	CFGToken *options = (CFGToken *)
-	                    calloc(initialNumOfTokens, sizeof(CFGToken));
+	CFGToken *options = (CFGToken *) calloc(numOfTokens, sizeof(CFGToken));
 
 	char *cfgLine = NULL;
 	b32 ignoreLine = FALSE;
@@ -169,8 +177,21 @@ CFGToken *parseCFGFile(char *cfgBuffer, i32 cfgSize, i32 *numTokens) {
 				token = generateTokenIfValid(tokenString, tokenValue, tokenLen);
 				if (token.option != (enum CFGTypes)INVALID) {
 					options[optionIndex++] = token;
-					// TODO: Realloc memory for more tokens
-					assert(optionIndex <= initialNumOfTokens);
+					if (optionIndex >= numOfTokens) {
+						numOfTokens *= 2;
+						i32 newSize = numOfTokens * sizeof(CFGToken);
+						options = realloc(options, newSize);
+
+						// NOTE: Program crashes if not enough memory available
+						assert(options != NULL);
+
+						// Zero out new memory
+						for (i32 i = optionIndex; i < numOfTokens; i++) {
+							options[i].option = 0;
+							options[i].value = NULL;
+							options[i].valueLen = 0;
+						}
+					}
 				}
 			}
 		}
@@ -258,11 +279,6 @@ i32 main(i32 argc, const char *argv[]) {
 		// out how many backup tokens we have, and then copying them into memory
 		// TODO: Pass program state in? Because atm memcpy is used twice and
 		// each time we're manually adding null-terminator
-		// TODO: Validate paths
-		// - E:\temp makes a file like temp<archive_name> when it should go into
-		//   temp folder
-		// - E:\doesnt exist does the same, if a directory doesn't exist we
-		//   should omit from backup
 		cfgOptions = parseCFGFile(cfgBuffer, cfgSize, &numOptions);
 
 		// Count how many backup locations in the CFG
@@ -273,31 +289,35 @@ i32 main(i32 argc, const char *argv[]) {
 		}
 
 		// Allocate the exact amount of backup locations
-		// TODO: Free this memory
-		state.backupPaths = calloc(state.numBackupPaths, sizeof(char*));
-		i32 backupIndex = 0;
-		for (i32 i = 0; i < numOptions; i++) {
-			if (cfgOptions[i].option == (enum CFGTypes)BACKUP_LOC) {
-				CFGToken token = cfgOptions[i];
-				state.backupPaths[backupIndex] =
-				                 (char *) calloc(token.valueLen+1, sizeof(char));
-				memcpy_s(state.backupPaths[backupIndex++], token.valueLen+1,
-				         token.value, token.valueLen);
+		if (state.numBackupPaths > 0) {
+			state.backupPaths = calloc(state.numBackupPaths, sizeof(char*));
+			i32 backupIndex = 0;
+			for (i32 i = 0; i < numOptions; i++) {
+				if (cfgOptions[i].option == (enum CFGTypes)BACKUP_LOC) {
+					CFGToken token = cfgOptions[i];
+					state.backupPaths[backupIndex] =
+						(char *) calloc(token.valueLen+1, sizeof(char));
+					memcpy_s(state.backupPaths[backupIndex++], token.valueLen+1,
+							token.value, token.valueLen);
+				}
 			}
 		}
 
+		for (i32 i = 0; i < numOptions; i++) {
+			free(cfgOptions[i].value);
+		}
 		free(cfgOptions);
 		free(cfgBuffer);
 	} else {
-		i32 cfgSize = 8; // TODO: Determine from array?
+		i32 cfgSize = 8;
 		const char *defaultCfg[] = {"# DSYNC Config File",
 		                            "# Lines prefixed with # are ignored",
-		                            "# ",
+		                            "#",
 		                            "# SAMPLE CONFIG",
-		                            "# [BACKUP_LOCATION_000]=C:\\",
+		                            "# [BACKUP_LOCATION]=C:\\",
 		                            "# [7Z_COMPRESSION]=mx9",
-		                            "",
-		                            "[7Z_COMPRESSION]=mx9"};
+		                            "#",
+		                            ""};
 
 		const char crlf[2] = {'\r', '\n'};
 
@@ -308,9 +328,14 @@ i32 main(i32 argc, const char *argv[]) {
 			// Determine number of bytes to write by checking string length
 			if (SUCCEEDED(StringCchLength(defaultCfg[i], STRSAFE_MAX_CCH,
 			                              &numBytesToWrite))) {
-				// TODO: What to do in fail case?
-				WriteFile(cfgFile, defaultCfg[i], (i32)numBytesToWrite,
-				          &bytesWritten, NULL);
+
+				if(!WriteFile(cfgFile, defaultCfg[i], (i32)numBytesToWrite,
+				              &bytesWritten, NULL)) {
+
+					// NOTE: Not program breaking as we'll just use default
+					// values until we can write/read a CFG file
+					printf("Error: Could not write cfg file to: %s\n", cfgPath);
+				}
 
 				assert(numBytesToWrite == bytesWritten);
 
@@ -325,20 +350,23 @@ i32 main(i32 argc, const char *argv[]) {
 	CloseHandle(cfgFile);
 
 	// Assume all args after module name are files to backup
-	char **filesToSync = { 0 };
+	char **filesToBackup = { 0 };
 	i32 numFilesToBackup = 1;
 	char currDir[MAX_PATH] = { 0 };
 	GetCurrentDirectory(MAX_PATH, currDir);
 
+	// NOTE: Flag to indicate if we need to free our filesToBackupList, ie. if
+	// files are giving on the cmd line we use ARGV as our list of files. We
+	// can't free the list(argv) in this case
+	b32 memAllocForFilesToBackup = FALSE;
+
 	// However if no args supplied after module then backup current directory
 	if (argc == 1) {
-		// TODO: We don't free this memory, but do we need to? The program is so
-		// short that we can arguably leave GC to the OS
-		filesToSync = (char **)calloc(1, sizeof(char*));
-		filesToSync[0] = (char *)calloc(MAX_PATH, sizeof(char));
-		*filesToSync = currDir;
+		filesToBackup = (char **)calloc(1, sizeof(char*));
+		*filesToBackup = currDir;
+		memAllocForFilesToBackup = TRUE;
 	} else {
-		filesToSync = &argv[1];
+		filesToBackup = &argv[1];
 		numFilesToBackup = argc - 1;
 	}
 
@@ -356,7 +384,7 @@ i32 main(i32 argc, const char *argv[]) {
 	if (numFilesToBackup == 1) {
 		// Set archive name to the file, note that file can be a absolute path
 		// or relative or just the file name. Extract name if it is a path
-		char *filename = *filesToSync;
+		char *filename = *filesToBackup;
 		size_t filenameSize = 0;
 		b32 fileIsPath = FALSE;
 		if (SUCCEEDED(StringCchLength(filename, MAX_PATH, &filenameSize))) {
@@ -415,7 +443,7 @@ i32 main(i32 argc, const char *argv[]) {
 	char *inputFileFormat = "%s \"%s\"";
 	for (i32 i = 0; i < numFilesToBackup; i++) {
 		StringCchPrintf(cmdArgs, MAX_PATH, inputFileFormat, cmdArgs,
-		                filesToSync[i]);
+		                filesToBackup[i]);
 	}
 
 	// Execute the 7zip command
@@ -448,9 +476,19 @@ i32 main(i32 argc, const char *argv[]) {
 					printf("- Copied file to: %s\n", altAbsOutput);
 				}
 			}
+
 		}
 	} else {
 		// TODO: CreateProcess failed
+	}
+
+	for (i32 i = 0; i < state.numBackupPaths; i++) {
+		free(state.backupPaths[i]);
+	}
+	free(state.backupPaths);
+
+	if (memAllocForFilesToBackup) {
+		free(filesToBackup);
 	}
 
 	return TRUE;
