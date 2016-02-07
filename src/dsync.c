@@ -1,47 +1,11 @@
 #include <stdio.h>
-#include <stdint.h>
-#include <assert.h>
 #include <Windows.h>
 #include <strsafe.h>
 #include <Shlwapi.h>
 
-#define TIME_START_DATE 1900
-#define TRUE 1
-#define FALSE 0
+#include "dsync.h"
 
 #define DSYNC_DEBUG TRUE
-
-#define Kilobytes(Value) ((Value)*1024LL)
-#define Megabytes(Value) (Kilobytes(Value)*1024LL)
-#define Gigabytes(Value) (Megabytes(Value)*1024LL)
-#define Terabytes(Value) (Gigabytes(Value)*1024LL)
-
-#define inline __inline
-
-typedef int32_t i32;
-typedef i32 b32;
-
-#define MAX_TOKEN_LEN 20
-//#define 7Z_COMPRESSION 0
-#define MAX_SWITCH_LENGTH 32508
-
-enum CFGTypes {
-	INVALID = 0,
-	COMPRESSION,
-	BACKUP_LOC,
-	NUM_TYPES
-};
-
-typedef struct CFGToken {
-	enum CFGTypes option;
-	char *value;
-	i32 valueLen;
-	b32 initialised;
-} CFGToken;
-
-typedef struct ProgramState {
-	char **backupLocations;
-} ProgramState;
 
 inline i32 trimAroundStr(char *src, i32 srcLen, const char charsToTrim[],
                          const i32 charsToTrimSize) {
@@ -100,9 +64,6 @@ CFGToken *parseCFGFile(char *cfgBuffer, i32 cfgSize, i32 *numTokens) {
 	optionStrings[(enum CFGTypes)COMPRESSION] = "7Z_COMPRESSION";
 	optionStrings[(enum CFGTypes)BACKUP_LOC] = "BACKUP_LOCATION";
 
-	// TODO: File is in memory, start parsing
-	// TODO: Create a struct that contains the config option and value to
-	// group the data together
 	i32 initialNumOfTokens = 10;
 	i32 optionIndex = 0;
 	CFGToken *options = (CFGToken *)
@@ -159,9 +120,9 @@ CFGToken *parseCFGFile(char *cfgBuffer, i32 cfgSize, i32 *numTokens) {
 					}
 
 					// Store token into memory
-					// TODO: We force CFGTypes to start from 1, is having an 
+					// TODO: We force CFGTypes to start from 1, is having an
 					// invalid option a good idea?
-					for(enum CFGTypes i = 1; i < (enum CFGTypes)NUM_TYPES; 
+					for(enum CFGTypes i = 1; i < (enum CFGTypes)NUM_TYPES;
 					    i++) {
 						if (strcmp(tokenString, optionStrings[i]) == 0) {
 
@@ -275,6 +236,7 @@ i32 main(i32 argc, const char *argv[]) {
 		i32 numOptions = 0;
 		cfgOptions = parseCFGFile(cfgBuffer, cfgSize, &numOptions);
 
+		//TODO: Store backup locations
 		state.backupLocations = malloc(sizeof(char*) * numOptions);
 		
 		for (i32 i = 0; i < numOptions; i++) {
@@ -285,7 +247,6 @@ i32 main(i32 argc, const char *argv[]) {
 		free(cfgOptions);
 		free(cfgBuffer);
 	} else {
-		// Create one
 		i32 cfgSize = 8; // TODO: Determine from array?
 		const char *defaultCfg[] = {"# DSYNC Config File",
 		                            "# Lines prefixed with # are ignored",
@@ -306,7 +267,7 @@ i32 main(i32 argc, const char *argv[]) {
 			if (SUCCEEDED(StringCchLength(defaultCfg[i], STRSAFE_MAX_CCH,
 			                              &numBytesToWrite))) {
 				// TODO: What to do in fail case?
-				WriteFile(cfgFile, defaultCfg[i], numBytesToWrite,
+				WriteFile(cfgFile, defaultCfg[i], (i32)numBytesToWrite,
 				          &bytesWritten, NULL);
 
 				assert(numBytesToWrite == bytesWritten);
