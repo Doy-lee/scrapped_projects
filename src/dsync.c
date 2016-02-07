@@ -247,7 +247,7 @@ i32 main(i32 argc, const char *argv[]) {
 
 		// Count how many backup locations in the CFG
 		for (i32 i = 0; i < numOptions; i++) {
-			if (cfgOptions[i].option = (enum CFGTypes)BACKUP_LOC) {
+			if (cfgOptions[i].option == (enum CFGTypes)BACKUP_LOC) {
 				state.numBackupPaths++;
 			}
 		}
@@ -257,7 +257,7 @@ i32 main(i32 argc, const char *argv[]) {
 		state.backupPaths = calloc(state.numBackupPaths, sizeof(char*));
 		i32 backupIndex = 0;
 		for (i32 i = 0; i < numOptions; i++) {
-			if (cfgOptions[i].option = (enum CFGTypes)BACKUP_LOC) {
+			if (cfgOptions[i].option == (enum CFGTypes)BACKUP_LOC) {
 				CFGToken token = cfgOptions[i];
 				state.backupPaths[backupIndex] =
 				                 (char *) calloc(token.valueLen+1, sizeof(char));
@@ -347,6 +347,7 @@ i32 main(i32 argc, const char *argv[]) {
 				}
 			}
 		} else {
+			// TODO: File name length failed
 			return FALSE;
 		}
 
