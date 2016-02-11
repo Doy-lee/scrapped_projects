@@ -7,6 +7,8 @@
 
 #define DSYNC_DEBUG TRUE
 
+#define ArraySize(array) sizeof(array)/sizeof(*array)
+
 /**
 	TODO: Verbose mode option in cfg file
 	TODO: Logging to file
@@ -24,7 +26,7 @@ inline i32 trimAroundStr(char *src, i32 srcLen, const char charsToTrim[],
 	// srcLen-1 as arrays start from 0, if we want to look at last char
 	i32 index = srcLen-1;
 	b32 matched = FALSE;
-	i32 newLen = 0;
+	i32 newLen = 1;
 
 	// Starting from EOL if any chars match for trimming, remove and update
 	// string length
@@ -69,8 +71,8 @@ inline i32 trimAroundStr(char *src, i32 srcLen, const char charsToTrim[],
 CFGToken generateTokenIfValid(char *tokenString, char *tokenValue,
                               i32 tokenLen) {
 	const char *optionStrings[(enum CFGTypes)NUM_TYPES] = { 0 };
-	optionStrings[(enum CFGTypes)COMPRESSION] = "7Z_COMPRESSION";
 	optionStrings[(enum CFGTypes)BACKUP_LOC] = "BACKUP_LOCATION";
+	optionStrings[(enum CFGTypes)HARDLINK] = "HARDLINK";
 
 	CFGToken result = { 0 };
 
@@ -81,7 +83,7 @@ CFGToken generateTokenIfValid(char *tokenString, char *tokenValue,
 		if (strcmp(tokenString, optionStrings[type]) == 0) {
 			const char charsToTrim[] = {'"', ' '};
 			tokenLen = trimAroundStr(tokenValue, tokenLen,
-			                          charsToTrim, 2);
+			                         charsToTrim, ArraySize(charsToTrim));
 
 			// if token is a backup location; do some path checking
 			if (type == (enum CFGTypes)BACKUP_LOC) {
@@ -203,7 +205,7 @@ CFGToken *parseCFGFile(char *cfgBuffer, i32 cfgSize, i32 *numTokens) {
 	return options;
 }
 
-char *getDirectoryName(char *absPath) {
+inline char *getDirectoryName(char *absPath) {
 	size_t absPathSize = 0;
 	if (SUCCEEDED(StringCchLength(absPath, MAX_PATH, &absPathSize))) {
 		for (i32 i = (i32)absPathSize; i > 0; i--) {
@@ -225,11 +227,18 @@ i32 main(i32 argc, const char *argv[]) {
 	char brokenString_1[] = "       F:\\test        ";
 	char brokenString_2[] = " C:\\   \"   ";
 
-	trimAroundStr(brokenString_1, 22, trim, 2);
-	assert(strcmp(brokenString_1, "F:\\test") == 0);
+	assert(ArraySize(brokenString_1) == 23);
+	assert(ArraySize(brokenString_2) == 12);
+	assert(ArraySize(trim) == 2);
 
-	trimAroundStr(brokenString_2, 11, trim, 2);
+	// NOTE: -1 because it includes null terminator
+	trimAroundStr(brokenString_1, ArraySize(brokenString_1)-1, trim,
+	              ArraySize(trim));
+	assert(strcmp(brokenString_1, "F:\\test") == 0);
+	trimAroundStr(brokenString_2, ArraySize(brokenString_2)-1, trim,
+	              ArraySize(trim));
 	assert(strcmp(brokenString_2, "C:\\") == 0);
+
 #else
 #endif
 
@@ -258,6 +267,7 @@ i32 main(i32 argc, const char *argv[]) {
 	                     NULL);
 
 	if (GetLastError() == ERROR_ALREADY_EXISTS) {
+
 		// Parse existing cfg file
 		DWORD cfgSize = GetFileSize(cfgFile, NULL);
 		DWORD bytesRead = 0;
@@ -280,10 +290,22 @@ i32 main(i32 argc, const char *argv[]) {
 		// each time we're manually adding null-terminator
 		cfgOptions = parseCFGFile(cfgBuffer, cfgSize, &numOptions);
 
-		// Count how many backup locations in the CFG
+		// Deal with the tokens read
 		for (i32 i = 0; i < numOptions; i++) {
-			if (cfgOptions[i].option == (enum CFGTypes)BACKUP_LOC) {
-				state.numBackupPaths++;
+			switch(cfgOptions[i].option) {
+				case (enum CFGTypes)BACKUP_LOC:
+					state.numBackupPaths++;
+					break;
+				case (enum CFGTypes)HARDLINK: {
+					// If hardlink is not equal to 0, then it must equal 1. Any
+					// other value is gonna be overriden
+					i32 val = atoi(cfgOptions[i].value);
+					state.hardLink = (val != 0) ? 1 : 0;
+					break;
+				}
+				default:
+					printf("token: unmatched option %d", cfgOptions[i].option);
+					break;
 			}
 		}
 
@@ -308,15 +330,22 @@ i32 main(i32 argc, const char *argv[]) {
 		free(cfgOptions);
 		free(cfgBuffer);
 	} else {
-		i32 cfgSize = 8;
 		const char *defaultCfg[] = {"# DSYNC Config File",
 		                            "# Lines prefixed with # are ignored",
 		                            "#",
 		                            "# SAMPLE CONFIG",
+		                            "#",
+		                            "# Which locations to backup the files to",
 		                            "# [BACKUP_LOCATION]=C:\\",
-		                            "# [7Z_COMPRESSION]=mx9",
+		                            "# [BACKUP_LOCATION]=F:\\",
+		                            "#",
+                                    "# Hard-link files if possible. Hard link creates multiple links to the file,",
+                                    "# only 1 physical copy on disk. Not possible on multiple drives, default",
+									"# behaviour is to fall back to file copy",
+		                            "# [HARDLINK]=1",
 		                            "#",
 		                            ""};
+		i32 cfgSize = ArraySize(defaultCfg);
 
 		const char crlf[2] = {'\r', '\n'};
 
@@ -460,7 +489,6 @@ i32 main(i32 argc, const char *argv[]) {
 
 			printf("\n\nDSYNC REDUNDANCY BACKUP\n");
 			printf("Now copying backup to alternate locations ..\n");
-			// TODO: Use hard-link where possible, otherwise copy file
 			// NOTE: We use the first backup path in the initial backup
 			// So start from the 2nd backup location and iterate
 			for (i32 i = 1; i < state.numBackupPaths; i++) {
@@ -468,11 +496,17 @@ i32 main(i32 argc, const char *argv[]) {
 				StringCchPrintf(altAbsOutput, MAX_PATH, absOutputFormat,
 				                state.backupPaths[i], archiveName, timestamp);
 
-				// TODO: Let user choose between hard-link and non-hardlink
-				if (CreateHardLink(altAbsOutput, absOutput, NULL)) {
-					printf("- Hard-linked file to: %s\n", altAbsOutput);
-				} else {
-					printf("- Hard-link failed, maybe destination is on a different drive, try copying ..\n");
+				b32 hardLinkFailed = FALSE;
+				if (state.hardLink) {
+					if (CreateHardLink(altAbsOutput, absOutput, NULL)) {
+						printf("- Hard-linked file to: %s\n", altAbsOutput);
+					} else {
+						hardLinkFailed = TRUE;
+						printf("- Hard-link failed, maybe destination is on a different drive, try copying ..\n");
+					}
+				}
+
+				if ((hardLinkFailed) || (state.hardLink == FALSE)) {
 					if (CopyFile(absOutput, altAbsOutput, TRUE)) {
 						printf("- Copied file to: %s\n", altAbsOutput);
 					} else {

@@ -10,8 +10,8 @@
 
 enum CFGTypes {
 	INVALID = 0,
-	COMPRESSION,
 	BACKUP_LOC,
+	HARDLINK,
 	NUM_TYPES
 };
 
@@ -24,13 +24,7 @@ typedef struct CFGToken {
 typedef struct ProgramState {
 	char **backupPaths;
 	i32 numBackupPaths;
+	b32 hardLink;
 } ProgramState;
-
-inline i32 trimAroundStr(char *src, i32 srcLen, const char charsToTrim[],
-                         const i32 charsToTrimSize);
-CFGToken generateTokenIfValid(char *tokenString, char *tokenValue,
-                              i32 tokenLen);
-CFGToken *parseCFGFile(char *cfgBuffer, i32 cfgSize, i32 *numTokens);
-char *getDirectoryName(char *absPath);
 
 #endif
