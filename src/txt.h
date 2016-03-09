@@ -65,8 +65,11 @@ typedef struct ProgramState {
 	ScreenData *screen;
 	TextBuffer *buffer;
 	TextBuffer *onScreenBuffer;
+	i32 lineLength[MAX_SCREEN_BUFFER_LINES];
+	i32 currLineIndex;
+
 	TextCaret *caret;
-	FontSheet fontSheet;
+	FontSheet *fontSheet;
 	MemoryArena arena;
 	Input input;
 } ProgramState;

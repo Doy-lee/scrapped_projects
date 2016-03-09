@@ -15,6 +15,8 @@
 #define globalVariable static
 #define inline __inline
 
+#define MAX_SCREEN_BUFFER_LINES 100
+
 typedef int8_t i8;
 typedef int16_t i16;
 typedef int32_t i32;
