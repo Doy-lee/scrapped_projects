@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+    <PreferenceCategory
+        android:title="@string/pref_general_settings"
+        android:key="pref_key_general_settings">
+        <EditTextPreference  android:title="@string/pref_music_path"
+            android:key="@string/pref_music_path_key"
+            android:defaultValue="/storage/emulated/0/Music"
+            android:summary="@string/pref_music_path_summ" />
+    </PreferenceCategory>
+</PreferenceScreen>

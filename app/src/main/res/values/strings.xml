@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">Amber</string>
+    <string name="action_settings">Settings</string>
+
+    <!-- Strings related to Settings -->
+    <string name="pref_general_settings">General Settings</string>
+    <string name="pref_music_path_key">pref_music_path_key</string>
+    <string name="pref_music_path">Music Path</string>
+    <string name="pref_music_path_summ">Location of music files to be used</string>
+</resources>
