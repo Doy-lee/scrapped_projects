@@ -115,6 +115,19 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
         startForeground(NOTIFY_ID, notification);
     }
 
+    // NOTE(doyle): Interface between client and service. Allows client to get service instance from
+    // the binder
+    public class AudioBinder extends Binder {
+        AudioService getService() {
+            return AudioService.this;
+        }
+    }
+
+    /*
+     *******************
+     * PLAYBACK CONTROL
+     *******************
+     */
     public void end() { player.stop(); }
     public int getPosition() { return player.getCurrentPosition(); }
     public int getDuration() { return player.getDuration(); }
@@ -172,11 +185,4 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
 
     public void setAudio(int audioIndex) { this.audioFileIndex = audioIndex; }
 
-    // NOTE(doyle): Interface between client and service. Allows client to get service instance from
-    // the binder
-    public class AudioBinder extends Binder {
-        AudioService getService() {
-            return AudioService.this;
-        }
-    }
 }
