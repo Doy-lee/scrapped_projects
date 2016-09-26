@@ -26,13 +26,14 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.ListView;
+import android.widget.MediaController.MediaPlayerControl;
 
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements MediaPlayerControl {
     private static final String TAG = MainActivity.class.getName();
     private static final int AMBER_READ_EXTERNAL_STORAGE_REQUEST = 1;
 
@@ -43,6 +44,10 @@ public class MainActivity extends AppCompatActivity {
     private AudioService audioService;
     private Intent playIntent;
     private boolean audioBound = false;
+
+    private AudioController controller;
+    private boolean paused = false;
+    private boolean playbackPaused = false;
 
     // NOTE(doyle): When the Android system creates the connection between the client and service,
     // (bindService()) it calls onServiceConnected() on the ServiceConnection, to deliver the
@@ -231,7 +236,7 @@ public class MainActivity extends AppCompatActivity {
                         .setAction("Action", null).show();
             }
         });
-
+        setController();
         amberUpdate();
     }
 
@@ -251,7 +256,14 @@ public class MainActivity extends AppCompatActivity {
 
         // TODO(doyle): Look into collapsing into one call ..
         audioService.setAudio(audioFileIndex);
-        audioService.startPlayback();
+        audioService.play();
+
+        if (playbackPaused) {
+            setController();
+            playbackPaused = false;
+        }
+
+        controller.show();
     }
 
     @Override
@@ -284,13 +296,19 @@ public class MainActivity extends AppCompatActivity {
                 return true;
             }
             case R.id.action_stop_playback: {
-                if (audioBound) { audioService.endPlayback(); }
+                if (audioBound) {
+                    audioService.end();
+                }
                 break;
             }
             case R.id.action_exit: {
                 stopService(playIntent);
                 audioService = null;
                 System.exit(0);
+                break;
+            }
+            case R.id.action_shuffle: {
+                audioService.setShuffle();
                 break;
             }
             default: {
@@ -300,6 +318,129 @@ public class MainActivity extends AppCompatActivity {
         }
 
         return super.onOptionsItemSelected(item);
+    }
+
+    @Override
+    public void start() {
+        audioService.go();
+    }
+
+    @Override
+    public void pause() {
+        audioService.pause();
+        playbackPaused = false;
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        paused = true;
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        if (paused) {
+            setController();
+            paused = false;
+        }
+    }
+
+    @Override
+    public void onStop() {
+        controller.hide();
+        super.onStop();
+    }
+
+    @Override
+    public int getDuration() {
+        if (audioService != null && audioBound && audioService.isPlaying())
+            return audioService.getDuration();
+
+        return 0;
+    }
+
+    @Override
+    public int getCurrentPosition() {
+        if (audioService != null && audioBound && audioService.isPlaying())
+            return audioService.getPosition();
+
+        return 0;
+    }
+
+    @Override
+    public void seekTo(int pos) {
+        audioService.seek(pos);
+    }
+
+    @Override
+    public boolean isPlaying() {
+        if (audioService != null && audioBound)
+            return audioService.isPlaying();
+
+        return false;
+    }
+
+    @Override
+    public int getBufferPercentage() {
+        return 0;
+    }
+
+    @Override
+    public boolean canPause() {
+        return true;
+    }
+
+    @Override
+    public boolean canSeekBackward() {
+        return true;
+    }
+
+    @Override
+    public boolean canSeekForward() {
+        return true;
+    }
+
+    @Override
+    public int getAudioSessionId() {
+        return 0;
+    }
+
+    private void playNext() {
+        audioService.playNext();
+        if (playbackPaused) {
+            setController();
+            playbackPaused = false;
+        }
+        controller.show(0);
+    }
+
+    private void playPrev() {
+        audioService.playPrev();
+        if (playbackPaused) {
+            setController();
+            playbackPaused = false;
+        }
+        controller.show(0);
+    }
+
+    private void setController() {
+        controller = new AudioController(this);
+        controller.setPrevNextListeners(new View.OnClickListener() {
+            public void onClick(View v) {
+                playNext();
+                controller.show();
+            }
+        }, new View.OnClickListener() {
+            public void onClick(View v) {
+                playPrev();
+                controller.show();
+            }
+        });
+
+        controller.setMediaPlayer(this);
+        controller.setAnchorView(findViewById(R.id.main_list_view));
+        controller.setEnabled(true);
     }
 
     public class AudioFile {

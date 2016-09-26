@@ -1,5 +1,7 @@
 package dqnt.amber;
 
+import android.app.Notification;
+import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
 import android.media.AudioManager;
@@ -10,16 +12,22 @@ import android.os.PowerManager;
 import android.util.Log;
 
 import java.util.ArrayList;
+import java.util.Random;
 
+// TODO(doyle): Audio focus/audio manager API to manage what happens to sound on lose focus
 public class AudioService extends Service implements MediaPlayer.OnPreparedListener,
         MediaPlayer.OnErrorListener, MediaPlayer.OnCompletionListener {
 
-    private final static String TAG = AudioService.class.getName();
+    private static final String TAG = AudioService.class.getName();
+    private static final int NOTIFY_ID = 1;
     private final IBinder binder = new AudioBinder();
     private MediaPlayer player;
 
     private ArrayList<MainActivity.AudioFile> audioList;
     private int audioFileIndex;
+
+    private boolean shuffle = false;
+    private Random rand;
 
     // NOTE(doyle): The system calls this method when the service is first created, to perform
     // one-time setup procedures (before it calls either onStartCommand() or onBind()). If the
@@ -39,6 +47,9 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
         player.setOnPreparedListener(this);
         player.setOnCompletionListener(this);
         player.setOnErrorListener(this);
+
+        // TODO(doyle): Revise for random shuffle
+        rand = new Random();
     }
 
     public void setAudioList(ArrayList<MainActivity.AudioFile> audioList) {
@@ -58,25 +69,94 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
     }
 
     @Override
-    public void onCompletion(MediaPlayer mp) {
+    public void onDestroy() {
+        // NOTE(doyle): Stop notification running in foreground
+        stopForeground(true);
+    }
 
+    // NOTE(doyle): Triggers when track finished/skipped or new track is selected
+    @Override
+    public void onCompletion(MediaPlayer mp) {
+        // TODO(doyle): Look at this again
+        if (player.getCurrentPosition() > 0) {
+            mp.reset();
+            playNext();
+        }
     }
 
     @Override
     public boolean onError(MediaPlayer mp, int what, int extra) {
+        // TODO(doyle): Look up API
+        mp.reset();
         return false;
     }
 
     @Override
-    public void onPrepared(MediaPlayer mp) { mp.start(); }
+    public void onPrepared(MediaPlayer mp) {
+        mp.start();
 
-    public void endPlayback() { player.stop(); }
-    public void startPlayback() {
+        Intent notificationIntent = new Intent(this, MainActivity.class);
+        notificationIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
+
+        // NOTE(doyle): Allow user to be redirected back to main activity on notification click
+        PendingIntent pendingIntent = PendingIntent.getActivity
+                (this, 0, notificationIntent, PendingIntent.FLAG_UPDATE_CURRENT);
+
+        MainActivity.AudioFile file = audioList.get(audioFileIndex);
+
+        Notification.Builder builder = new Notification.Builder(this);
+        builder.setContentIntent(pendingIntent)
+                .setTicker(file.title)
+                .setOngoing(true)
+                .setContentTitle("Playing")
+                .setContentText(file.title);
+        Notification notification = builder.build();
+
+        startForeground(NOTIFY_ID, notification);
+    }
+
+    public void end() { player.stop(); }
+    public int getPosition() { return player.getCurrentPosition(); }
+    public int getDuration() { return player.getDuration(); }
+    public boolean isPlaying() { return player.isPlaying(); }
+    public void pause() { player.pause(); }
+    public void seek(int pos) { player.seekTo(pos); }
+    public void go() { player.start(); }
+
+    public void setShuffle() {
+        if (shuffle) shuffle = false;
+        else shuffle = true;
+    }
+
+    public void playPrev() {
+        if (--audioFileIndex < 0) audioFileIndex = audioList.size()-1;
+        play();
+    }
+
+    public void playNext() {
+        if (shuffle)
+        {
+            int newIndex = audioFileIndex;
+            while (newIndex == audioFileIndex)
+            {
+                newIndex = rand.nextInt(audioList.size());
+            }
+
+            audioFileIndex = newIndex;
+        }
+        else
+        {
+            if (++audioFileIndex >= audioList.size()) audioFileIndex = 0;
+        }
+
+        play();
+    }
+
+    public void play() {
         player.reset();
         MainActivity.AudioFile audio = audioList.get(audioFileIndex);
-        int audioId = audio.id;
-
         /*
+        int audioId = audio.id;
         Uri trackUri = ContentUris.withAppendedId
                 (android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, audioId);
         */
