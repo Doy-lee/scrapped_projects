@@ -1,18 +1,20 @@
 package dqnt.amber;
 
 import android.Manifest;
+import android.content.ComponentName;
 import android.content.ContentResolver;
+import android.content.ContentUris;
 import android.content.Context;
 import android.content.Intent;
+import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Environment;
+import android.os.IBinder;
 import android.preference.PreferenceManager;
-import android.provider.Settings;
 import android.support.design.widget.FloatingActionButton;
 import android.support.design.widget.Snackbar;
 import android.support.v4.app.ActivityCompat;
@@ -20,14 +22,12 @@ import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.util.Log;
-import android.view.View;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.View;
 import android.widget.ListView;
 
 import java.io.File;
-import java.io.FileFilter;
-import java.io.FilenameFilter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -40,46 +40,51 @@ public class MainActivity extends AppCompatActivity {
     private ArrayList<AudioFile> audioList;
     private ListView audioFileListView;
 
-    public class AudioFile
-    {
-        int id;
-        String artist;
-        String title;
+    private AudioService audioService;
+    private Intent playIntent;
+    private boolean audioBound = false;
 
-        public AudioFile(int id, String artist, String title)
-        {
-            this.id = id;
-            this.artist = artist;
-            this.title = title;
+    // NOTE(doyle): When the Android system creates the connection between the client and service,
+    // (bindService()) it calls onServiceConnected() on the ServiceConnection, to deliver the
+    // IBinder that the client can use to communicate with the service. (i.e. callback).
+    private ServiceConnection audioConnection = new ServiceConnection() {
+
+
+        // NOTE(doyle): Use the binder to get access to the audio service, i.e. playback control
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder service) {
+            AudioService.AudioBinder binder = (AudioService.AudioBinder) service;
+            audioService = binder.getService();
+            audioService.setAudioList(audioList);
+
+            audioBound = true;
         }
-    }
 
-    private void getFilesFromDirRecursive(ArrayList<File> list, File root)
-    {
+        @Override
+        public void onServiceDisconnected(ComponentName name) {
+            audioBound = false;
+        }
+
+    };
+
+    private void getFilesFromDirRecursive(ArrayList<File> list, File root) {
         File[] dir = root.listFiles();
-        for (File file: dir)
-        {
-            if (file.isDirectory())
-            {
+        for (File file : dir) {
+            if (file.isDirectory()) {
                 getFilesFromDirRecursive(list, file);
-            }
-            else
-            {
+            } else {
                 list.add(file);
             }
         }
     }
 
-    private void enumerateAndDisplayAudio()
-    {
+    private void enumerateAndDisplayAudio() {
         ContentResolver musicResolver = getContentResolver();
         Uri musicUri = android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
         Cursor musicCursor = musicResolver.query(musicUri, null, null, null, null);
 
-        if (musicCursor != null)
-        {
-            if (musicCursor.moveToFirst())
-            {
+        if (musicCursor != null) {
+            if (musicCursor.moveToFirst()) {
                 int titleCol = musicCursor.getColumnIndex
                         (android.provider.MediaStore.Audio.Media.TITLE);
                 int idCol = musicCursor.getColumnIndex
@@ -87,23 +92,21 @@ public class MainActivity extends AppCompatActivity {
                 int artistCol = musicCursor.getColumnIndex
                         (android.provider.MediaStore.Audio.Media.ARTIST);
 
-                do
-                {
+                do {
                     int id = musicCursor.getInt(idCol);
                     String title = musicCursor.getString(titleCol);
                     String artist = musicCursor.getString(artistCol);
 
-                    AudioFile audioFile = new AudioFile(id, artist, title);
+                    Uri uri = ContentUris.withAppendedId
+                            (android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id);
+
+                    AudioFile audioFile = new AudioFile(id, uri, artist, title);
                     audioList.add(audioFile);
                 } while (musicCursor.moveToNext());
-            }
-            else
-            {
+            } else {
                 Log.v(TAG, "No music files found by MediaStore");
             }
-        }
-        else
-        {
+        } else {
             Log.e(TAG, "Cursor could not be resolved from ContentResolver");
         }
 
@@ -115,34 +118,40 @@ public class MainActivity extends AppCompatActivity {
 
         String musicPath = sharedPref.getString("pref_music_path_key", "");
         File musicDir = new File(musicPath);
-        if (musicDir.exists() && musicDir.canRead())
-        {
+        if (musicDir.exists() && musicDir.canRead()) {
             Log.d(TAG, "Music directory exists and is readable: " + musicDir.getAbsolutePath());
 
             ArrayList<File> audioFileEnumerator = new ArrayList<>();
             getFilesFromDirRecursive(audioFileEnumerator, musicDir);
 
             int uniqueId = 999;
-            for (File file: audioFileEnumerator)
-            {
-                if (file.toString().endsWith(".opus"))
-                {
+            for (File file : audioFileEnumerator) {
+                if (file.toString().endsWith(".opus")) {
                     // TODO(doyle): Media parse from media player or external library
-                    AudioFile audio = new AudioFile(uniqueId++, "", file.toString());
+                    Uri uri = Uri.fromFile(file);
+                    /*
+                    musicCursor = musicResolver.query(uri, null, null, null, null);
+                    if (musicCursor != null)
+                    {
+                        musicCursor.moveToFirst();
+                        int titleCol = musicCursor.getColumnIndex
+                                (android.provider.MediaStore.Audio.Media.TITLE);
+                        int idCol = musicCursor.getColumnIndex
+                                (android.provider.MediaStore.Audio.Media._ID);
+                        int artistCol = musicCursor.getColumnIndex
+                                (android.provider.MediaStore.Audio.Media.ARTIST);
+
+                        int id = musicCursor.getInt(idCol);
+                        String title = musicCursor.getString(titleCol);
+                        String artist = musicCursor.getString(artistCol);
+
+                    }
+                    */
+
+                    AudioFile audio = new AudioFile(uniqueId++, uri, "", file.toString());
                     audioList.add(audio);
                 }
             }
-            /*
-            list = musicDir.listFiles(new FilenameFilter(){
-                @Override
-                public boolean accept(File dir, String name) {
-                    boolean result = false;
-                    if (name.endsWith(".opus")) result = true;
-                    return result;
-                }
-            });
-            */
-
         }
 
         /* Sort list */
@@ -158,8 +167,7 @@ public class MainActivity extends AppCompatActivity {
         this.audioFileListView.setAdapter(this.audioFileAdapter);
     }
 
-    private void amberUpdate()
-    {
+    private void amberUpdate() {
         this.audioList = new ArrayList<AudioFile>();
 
         // NOTE(doyle): Only ask for permissions if version >= Android M (API 23)
@@ -175,8 +183,7 @@ public class MainActivity extends AppCompatActivity {
             }
         }
 
-        if (readPermissionCheck == PackageManager.PERMISSION_GRANTED)
-        {
+        if (readPermissionCheck == PackageManager.PERMISSION_GRANTED) {
             enumerateAndDisplayAudio();
         }
     }
@@ -185,11 +192,9 @@ public class MainActivity extends AppCompatActivity {
     public void onRequestPermissionsResult(int requestCode,
                                            String[] permissions, int[] grantResults) {
         switch (requestCode) {
-            case AMBER_READ_EXTERNAL_STORAGE_REQUEST:
-            {
+            case AMBER_READ_EXTERNAL_STORAGE_REQUEST: {
                 // If request is cancelled, the result arrays are empty.
-                if (grantResults.length == 0)
-                {
+                if (grantResults.length == 0) {
                     Log.i(TAG, "Read external storage permission request cancelled");
                     return;
                 }
@@ -204,13 +209,13 @@ public class MainActivity extends AppCompatActivity {
 
                 return;
             }
-            default:
-            {
+            default: {
                 Log.e(TAG, "Permission request code not handled: " + requestCode);
                 break;
             }
         }
     }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -231,10 +236,36 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @Override
+    protected void onStart() {
+        super.onStart();
+        if (playIntent == null) {
+            // TODO(doyle): Start a new thread for MP3 playback, recommended by Android
+            playIntent = new Intent(this, AudioService.class);
+            bindService(playIntent, audioConnection, Context.BIND_AUTO_CREATE);
+            startService(playIntent);
+        }
+    }
+
+    public void audioFileClicked(View view) {
+        int audioFileIndex = Integer.parseInt(view.getTag().toString());
+
+        // TODO(doyle): Look into collapsing into one call ..
+        audioService.setAudio(audioFileIndex);
+        audioService.startPlayback();
+    }
+
+    @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         // Inflate the menu; this adds items to the action bar if it is present.
         getMenuInflater().inflate(R.menu.menu_main, menu);
         return true;
+    }
+
+    @Override
+    protected void onDestroy() {
+        stopService(playIntent);
+        audioService = null;
+        super.onDestroy();
     }
 
     @Override
@@ -245,21 +276,43 @@ public class MainActivity extends AppCompatActivity {
         int id = item.getItemId();
 
         //noinspection SimplifiableIfStatement
-        switch(id)
-        {
-            case R.id.action_settings:
-            {
+        switch (id) {
+            case R.id.action_settings: {
                 Intent intent = new Intent();
                 intent.setClassName(this, "dqnt.amber.SettingsActivity");
                 startActivity(intent);
                 return true;
             }
-            default:
-            {
+            case R.id.action_stop_playback: {
+                if (audioBound) { audioService.endPlayback(); }
+                break;
+            }
+            case R.id.action_exit: {
+                stopService(playIntent);
+                audioService = null;
+                System.exit(0);
+                break;
+            }
+            default: {
                 Log.e(TAG, "Unrecognised item id selected in options menu: " + id);
+                break;
             }
         }
 
         return super.onOptionsItemSelected(item);
+    }
+
+    public class AudioFile {
+        int id;
+        Uri uri;
+        String artist;
+        String title;
+
+        public AudioFile(int id, Uri uri, String artist, String title) {
+            this.id = id;
+            this.uri = uri;
+            this.artist = artist;
+            this.title = title;
+        }
     }
 }

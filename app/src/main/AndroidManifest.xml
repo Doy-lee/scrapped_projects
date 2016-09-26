@@ -3,6 +3,7 @@
     package="dqnt.amber">
 
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <application
         android:allowBackup="true"
@@ -11,7 +12,7 @@
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
         <activity
-            android:name="dqnt.amber.MainActivity"
+            android:name=".MainActivity"
             android:label="@string/app_name"
             android:theme="@style/AppTheme.NoActionBar">
             <intent-filter>
@@ -21,7 +22,7 @@
             </intent-filter>
         </activity>
         <activity
-            android:name="dqnt.amber.SettingsActivity"
+            android:name=".SettingsActivity"
             android:label="Settings"
             android:parentActivityName=".MainActivity"
             android:theme="@style/AppTheme.NoActionBar">
@@ -29,6 +30,11 @@
                 android:name="android.support.PARENT_ACTIVITY"
                 android:value="dqnt.amber.MainActivity" />
         </activity>
+
+        <service
+            android:name="dqnt.amber.AudioService"
+            android:enabled="true"
+            android:exported="false"/>
     </application>
 
 </manifest>

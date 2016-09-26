@@ -16,6 +16,5 @@
         android:layout_height="match_parent"
         android:id="@+id/fragment"
         android:name="dqnt.amber.SettingsActivity$SettingsFragment"
-        tools:layout="@layout/content_settings"
         android:layout_width="match_parent" />
 </LinearLayout>
