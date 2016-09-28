@@ -12,6 +12,7 @@ import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.media.MediaMetadataRetriever;
 import android.net.Uri;
+import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
@@ -54,8 +55,6 @@ public class MainActivity extends AppCompatActivity implements MediaPlayerContro
     // (bindService()) it calls onServiceConnected() on the ServiceConnection, to deliver the
     // IBinder that the client can use to communicate with the service. (i.e. callback).
     private ServiceConnection audioConnection = new ServiceConnection() {
-
-
         // NOTE(doyle): Use the binder to get access to the audio service, i.e. playback control
         @Override
         public void onServiceConnected(ComponentName name, IBinder service) {
@@ -84,6 +83,107 @@ public class MainActivity extends AppCompatActivity implements MediaPlayerContro
         }
     }
 
+    private class ProcessAudioMetadata extends AsyncTask<Void, AudioFile, Void> {
+        private Context context;
+        public ProcessAudioMetadata(Context context) { this.context = context; }
+
+        @Override
+        protected Void doInBackground(Void... params) {
+            MediaMetadataRetriever retriever = new MediaMetadataRetriever();
+
+            /* Get music from Android's media storer */
+            ContentResolver musicResolver = getContentResolver();
+            Uri musicUri = android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
+            Cursor musicCursor = musicResolver.query(musicUri, null, null, null, null);
+
+            int audioId = 0;
+            if (musicCursor != null) {
+                if (musicCursor.moveToFirst()) {
+                    int idCol = musicCursor.getColumnIndex
+                            (android.provider.MediaStore.Audio.Media._ID);
+                    do {
+                        int id = musicCursor.getInt(idCol);
+                        Uri uri = ContentUris.withAppendedId
+                                (android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id);
+
+                        AudioFile audio = extractAudioMetadata(context, retriever, audioId++, uri);
+                        if (audio != null) {
+                            publishProgress(audio);
+                        }
+                    } while (musicCursor.moveToNext());
+                } else {
+                    Log.v(TAG, "No music files found by MediaStore");
+                }
+                musicCursor.close();
+            } else {
+                Log.e(TAG, "Cursor could not be resolved from ContentResolver");
+            }
+
+            /* DEBUG CLEAR preferences */
+            // sharedPref.edit().clear().commit();
+
+            /* Get music from the path set in preferences */
+            // TODO(doyle): Add callback handling on preference change
+            SharedPreferences sharedPref = PreferenceManager.getDefaultSharedPreferences(context);
+            String musicPath = sharedPref.getString("pref_music_path_key", "");
+            File musicDir = new File(musicPath);
+
+            if (musicDir.exists() && musicDir.canRead()) {
+                Log.d(TAG, "Music directory exists and is readable: " + musicDir.getAbsolutePath());
+
+                ArrayList<File> fileList = new ArrayList<>();
+                getFilesFromDirRecursive(fileList, musicDir);
+
+                for (File file : fileList) {
+                    if (file.toString().endsWith(".opus")) {
+                        // TODO(doyle): Media parse from media player or external library
+                        Uri uri = Uri.fromFile(file);
+
+                        AudioFile audio = extractAudioMetadata(context, retriever, audioId++, uri);
+                        if (audio != null) {
+                            publishProgress(audio);
+                        }
+                    }
+                }
+            }
+            retriever.release();
+
+            /* Sort list */
+            Collections.sort(audioList, new Comparator<AudioFile>() {
+                public int compare(AudioFile a, AudioFile b) {
+                    return a.title.compareTo(b.title);
+                }
+            });
+
+            return null;
+        }
+
+        private int updateCounter = 0;
+        private static final int UPDATE_THRESHOLD = 20;
+        @Override
+        protected void onProgressUpdate(AudioFile... files) {
+            super.onProgressUpdate(files);
+            audioList.add(files[0]);
+
+            if (updateCounter++ >= UPDATE_THRESHOLD) {
+                updateCounter = 0;
+                audioFileAdapter.notifyDataSetChanged();
+            }
+        }
+
+        @Override
+        protected void onPostExecute(Void aVoid) {
+            super.onPostExecute(aVoid);
+            audioFileAdapter.notifyDataSetChanged();
+        }
+    }
+
+    private String extractAudioKeyData(MediaMetadataRetriever retriever, int key) {
+        String field = retriever.extractMetadata(key);
+        if (field == null) field = "Unknown";
+        return field;
+    }
+
     private AudioFile extractAudioMetadata(Context context, MediaMetadataRetriever retriever,
                                            int id, Uri uri) {
 
@@ -95,138 +195,50 @@ public class MainActivity extends AppCompatActivity implements MediaPlayerContro
 
         // NOTE(doyle): API
         // developer.android.com/reference/android/media/MediaMetadataRetriever.html
-        // TODO(doyle): Revise
-        String metadata[] = new String[14];
-        metadata[0] =
-                retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM);
-        metadata[1] =
-                retriever.extractMetadata
-                        (MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST);
-        metadata[2] =
-                retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST);
-        metadata[3] =
-                retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_AUTHOR);
-        metadata[4] =
-                retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_BITRATE);
-        metadata[5] =
-                retriever.extractMetadata
-                        (MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER);
-        metadata[6] =
-                retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_COMPOSER);
-        metadata[7] =
-                retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DATE);
-        metadata[8] =
-                retriever.extractMetadata
-                        (MediaMetadataRetriever.METADATA_KEY_DISC_NUMBER);
-        metadata[9] =
-                retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION);
-        metadata[10] =
-                retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_GENRE);
-        metadata[11] =
-                retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE);
-        metadata[12] =
-                retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_WRITER);
-        metadata[13] =
-                retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_YEAR);
+        String album = extractAudioKeyData(retriever, MediaMetadataRetriever.METADATA_KEY_ALBUM);
+        String albumArtist = extractAudioKeyData(retriever, MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST);
+        String artist = extractAudioKeyData(retriever, (MediaMetadataRetriever.METADATA_KEY_ARTIST));
+        String author = extractAudioKeyData(retriever, MediaMetadataRetriever.METADATA_KEY_AUTHOR);
+        String bitrate = extractAudioKeyData(retriever, MediaMetadataRetriever.METADATA_KEY_BITRATE);
+        String cdTrackNum = extractAudioKeyData(retriever, MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER);
+        String composer = extractAudioKeyData(retriever, MediaMetadataRetriever.METADATA_KEY_COMPOSER);
+        String date = extractAudioKeyData(retriever, MediaMetadataRetriever.METADATA_KEY_DATE);
+        String discNum = extractAudioKeyData(retriever, MediaMetadataRetriever.METADATA_KEY_DISC_NUMBER);
+        String duration = extractAudioKeyData(retriever, MediaMetadataRetriever.METADATA_KEY_DURATION);
+        String genre = extractAudioKeyData(retriever, MediaMetadataRetriever.METADATA_KEY_GENRE);
+        String title = extractAudioKeyData(retriever, MediaMetadataRetriever.METADATA_KEY_TITLE);
+        String writer = extractAudioKeyData(retriever, MediaMetadataRetriever.METADATA_KEY_WRITER);
+        String year = extractAudioKeyData(retriever, MediaMetadataRetriever.METADATA_KEY_YEAR);
 
-        for (int i = 0; i < metadata.length; i++) {
-            if (metadata[i]== null) {
-                metadata[i] = "Unknown";
-            }
-        }
-
-        Log.v(TAG, "File: " + uri.toString() + ", Parsed audio: " + metadata[2] +  " - " + metadata[11]);
+        File file = new File(uri.getPath());
+        Log.v(TAG, "File: " + file.getName() + ", Parsed audio: " + artist +  " - " + title);
 
         AudioFile result = new AudioFile(id,
                                          uri,
-                                         metadata[0],
-                                         metadata[1],
-                                         metadata[2],
-                                         metadata[3],
-                                         metadata[4],
-                                         metadata[5],
-                                         metadata[6],
-                                         metadata[7],
-                                         metadata[8],
-                                         metadata[9],
-                                         metadata[10],
-                                         metadata[11],
-                                         metadata[12],
-                                         metadata[13]);
+                                         album,
+                                         albumArtist,
+                                         artist,
+                                         author,
+                                         bitrate,
+                                         cdTrackNum,
+                                         composer,
+                                         date,
+                                         discNum,
+                                         duration,
+                                         genre,
+                                         title,
+                                         writer,
+                                         year);
         return result;
     }
 
-    private void enumerateAndDisplayAudio() {
-        MediaMetadataRetriever retriever = new MediaMetadataRetriever();
-        Context context = this.getApplicationContext();
+    private void amberCreate() {
+        /* Assign UI references */
+        audioList = new ArrayList<AudioFile>();
+        audioFileAdapter = new AudioFileAdapter(getBaseContext(), audioList);
 
-        /* Get music from Android's media storer */
-        ContentResolver musicResolver = getContentResolver();
-        Uri musicUri = android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
-        Cursor musicCursor = musicResolver.query(musicUri, null, null, null, null);
-
-        int audioId = 0;
-        if (musicCursor != null) {
-            if (musicCursor.moveToFirst()) {
-                int idCol = musicCursor.getColumnIndex
-                        (android.provider.MediaStore.Audio.Media._ID);
-                do {
-                    int id = musicCursor.getInt(idCol);
-                    Uri uri = ContentUris.withAppendedId
-                            (android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id);
-
-                    AudioFile audio = extractAudioMetadata(context, retriever, audioId++, uri);
-                    if (audio != null) audioList.add(audio);
-                } while (musicCursor.moveToNext());
-            } else {
-                Log.v(TAG, "No music files found by MediaStore");
-            }
-        } else {
-            Log.e(TAG, "Cursor could not be resolved from ContentResolver");
-        }
-
-        /* DEBUG CLEAR preferences */
-        // sharedPref.edit().clear().commit();
-
-        /* Get music from the path set in preferences */
-        // TODO(doyle): Add callback handling on preference change
-        SharedPreferences sharedPref = PreferenceManager.getDefaultSharedPreferences(this);
-        String musicPath = sharedPref.getString("pref_music_path_key", "");
-        File musicDir = new File(musicPath);
-
-        if (musicDir.exists() && musicDir.canRead()) {
-            Log.d(TAG, "Music directory exists and is readable: " + musicDir.getAbsolutePath());
-
-            ArrayList<File> fileList = new ArrayList<>();
-            getFilesFromDirRecursive(fileList, musicDir);
-
-            for (File file : fileList) {
-                if (file.toString().endsWith(".opus")) {
-                    // TODO(doyle): Media parse from media player or external library
-                    Uri uri = Uri.fromFile(file);
-
-                    AudioFile audio = extractAudioMetadata(context, retriever, audioId++, uri);
-                    if (audio != null) audioList.add(audio);
-                }
-            }
-        }
-        retriever.release();
-
-        /* Sort list */
-        Collections.sort(audioList, new Comparator<AudioFile>() {
-            public int compare(AudioFile a, AudioFile b) {
-                return a.title.compareTo(b.title);
-            }
-        });
-
-        /* Display audio */
-        this.audioFileListView = (ListView) findViewById(R.id.main_list_view);
-        this.audioFileAdapter = new AudioFileAdapter(this, audioList);
-        this.audioFileListView.setAdapter(this.audioFileAdapter);
-    }
-
-    private void amberUpdate() {
-        this.audioList = new ArrayList<AudioFile>();
+        audioFileListView = (ListView) findViewById(R.id.main_list_view);
+        audioFileListView.setAdapter(audioFileAdapter);
 
         // NOTE(doyle): Only ask for permissions if version >= Android M (API 23)
         int readPermissionCheck = ContextCompat.checkSelfPermission(this,
@@ -242,7 +254,8 @@ public class MainActivity extends AppCompatActivity implements MediaPlayerContro
         }
 
         if (readPermissionCheck == PackageManager.PERMISSION_GRANTED) {
-            enumerateAndDisplayAudio();
+            ProcessAudioMetadata task = new ProcessAudioMetadata(getApplicationContext());
+            task.execute();
         }
     }
 
@@ -258,10 +271,14 @@ public class MainActivity extends AppCompatActivity implements MediaPlayerContro
                 }
 
                 if (grantResults.length > 1)
-                    Log.e(TAG, "Read external storage permission request has unexpected argument results expected length 1, got " + grantResults.length + ". Ignoring additional arguments");
+                    Log.e(TAG, "Read external storage permission request has unexpected argument " +
+                            "results expected length 1, got " + grantResults.length +
+                            ". Ignoring additional arguments");
 
-                if (grantResults[0] == PackageManager.PERMISSION_GRANTED)
-                    enumerateAndDisplayAudio();
+                if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    ProcessAudioMetadata task = new ProcessAudioMetadata(getApplicationContext());
+                    task.execute();
+                }
                 else
                     Log.i(TAG, "Read external storage permission request denied");
 
@@ -289,8 +306,9 @@ public class MainActivity extends AppCompatActivity implements MediaPlayerContro
                         .setAction("Action", null).show();
             }
         });
+
         setController();
-        amberUpdate();
+        amberCreate();
     }
 
     @Override
