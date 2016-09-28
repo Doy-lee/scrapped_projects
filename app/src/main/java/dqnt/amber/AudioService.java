@@ -23,7 +23,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
     private final IBinder binder = new AudioBinder();
     private MediaPlayer player;
 
-    private ArrayList<MainActivity.AudioFile> audioList;
+    private ArrayList<AudioFile> audioList;
     private int audioFileIndex;
 
     private boolean shuffle = false;
@@ -52,7 +52,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
         rand = new Random();
     }
 
-    public void setAudioList(ArrayList<MainActivity.AudioFile> audioList) {
+    public void setAudioList(ArrayList<AudioFile> audioList) {
         this.audioList = audioList;
     }
 
@@ -102,7 +102,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
         PendingIntent pendingIntent = PendingIntent.getActivity
                 (this, 0, notificationIntent, PendingIntent.FLAG_UPDATE_CURRENT);
 
-        MainActivity.AudioFile file = audioList.get(audioFileIndex);
+        AudioFile file = audioList.get(audioFileIndex);
 
         Notification.Builder builder = new Notification.Builder(this);
         builder.setContentIntent(pendingIntent)
@@ -167,7 +167,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
 
     public void play() {
         player.reset();
-        MainActivity.AudioFile audio = audioList.get(audioFileIndex);
+        AudioFile audio = audioList.get(audioFileIndex);
         /*
         int audioId = audio.id;
         Uri trackUri = ContentUris.withAppendedId

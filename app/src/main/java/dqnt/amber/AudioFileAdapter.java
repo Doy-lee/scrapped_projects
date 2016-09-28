@@ -14,10 +14,10 @@ import java.util.ArrayList;
  * Created by Doyle on 25/09/2016.
  */
 public class AudioFileAdapter extends BaseAdapter {
-    private ArrayList<MainActivity.AudioFile> audioList;
+    private ArrayList<AudioFile> audioList;
     private LayoutInflater audioInflater;
 
-    public AudioFileAdapter(Context context, ArrayList<MainActivity.AudioFile> audioList) {
+    public AudioFileAdapter(Context context, ArrayList<AudioFile> audioList) {
         this.audioList = audioList;
         audioInflater = LayoutInflater.from(context);
     }
@@ -42,7 +42,7 @@ public class AudioFileAdapter extends BaseAdapter {
         /* Get data */
         LinearLayout fileEntry = (LinearLayout)
                 audioInflater.inflate(R.layout.file_audio, parent, false);
-        MainActivity.AudioFile audio = audioList.get(position);
+        AudioFile audio = audioList.get(position);
 
         /* Set view data */
         TextView title = (TextView) fileEntry.findViewById(R.id.audio_title);

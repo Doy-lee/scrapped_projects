@@ -35,6 +35,60 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 
+class AudioFile {
+    int id;
+    Uri uri;
+    String album;
+    String albumArtist;
+    String artist;
+    String author;
+    String bitrate;
+    String cdTrackNumber;
+    String composer;
+    String date;
+    String discNumber;
+    String duration;
+    String genre;
+    String title;
+    String writer;
+    String year;
+
+    public AudioFile(int id,
+                     Uri uri,
+                     String album,
+                     String albumArtist,
+                     String artist,
+                     String author,
+                     String bitrate,
+                     String cdTrackNumber,
+                     String composer,
+                     String date,
+                     String discNumber,
+                     String duration,
+                     String genre,
+                     String title,
+                     String writer,
+                     String year
+    ) {
+        this.id = id;
+        this.uri = uri;
+        this.album = album;
+        this.albumArtist = albumArtist;
+        this.artist = artist;
+        this.author = author;
+        this.bitrate = bitrate;
+        this.cdTrackNumber = cdTrackNumber;
+        this.composer = composer;
+        this.date = date;
+        this.discNumber = discNumber;
+        this.duration = duration;
+        this.genre = genre;
+        this.title = title;
+        this.writer = writer;
+        this.year = year;
+    }
+}
+
 public class MainActivity extends AppCompatActivity implements MediaPlayerControl {
     private static final String TAG = MainActivity.class.getName();
     private static final int AMBER_READ_EXTERNAL_STORAGE_REQUEST = 1;
@@ -522,57 +576,4 @@ public class MainActivity extends AppCompatActivity implements MediaPlayerContro
         controller.setEnabled(true);
     }
 
-    public class AudioFile {
-        int id;
-        Uri uri;
-        String album;
-        String albumArtist;
-        String artist;
-        String author;
-        String bitrate;
-        String cdTrackNumber;
-        String composer;
-        String date;
-        String discNumber;
-        String duration;
-        String genre;
-        String title;
-        String writer;
-        String year;
-
-        public AudioFile(int id,
-                         Uri uri,
-                         String album,
-                         String albumArtist,
-                         String artist,
-                         String author,
-                         String bitrate,
-                         String cdTrackNumber,
-                         String composer,
-                         String date,
-                         String discNumber,
-                         String duration,
-                         String genre,
-                         String title,
-                         String writer,
-                         String year
-        ) {
-            this.id = id;
-            this.uri = uri;
-            this.album = album;
-            this.albumArtist = albumArtist;
-            this.artist = artist;
-            this.author = author;
-            this.bitrate = bitrate;
-            this.cdTrackNumber = cdTrackNumber;
-            this.composer = composer;
-            this.date = date;
-            this.discNumber = discNumber;
-            this.duration = duration;
-            this.genre = genre;
-            this.title = title;
-            this.writer = writer;
-            this.year = year;
-        }
-    }
 }
