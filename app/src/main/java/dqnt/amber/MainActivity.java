@@ -10,6 +10,7 @@ import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
 import android.media.MediaMetadataRetriever;
 import android.net.Uri;
 import android.os.AsyncTask;
@@ -105,6 +106,8 @@ public class MainActivity extends AppCompatActivity implements MediaPlayerContro
     private boolean paused = false;
     private boolean playbackPaused = false;
 
+    private AudioDatabase database;
+
     // NOTE(doyle): When the Android system creates the connection between the client and service,
     // (bindService()) it calls onServiceConnected() on the ServiceConnection, to deliver the
     // IBinder that the client can use to communicate with the service. (i.e. callback).
@@ -137,6 +140,26 @@ public class MainActivity extends AppCompatActivity implements MediaPlayerContro
         }
     }
 
+    private class GetAudioMetadataFromDb extends AsyncTask<Void, Void, Void> {
+        @Override
+        protected Void doInBackground(Void... params) {
+            ArrayList<AudioFile> list = database.getAllAudioFiles();
+
+            // TODO(doyle): Audiolist is used as a reference in other activities
+            // Can't replace it without updating those references, for now just blindly copy
+            for (AudioFile file: list) {
+                audioList.add(file);
+            }
+            return null;
+        }
+
+        @Override
+        protected void onPostExecute(Void aVoid) {
+            super.onPostExecute(aVoid);
+            audioFileAdapter.notifyDataSetChanged();
+        }
+    }
+
     private class ProcessAudioMetadata extends AsyncTask<Void, AudioFile, Void> {
         private Context context;
         public ProcessAudioMetadata(Context context) { this.context = context; }
@@ -150,6 +173,8 @@ public class MainActivity extends AppCompatActivity implements MediaPlayerContro
             Uri musicUri = android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
             Cursor musicCursor = musicResolver.query(musicUri, null, null, null, null);
 
+            SQLiteDatabase db = database.getWritableDatabase();
+
             int audioId = 0;
             if (musicCursor != null) {
                 if (musicCursor.moveToFirst()) {
@@ -162,6 +187,7 @@ public class MainActivity extends AppCompatActivity implements MediaPlayerContro
 
                         AudioFile audio = extractAudioMetadata(context, retriever, audioId++, uri);
                         if (audio != null) {
+                            database.insertAudioFileToDb(db, audio);
                             publishProgress(audio);
                         }
                     } while (musicCursor.moveToNext());
@@ -195,12 +221,14 @@ public class MainActivity extends AppCompatActivity implements MediaPlayerContro
 
                         AudioFile audio = extractAudioMetadata(context, retriever, audioId++, uri);
                         if (audio != null) {
+                            database.insertAudioFileToDb(db, audio);
                             publishProgress(audio);
                         }
                     }
                 }
             }
             retriever.release();
+            db.close();
 
             /* Sort list */
             Collections.sort(audioList, new Comparator<AudioFile>() {
@@ -208,7 +236,6 @@ public class MainActivity extends AppCompatActivity implements MediaPlayerContro
                     return a.title.compareTo(b.title);
                 }
             });
-
             return null;
         }
 
@@ -229,6 +256,10 @@ public class MainActivity extends AppCompatActivity implements MediaPlayerContro
         protected void onPostExecute(Void aVoid) {
             super.onPostExecute(aVoid);
             audioFileAdapter.notifyDataSetChanged();
+
+            SharedPreferences sharedPref = PreferenceManager.getDefaultSharedPreferences(context);
+            String libraryInitKey = getResources().getString(R.string.internal_pref_library_init_key);
+            sharedPref.edit().putBoolean(libraryInitKey, true).apply();
         }
     }
 
@@ -294,6 +325,8 @@ public class MainActivity extends AppCompatActivity implements MediaPlayerContro
         audioFileListView = (ListView) findViewById(R.id.main_list_view);
         audioFileListView.setAdapter(audioFileAdapter);
 
+        database = new AudioDatabase(getApplicationContext());
+
         // NOTE(doyle): Only ask for permissions if version >= Android M (API 23)
         int readPermissionCheck = ContextCompat.checkSelfPermission(this,
                 Manifest.permission.READ_EXTERNAL_STORAGE);
@@ -307,9 +340,17 @@ public class MainActivity extends AppCompatActivity implements MediaPlayerContro
             }
         }
 
+        SharedPreferences sharedPref = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
+        boolean libraryInit = sharedPref.getBoolean
+                (getResources().getString(R.string.internal_pref_library_init_key), false);
         if (readPermissionCheck == PackageManager.PERMISSION_GRANTED) {
-            ProcessAudioMetadata task = new ProcessAudioMetadata(getApplicationContext());
-            task.execute();
+            if (libraryInit) {
+                new GetAudioMetadataFromDb().execute();
+            } else {
+                ProcessAudioMetadata processTask = new ProcessAudioMetadata(getApplicationContext());
+                processTask.execute();
+            }
+
         }
     }
 
@@ -330,8 +371,17 @@ public class MainActivity extends AppCompatActivity implements MediaPlayerContro
                             ". Ignoring additional arguments");
 
                 if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    ProcessAudioMetadata task = new ProcessAudioMetadata(getApplicationContext());
-                    task.execute();
+                    Context appContext = getApplicationContext();
+                    SharedPreferences sharedPref = PreferenceManager.getDefaultSharedPreferences(appContext);
+                    boolean libraryInit = sharedPref.getBoolean
+                            (getResources().getString(R.string.internal_pref_library_init_key), false);
+
+                    if (libraryInit) {
+                        new GetAudioMetadataFromDb().execute();
+                    } else {
+                        ProcessAudioMetadata processTask = new ProcessAudioMetadata(appContext);
+                        processTask.execute();
+                    }
                 }
                 else
                     Log.i(TAG, "Read external storage permission request denied");

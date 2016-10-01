@@ -7,4 +7,6 @@
     <string name="pref_music_path_key">pref_music_path_key</string>
     <string name="pref_music_path">Music Path</string>
     <string name="pref_music_path_summ">Location of music files to be used</string>
+
+    <string name="internal_pref_library_init_key">internal_pref_library_init_key</string>
 </resources>

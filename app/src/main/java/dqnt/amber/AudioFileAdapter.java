@@ -14,7 +14,7 @@ import java.util.ArrayList;
  * Created by Doyle on 25/09/2016.
  */
 public class AudioFileAdapter extends BaseAdapter {
-    private ArrayList<AudioFile> audioList;
+    public ArrayList<AudioFile> audioList;
     private LayoutInflater audioInflater;
 
     public AudioFileAdapter(Context context, ArrayList<AudioFile> audioList) {

@@ -7,6 +7,7 @@ import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.net.Uri;
 import android.provider.BaseColumns;
+import android.util.Log;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -22,7 +23,7 @@ public class AudioDatabase extends SQLiteOpenHelper {
     // with the Android framework.
     // public static final String COLUMN_NAME_ID = "_ID";
     public static class Entry implements BaseColumns {
-        public static final String DB_NAME = "Amber";
+        public static final String DB_NAME = "Amber.db";
         public static final String TABLE_NAME = "AudioFile";
         public static final String KEY_PATH = "file_path";
         public static final String KEY_TITLE = "title";
@@ -30,13 +31,15 @@ public class AudioDatabase extends SQLiteOpenHelper {
         public static final String KEY_YEAR = "year";
     }
 
+    private static final String TAG = AudioDatabase.class.getName();
+
     private static final int DB_VERSION = 1;
     private static final String DB_TABLE_CREATE =
         "CREATE TABLE " + Entry.TABLE_NAME + " (" + Entry._ID + " INTEGER PRIMARY KEY AUTOINCREMENT, "
                                                + Entry.KEY_PATH + " TEXT, "
                                                + Entry.KEY_ARTIST + " TEXT, "
                                                + Entry.KEY_TITLE  + " TEXT, "
-                                               + Entry.KEY_YEAR   + " TEXT, "
+                                               + Entry.KEY_YEAR   + " TEXT"
                                                + ")";
         // "CREATE TABLE " + DATABASE_TABLE_NAME + " (" + KEY_WORD + " TEXT, " + KEY_DEFINITION + " TEXT);";
 
@@ -56,27 +59,31 @@ public class AudioDatabase extends SQLiteOpenHelper {
         onCreate(db);
     }
 
-    public void insertAudioFileToDb(AudioFile files[]) {
-        SQLiteDatabase db = this.getWritableDatabase();
-
-        for (AudioFile file: files) {
-            ContentValues value = new ContentValues();
-            value.put(Entry.KEY_PATH, file.uri.getPath());
-            value.put(Entry.KEY_TITLE, file.title);
-            value.put(Entry.KEY_ARTIST, file.artist);
-            value.put(Entry.KEY_YEAR, file.year);
-
-            db.insert(Entry.TABLE_NAME, null, value);
+    // TODO(doyle): Pass db as argument or accept list of audiofiles
+    // NOTE(doyle): Does not close db connection
+    public void insertAudioFileToDb(SQLiteDatabase db, AudioFile file) {
+        if (file == null || db == null) {
+            Log.e(TAG, "DB or File is null");
+            return;
         }
 
-        db.close();
+        ContentValues value = new ContentValues();
+        value.put(Entry.KEY_PATH, file.uri.getPath());
+        value.put(Entry.KEY_TITLE, file.title);
+        value.put(Entry.KEY_ARTIST, file.artist);
+        value.put(Entry.KEY_YEAR, file.year);
+        db.insert(Entry.TABLE_NAME, null, value);
     }
 
-    private final String[] projection = {Entry.KEY_PATH, Entry.KEY_ARTIST, Entry.KEY_TITLE,
+    private final String[] projection = {Entry._ID, Entry.KEY_PATH, Entry.KEY_ARTIST, Entry.KEY_TITLE,
                                          Entry.KEY_YEAR};
     public ArrayList<AudioFile> getAllAudioFiles() {
-
         SQLiteDatabase db = this.getReadableDatabase();
+        if (db == null) {
+            Log.e(TAG, "Tried to get non-existent app database");
+            return null;
+        }
+
         Cursor cursor = db.query(Entry.TABLE_NAME,
                                  projection,
                                  null,
@@ -85,11 +92,11 @@ public class AudioDatabase extends SQLiteOpenHelper {
                                  null,
                                  null);
 
-        int audioId = 0;
         ArrayList<AudioFile> result = new ArrayList<>();
         cursor.moveToFirst();
         while (!cursor.isAfterLast()) {
-            int id = cursor.getInt(0);
+            // NOTE(doyle): Since DB primary keys start from 1
+            int id = cursor.getInt(0) - 1;
             Uri uri = Uri.fromFile(new File(cursor.getString(1)));
 
             String tmp = "Unknown";
@@ -110,6 +117,8 @@ public class AudioDatabase extends SQLiteOpenHelper {
             AudioFile file = new AudioFile(id, uri, album, albumArtist, artist, author, bitrate,
                     cdTrackNumber, composer, date, discNumber, duration, genre, title, writer, year);
             result.add(file);
+            cursor.moveToNext();
+            Log.v(TAG, "Uri: " + uri + ", Parsed audio: " + artist +  " - " + title);
         }
 
         return result;
