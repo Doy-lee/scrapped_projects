@@ -1,7 +1,7 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
-    tools:context="dqnt.amber.MainActivity">
+    tools:context="com.dqnt.amberMainActivity">
     <item
         android:id="@+id/action_stop_playback"
         android:orderInCategory="100"

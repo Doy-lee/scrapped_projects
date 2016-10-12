@@ -1,4 +1,4 @@
-package dqnt.amber;
+package com.dqnt.amber;
 
 import android.content.Context;
 import android.view.LayoutInflater;
