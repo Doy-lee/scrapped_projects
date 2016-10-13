@@ -5,7 +5,6 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
-import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import java.util.ArrayList;
@@ -13,11 +12,13 @@ import java.util.ArrayList;
 /**
  * Created by Doyle on 25/09/2016.
  */
-public class AudioFileAdapter extends BaseAdapter {
-    public ArrayList<AudioFile> audioList;
+class AudioFileAdapter extends BaseAdapter {
+    private final String TAG = AudioFileAdapter.class.getName();
+
+    private ArrayList<AudioFile> audioList;
     private LayoutInflater audioInflater;
 
-    public AudioFileAdapter(Context context, ArrayList<AudioFile> audioList) {
+    AudioFileAdapter(Context context, ArrayList<AudioFile> audioList) {
         this.audioList = audioList;
         audioInflater = LayoutInflater.from(context);
     }
@@ -37,22 +38,39 @@ public class AudioFileAdapter extends BaseAdapter {
         return audioList.get(position).id;
     }
 
+    // NOTE(doyle): Cache the inflated layout elements in a audio entry into the tag of a list item
+    private class AudioEntryInView {
+        TextView artist;
+        TextView title;
+    }
+
     @Override
     public View getView(int position, View convertView, ViewGroup parent) {
-        /* Get data */
-        LinearLayout fileEntry = (LinearLayout)
-                audioInflater.inflate(R.layout.file_audio, parent, false);
+        AudioEntryInView audioEntry;
+
+        // NOTE(doyle): convertView is a recycled entry going offscreen to be
+        // reused for another element
+        if (convertView == null) {
+            audioEntry = new AudioEntryInView();
+            audioEntry.artist = (TextView) convertView.findViewById(R.id.audio_artist);
+            audioEntry.title = (TextView) convertView.findViewById(R.id.audio_title);
+
+            convertView = audioInflater.inflate(R.layout.file_audio, parent, false);
+            convertView.setTag(audioEntry);
+        } else {
+            audioEntry = (AudioEntryInView) convertView.getTag();
+        }
+
         AudioFile audio = audioList.get(position);
+        if (Debug.CAREFUL_ASSERT(audio != null, TAG, "getView(): Audio file is null")) {
+            /* Set view data */
+            audioEntry.artist.setText(audio.title);
+            audioEntry.title.setText(audio.artist);
 
-        /* Set view data */
-        TextView title = (TextView) fileEntry.findViewById(R.id.audio_title);
-        TextView artistView = (TextView) fileEntry.findViewById(R.id.audio_artist);
-        title.setText(audio.title);
-        artistView.setText(audio.artist);
+            /* Set position as tag */
+            convertView.setTag(position);
+        }
 
-        /* Set position as tag */
-        fileEntry.setTag(position);
-
-        return fileEntry;
+        return convertView;
     }
 }
