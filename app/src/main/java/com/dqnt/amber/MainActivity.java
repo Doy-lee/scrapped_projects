@@ -1,5 +1,6 @@
 package com.dqnt.amber;
 
+
 import android.Manifest;
 import android.content.ComponentName;
 import android.content.ContentResolver;
@@ -26,7 +27,7 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.ListView;
-import android.widget.MediaController.MediaPlayerControl;
+import android.widget.Toast;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -34,20 +35,15 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 
-public class MainActivity extends AppCompatActivity implements MediaPlayerControl {
+public class MainActivity extends AppCompatActivity {
+    public static final String BROADCAST_PLAY_NEW_AUDIO = "com.dqnt.amber.PlayNewAudio";
     private static final String TAG = MainActivity.class.getName();
     private static final int AMBER_READ_EXTERNAL_STORAGE_REQUEST = 1;
-
     private AudioFileAdapter audioFileAdapter;
     private ArrayList<AudioFile> audioList;
 
     private AudioService audioService;
-    private Intent playIntent;
-    private boolean audioBound = false;
-
-    private AudioController controller;
-    private boolean paused = false;
-    private boolean playbackPaused = false;
+    private boolean serviceBound = false;
 
     /*
      ***********************************************************************************************
@@ -62,39 +58,21 @@ public class MainActivity extends AppCompatActivity implements MediaPlayerContro
         // NOTE(doyle): Use the binder to get access to the audio service, i.e. playback control
         @Override
         public void onServiceConnected(ComponentName name, IBinder service) {
-            AudioService.AudioBinder binder = (AudioService.AudioBinder) service;
+            AudioService.LocalBinder binder = (AudioService.LocalBinder) service;
             audioService = binder.getService();
-            audioService.setAudioList(audioList);
+            serviceBound = true;
 
-            audioBound = true;
+            if (Debug.DEBUG_MODE) {
+                Toast.makeText(getApplicationContext(), "Service Bound", Toast.LENGTH_SHORT).show();
+            }
         }
 
         @Override
         public void onServiceDisconnected(ComponentName name) {
-            audioBound = false;
+            serviceBound = false;
         }
 
     };
-
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
-
-        setController();
-        amberCreate();
-    }
-
-    @Override
-    protected void onStart() {
-        super.onStart();
-        if (playIntent == null) {
-            // TODO(doyle): Start a new thread for MP3 playback, recommended by Android
-            playIntent = new Intent(this, AudioService.class);
-            bindService(playIntent, audioConnection, Context.BIND_AUTO_CREATE);
-            startService(playIntent);
-        }
-    }
 
     private void amberCreate() {
         /* Assign UI references */
@@ -134,58 +112,76 @@ public class MainActivity extends AppCompatActivity implements MediaPlayerContro
     }
 
     private void queryDeviceForAudioData() {
+        Context appContext = getApplicationContext();
         SharedPreferences sharedPref = PreferenceManager.
-                getDefaultSharedPreferences(getApplicationContext());
+                getDefaultSharedPreferences(appContext);
         boolean libraryInit = sharedPref.getBoolean
                 (getResources().getString(R.string.internal_pref_library_init_key), false);
 
-        AudioDatabase dbHandle = AudioDatabase.getHandle(getApplicationContext());
+        AudioDatabase dbHandle = AudioDatabase.getHandle(appContext);
         if (Debug.CAREFUL_ASSERT(dbHandle != null, TAG,
                 "amberCreate(): Could not get a db handle")) {
             if (libraryInit) {
                 new GetAudioMetadataFromDb(dbHandle).execute();
             } else {
-                GetAudioFromDevice task = new GetAudioFromDevice(getApplicationContext(),
-                        dbHandle);
+                GetAudioFromDevice task = new GetAudioFromDevice(appContext, dbHandle);
                 task.execute();
             }
         }
     }
 
-    private void setController() {
-        controller = new AudioController(this);
-        controller.setPrevNextListeners(new View.OnClickListener() {
-            // NOTE(doyle): onClick callback for next song button
-            public void onClick(View v) {
-
-                audioService.playNext();
-                controller.show();
-            }
-        }, new View.OnClickListener() {
-            // NOTE(doyle): onClick callback for prev song button
-            public void onClick(View v) {
-                playPrev();
-                controller.show();
-            }
-        });
-
-        controller.setMediaPlayer(this);
-        controller.setAnchorView(findViewById(R.id.main_list_view));
-        controller.setEnabled(true);
+    /*
+     ***********************************************************************************************
+     * FRAGMENT LIFECYCLE BEHAVIOUR
+     ***********************************************************************************************
+     */
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        amberCreate();
     }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        if (!serviceBound) {
+            Log.d(TAG, "Starting service again");
+            Intent playerIntent = new Intent(this, AudioService.class);
+            startService(playerIntent);
+            bindService(playerIntent, audioConnection, Context.BIND_AUTO_CREATE);
+        }
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+    }
+
+    @Override
+    public void onStop() {
+        super.onStop();
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (serviceBound) {
+            unbindService(audioConnection);
+        }
+    }
+
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         // Inflate the menu; this adds items to the action bar if it is present.
         getMenuInflater().inflate(R.menu.menu_main, menu);
         return true;
-    }
-
-    @Override
-    protected void onDestroy() {
-        stopService(playIntent);
-        audioService = null;
-        super.onDestroy();
     }
 
     @Override
@@ -198,29 +194,27 @@ public class MainActivity extends AppCompatActivity implements MediaPlayerContro
         //noinspection SimplifiableIfStatement
         switch (id) {
             case R.id.action_settings: {
-                Intent intent = new Intent();
-                intent.setClassName(this, "com.dqnt.amber.SettingsActivity");
+                Intent intent = new Intent(this, SettingsActivity.class);
                 startActivity(intent);
                 return true;
             }
             case R.id.action_stop_playback: {
-                if (audioBound) {
-                    audioService.end();
-                }
                 break;
             }
             case R.id.action_exit: {
-                stopService(playIntent);
-                audioService = null;
+                if (serviceBound) {
+                    unbindService(audioConnection);
+                    audioService.stopSelf();
+                }
                 System.exit(0);
                 break;
             }
             case R.id.action_shuffle: {
-                audioService.setShuffle();
                 break;
             }
             default: {
-                Log.e(TAG, "Unrecognised item id selected in options menu: " + id);
+                Debug.CAREFUL_ASSERT
+                        (false, TAG, "Unrecognised item id selected in options menu: " + id);
                 break;
             }
         }
@@ -257,6 +251,19 @@ public class MainActivity extends AppCompatActivity implements MediaPlayerContro
         }
     }
 
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        outState.putBoolean("ServiceState", serviceBound);
+        super.onSaveInstanceState(outState);
+    }
+
+    @Override
+    protected void onRestoreInstanceState(Bundle savedInstanceState) {
+        super.onRestoreInstanceState(savedInstanceState);
+        serviceBound = savedInstanceState.getBoolean("ServiceState");
+    }
+
+
     /*
      ***********************************************************************************************
      * ASYNC TASKS FOR QUERYING AUDIO
@@ -279,7 +286,7 @@ public class MainActivity extends AppCompatActivity implements MediaPlayerContro
             ArrayList<AudioFile> list = dbHandle.getAllAudioFiles();
             // TODO(doyle): Audiolist is used as a reference in other activities
             // Can't replace it without updating those references, for now just blindly copy
-            for (AudioFile file: list) audioList.add(file);
+            audioList.addAll(list);
 
             return null;
         }
@@ -503,128 +510,26 @@ public class MainActivity extends AppCompatActivity implements MediaPlayerContro
         return result;
     }
 
+    private void playAudio(List<AudioFile> playlist, int index) {
+        audioService.queuePlaylistAndSong(playlist, index);
+        // TODO(doyle): Parcel vs accessing service class
+        if (!serviceBound) {
+            // Debug.CAREFUL_ASSERT(false, TAG, "playAudio(): Service not bound after start up?");
+            Intent playerIntent = new Intent(this, AudioService.class);
+            startService(playerIntent);
+            bindService(playerIntent, audioConnection, Context.BIND_AUTO_CREATE);
+        } else {
+            // NOTE(doyle): Service is active, send media with broadcast receiver
+            Intent broadcastIntent = new Intent(BROADCAST_PLAY_NEW_AUDIO);
+            sendBroadcast(broadcastIntent);
+        }
+    }
+
     public void audioFileClicked(View view) {
-        int audioFileIndex = Integer.parseInt(view.getTag().toString());
-
+        AudioFileAdapter.AudioEntryInView entry = (AudioFileAdapter.AudioEntryInView) view.getTag();
+        int index = entry.position;
         // TODO(doyle): Look into collapsing into one call ..
-        audioService.setAudio(audioFileIndex);
-        audioService.play();
-
-        if (playbackPaused) {
-            setController();
-            playbackPaused = false;
-        }
-
-        controller.show();
-    }
-
-    /*
-     ***********************************************************************************************
-     * MediaPlayer Interface Implementation
-     ***********************************************************************************************
-     */
-    @Override
-    public void start() {
-        audioService.go();
-    }
-
-    @Override
-    public void pause() {
-        audioService.pause();
-        playbackPaused = false;
-    }
-
-    @Override
-    public void onPause() {
-        super.onPause();
-        paused = true;
-    }
-
-    @Override
-    public void onResume() {
-        super.onResume();
-        if (paused) {
-            setController();
-            paused = false;
-        }
-    }
-
-    @Override
-    public void onStop() {
-        controller.hide();
-        super.onStop();
-    }
-
-    @Override
-    public int getDuration() {
-        if (audioService != null && audioBound && audioService.isPlaying())
-            return audioService.getDuration();
-
-        return 0;
-    }
-
-    @Override
-    public int getCurrentPosition() {
-        if (audioService != null && audioBound && audioService.isPlaying())
-            return audioService.getPosition();
-
-        return 0;
-    }
-
-    @Override
-    public void seekTo(int pos) {
-        audioService.seek(pos);
-    }
-
-    @Override
-    public boolean isPlaying() {
-        if (audioService != null && audioBound)
-            return audioService.isPlaying();
-
-        return false;
-    }
-
-    @Override
-    public int getBufferPercentage() {
-        return 0;
-    }
-
-    @Override
-    public boolean canPause() {
-        return true;
-    }
-
-    @Override
-    public boolean canSeekBackward() {
-        return true;
-    }
-
-    @Override
-    public boolean canSeekForward() {
-        return true;
-    }
-
-    @Override
-    public int getAudioSessionId() {
-        return 0;
-    }
-
-    private void playNext() {
-        audioService.playNext();
-        if (playbackPaused) {
-            setController();
-            playbackPaused = false;
-        }
-        controller.show(0);
-    }
-
-    private void playPrev() {
-        audioService.playPrev();
-        if (playbackPaused) {
-            setController();
-            playbackPaused = false;
-        }
-        controller.show(0);
+        playAudio(audioList, index);
     }
 
 }

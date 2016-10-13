@@ -39,7 +39,8 @@ class AudioFileAdapter extends BaseAdapter {
     }
 
     // NOTE(doyle): Cache the inflated layout elements in a audio entry into the tag of a list item
-    private class AudioEntryInView {
+    public class AudioEntryInView {
+        int position;
         TextView artist;
         TextView title;
     }
@@ -51,11 +52,12 @@ class AudioFileAdapter extends BaseAdapter {
         // NOTE(doyle): convertView is a recycled entry going offscreen to be
         // reused for another element
         if (convertView == null) {
+            convertView = audioInflater.inflate(R.layout.file_audio, parent, false);
+
             audioEntry = new AudioEntryInView();
             audioEntry.artist = (TextView) convertView.findViewById(R.id.audio_artist);
             audioEntry.title = (TextView) convertView.findViewById(R.id.audio_title);
 
-            convertView = audioInflater.inflate(R.layout.file_audio, parent, false);
             convertView.setTag(audioEntry);
         } else {
             audioEntry = (AudioEntryInView) convertView.getTag();
@@ -66,9 +68,7 @@ class AudioFileAdapter extends BaseAdapter {
             /* Set view data */
             audioEntry.artist.setText(audio.title);
             audioEntry.title.setText(audio.artist);
-
-            /* Set position as tag */
-            convertView.setTag(position);
+            audioEntry.position = position;
         }
 
         return convertView;
