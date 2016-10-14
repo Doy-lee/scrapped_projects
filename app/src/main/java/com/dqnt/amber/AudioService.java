@@ -10,7 +10,6 @@ import android.content.IntentFilter;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.media.session.MediaSessionManager;
-import android.net.Uri;
 import android.os.Binder;
 import android.os.IBinder;
 import android.os.PowerManager;
@@ -24,7 +23,9 @@ import android.telephony.TelephonyManager;
 import android.util.Log;
 
 import java.io.IOException;
-import java.util.List;
+
+import com.dqnt.amber.PlaybackData.PlaylistSpec;
+import com.dqnt.amber.PlaybackData.AudioFile;
 
 // TODO(doyle): Audio focus/audio manager API to manage what happens to sound on lose focus
 public class AudioService extends Service implements MediaPlayer.OnPreparedListener,
@@ -55,7 +56,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
     // NOTE(doyle): Interface between client and service. Allows client to get service instance from
     // the binder
     public class LocalBinder extends Binder {
-        public AudioService getService() { return AudioService.this; }
+        AudioService getService() { return AudioService.this; }
     }
 
     @Override
@@ -66,8 +67,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
     private final int NOTIFY_ID = 1;
     private AudioManager audioManager;
 
-    private List<AudioFile> playlist;
-    private int playlistIndex;
+    private PlaylistSpec playlist;
     private AudioFile activeAudio;
 
     private MediaPlayer player;
@@ -93,7 +93,6 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
         if (mediaSessionManager == null) {
             try {
                 initMediaSession();
-                // initMediaPlayer();
             } catch (RemoteException e) {
                 e.printStackTrace();
                 stopSelf();
@@ -270,38 +269,25 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
         player.setOnPreparedListener(this);
         player.setOnSeekCompleteListener(this);
         player.reset();
+        resumePosition = 0;
 
         // NOTE(doyle): Partial wake to allow playback on screen-off
         player.setWakeMode(getApplicationContext(), PowerManager.PARTIAL_WAKE_LOCK);
         player.setAudioStreamType(AudioManager.STREAM_MUSIC);
-
-        if (Debug.CAREFUL_ASSERT(activeAudio != null, TAG,
-                "initMediaPlayer(): Audio file is null")) {
-            try {
-                player.setDataSource(getApplicationContext(), activeAudio.uri);
-            } catch (IOException e) {
-                e.printStackTrace();
-                stopSelf();
-            }
-            player.prepareAsync();
-        }
     }
 
     @Override
     public boolean onUnbind(Intent intent) {
-        if (player != null) {
-            player.stop();
-            player.release();
-        }
-
+        Log.d(TAG, "onUnbind(): Service unbound from activity");
         return false;
     }
 
     @Override
     public void onDestroy() {
+        Log.d(TAG, "onDestroy(): Service destroyed");
+
         // NOTE(doyle): Stop notification running in foreground
         stopForeground(true);
-
         if (player != null) {
             stopMedia();
             player.release();
@@ -310,13 +296,11 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
         // TODO(doyle):  Think about focus only requested during playback
         removeAudioFocus();
 
-        if (phoneStateListener != null)
-            telephonyManager.listen(phoneStateListener, PhoneStateListener.LISTEN_NONE);
-
         removeNotification();
 
         unregisterReceiver(becomingNoisyReceiver);
         unregisterReceiver(playNewAudioReceiver);
+        unregisterCallStateListener(phoneStateListener);
     }
 
     private boolean requestAudioFocus() {
@@ -331,22 +315,6 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
     private boolean removeAudioFocus() {
         return AudioManager.AUDIOFOCUS_REQUEST_GRANTED == audioManager.abandonAudioFocus(this);
     }
-
-    void queuePlaylistAndSong(final List<AudioFile> playlist, int index) {
-        if (Debug.CAREFUL_ASSERT(playlist != null, TAG,
-                "queuePlaylistAndSong(): Playlist is null" )) {
-            this.playlist = playlist;
-
-            if (!Debug.CAREFUL_ASSERT(index < playlist.size(), TAG,
-                    "queuePlaylistAndSong(): Index out of bounds")) {
-                index = 0;
-            }
-
-            this.playlistIndex = index;
-            activeAudio = playlist.get(index);
-        }
-    }
-
 
     /*
      ***********************************************************************************************
@@ -411,29 +379,32 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
     public void onAudioFocusChange(int focusState) {
         //Invoked when the audio focus of the system is updated.
         switch (focusState) {
-            case AudioManager.AUDIOFOCUS_GAIN:
+            case AudioManager.AUDIOFOCUS_GAIN: {
                 // resume playback
                 if (player == null) initMediaPlayer();
-                else if (!player.isPlaying()) player.start();
                 player.setVolume(1.0f, 1.0f);
+                playMedia();
                 break;
-            case AudioManager.AUDIOFOCUS_LOSS:
-                // Lost focus for an unbounded amount of time: stop playback and release media player
-                if (player.isPlaying()) player.stop();
+            }
+            case AudioManager.AUDIOFOCUS_LOSS: {
+                // Lost focus for an amount of time stop playback and release media player
+                stopMedia();
                 player.release();
                 player = null;
                 break;
-            case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT:
-                // Lost focus for a short time, but we have to stop
-                // playback. We don't release the media player because playback
-                // is likely to resume
-                if (player.isPlaying()) player.pause();
+            }
+            case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT: {
+                // Lost focus for a short time, but we have to stop playback. We don't release the
+                // media player because playback is likely to resume
+                pauseMedia();
                 break;
-            case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK:
-                // Lost focus for a short time, but it's ok to keep playing
-                // at an attenuated level
+            }
+
+            // Lost focus for a short time, but it's ok to keep playing at an attenuated level
+            case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK: {
                 if (player.isPlaying()) player.setVolume(0.1f, 0.1f);
                 break;
+            }
         }
     }
 
@@ -459,20 +430,36 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
      ***********************************************************************************************
      */
     private void playMedia() {
+        Debug.CAREFUL_ASSERT(player != null, TAG, "playMedia(): Player is null");
+
+        if (Debug.CAREFUL_ASSERT(((resumePosition <= activeAudio.duration) || (resumePosition >= 0)),
+                TAG, "playMedia(): Resume position is invalid")) {
+
+            // resumePosition
+        }
         if (!player.isPlaying()) {
+            player.seekTo(resumePosition);
             player.start();
         }
     }
 
     private void stopMedia() {
-        if (player == null) return;
+        if (player == null) {
+            Debug.CAREFUL_ASSERT(false, TAG, "stopMedia(): Tried to stop null player");
+            return;
+        }
+
         if (player.isPlaying()) {
             player.stop();
         }
     }
 
     private void pauseMedia() {
-        if (player == null) return;
+        if (player == null) {
+            Debug.CAREFUL_ASSERT(false, TAG, "pauseMedia(): Tried to pause null player");
+            return;
+        }
+
         if (player.isPlaying()) {
             player.pause();
             resumePosition = player.getCurrentPosition();
@@ -480,6 +467,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
     }
 
     private void resumeMedia() {
+        Debug.CAREFUL_ASSERT(player != null, TAG, "resumeMedia(): Player is null");
         if (!player.isPlaying()) {
             player.seekTo(resumePosition);
             player.start();
@@ -488,10 +476,63 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
 
     private void skipToNext() {
         // TODO(doyle): To be implemented
+        Debug.CAREFUL_ASSERT(playlist.list.size() > 0, TAG, "skipToNext(): Playlist is empty: " +
+                "" + playlist.list.size());
+
+        if (++playlist.index >= playlist.list.size()) playlist.index = 0;
+        activeAudio = playlist.list.get(playlist.index);
+        prepareSongAndPlay();
     }
 
     private void skipToPrevious() {
         // TODO(doyle): To be implemented
+        Debug.CAREFUL_ASSERT(playlist.list.size() > 0, TAG, "skipToPrevious(): Playlist is empty: " +
+                "" + playlist.list.size());
+
+        if (--playlist.index < 0) playlist.index = playlist.list.size() - 1;
+        activeAudio = playlist.list.get(playlist.index);
+        prepareSongAndPlay();
+    }
+
+    void queuePlaylistAndSong(final PlaylistSpec playlist) {
+        if (Debug.CAREFUL_ASSERT(playlist != null, TAG,
+                "queuePlaylistAndSong(): Playlist is null" )) {
+            this.playlist = playlist;
+
+            if (!Debug.CAREFUL_ASSERT(playlist.index < playlist.list.size(), TAG,
+                    "queuePlaylistAndSong(): Index out of bounds")) {
+                this.playlist.index = 0;
+            } else {
+                this.playlist.index = playlist.index;
+            }
+
+            activeAudio = playlist.list.get(playlist.index);
+        }
+    }
+
+    private void prepareSongAndPlay() {
+        /* Prepare song and play it */
+
+        if (player == null) {
+            initMediaPlayer();
+        } else {
+            // stopMedia();
+        }
+
+        if (Debug.CAREFUL_ASSERT(activeAudio != null, TAG,
+                "initMediaPlayer(): Audio file is null")) {
+            try {
+                player.reset();
+                player.setDataSource(getApplicationContext(), activeAudio.uri);
+                player.prepareAsync();
+                buildNotification(PlaybackStatus.PLAYING);
+            } catch (IOException e) {
+                e.printStackTrace();
+                Debug.CAREFUL_ASSERT(false, TAG, "prepareSongAndPlay(): IOException, could not " +
+                        "set file as source");
+                stopSelf();
+            }
+        }
     }
 
     /*
@@ -515,9 +556,8 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
     private BroadcastReceiver playNewAudioReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-            stopMedia();
-            initMediaPlayer();
-            buildNotification(PlaybackStatus.PLAYING);
+            Log.d(TAG, "Received play new audio intent");
+            prepareSongAndPlay();
         }
     };
 
@@ -533,7 +573,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
     private void registerCallStateListener() {
         telephonyManager = (TelephonyManager) getSystemService(Context.TELEPHONY_SERVICE);
         phoneStateListener = new PhoneStateListener() {
-            @Override
+        @Override
             public void onCallStateChanged(int state, String incomingNumber) {
                 switch(state) {
                     case TelephonyManager.CALL_STATE_OFFHOOK:
@@ -546,8 +586,8 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
 
                     case TelephonyManager.CALL_STATE_IDLE:
                         if (player != null && ongoingCall) {
-                                ongoingCall = false;
-                                resumeMedia();
+                            ongoingCall = false;
+                            resumeMedia();
                         }
                         break;
                 }
@@ -558,8 +598,9 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
         telephonyManager.listen(phoneStateListener, PhoneStateListener.LISTEN_CALL_STATE);
     }
 
-    private void unregisterCallStateListener() {
-
+    private void unregisterCallStateListener(PhoneStateListener listener) {
+        if (listener != null)
+            telephonyManager.listen(listener, PhoneStateListener.LISTEN_NONE);
     }
 
 }

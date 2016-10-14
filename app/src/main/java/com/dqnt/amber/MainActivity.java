@@ -18,6 +18,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.preference.PreferenceManager;
+import android.provider.MediaStore;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
@@ -35,12 +36,16 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 
+import com.dqnt.amber.PlaybackData.AudioFile;
+import com.dqnt.amber.PlaybackData.PlaylistSpec;
+
 public class MainActivity extends AppCompatActivity {
     public static final String BROADCAST_PLAY_NEW_AUDIO = "com.dqnt.amber.PlayNewAudio";
     private static final String TAG = MainActivity.class.getName();
     private static final int AMBER_READ_EXTERNAL_STORAGE_REQUEST = 1;
     private AudioFileAdapter audioFileAdapter;
-    private ArrayList<AudioFile> audioList;
+
+    private List<AudioFile> allAudioFiles;
 
     private AudioService audioService;
     private boolean serviceBound = false;
@@ -76,8 +81,8 @@ public class MainActivity extends AppCompatActivity {
 
     private void amberCreate() {
         /* Assign UI references */
-        audioList = new ArrayList<>();
-        audioFileAdapter = new AudioFileAdapter(getBaseContext(), audioList);
+        allAudioFiles = new ArrayList<>();
+        audioFileAdapter = new AudioFileAdapter(getBaseContext(), allAudioFiles);
 
         ListView audioFileListView = (ListView) findViewById(R.id.main_list_view);
         audioFileListView.setAdapter(audioFileAdapter);
@@ -146,7 +151,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onStart() {
         super.onStart();
         if (!serviceBound) {
-            Log.d(TAG, "Starting service again");
+            Log.d(TAG, "onStart(): Starting audio service");
             Intent playerIntent = new Intent(this, AudioService.class);
             startService(playerIntent);
             bindService(playerIntent, audioConnection, Context.BIND_AUTO_CREATE);
@@ -283,11 +288,15 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         protected Void doInBackground(Void... params) {
-            ArrayList<AudioFile> list = dbHandle.getAllAudioFiles();
-            // TODO(doyle): Audiolist is used as a reference in other activities
-            // Can't replace it without updating those references, for now just blindly copy
-            audioList.addAll(list);
+            // TODO(doyle): Look at again, we copy since other activities use a reference to our master list
+            List<AudioFile> list = dbHandle.getAllAudioFiles();
+            allAudioFiles.addAll(list);
 
+            Collections.sort(allAudioFiles, new Comparator<AudioFile>() {
+                public int compare(AudioFile a, AudioFile b) {
+                    return a.title.compareTo(b.title);
+                }
+            });
             return null;
         }
 
@@ -332,7 +341,7 @@ public class MainActivity extends AppCompatActivity {
                 updateCounter = 0;
 
                 dbHandle.insertMultiAudioFileToDb(updateBatch);
-                audioList.addAll(updateBatch);
+                allAudioFiles.addAll(updateBatch);
                 updateBatch.clear();
 
                 publishProgress();
@@ -348,24 +357,32 @@ public class MainActivity extends AppCompatActivity {
              */
             MediaMetadataRetriever retriever = new MediaMetadataRetriever();
             ContentResolver musicResolver = getContentResolver();
-            Uri musicUri = android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
+            Uri musicUri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
             Cursor musicCursor = musicResolver.query(musicUri, null, null, null, null);
 
             int audioId = 0;
             if (Debug.CAREFUL_ASSERT(musicCursor != null, TAG, "doInBackground(): " +
                     "Cursor could not be resolved from ContentResolver")) {
                 if (musicCursor.moveToFirst()) {
-                    int idCol = musicCursor.getColumnIndex
-                            (android.provider.MediaStore.Audio.Media._ID);
+                    int idCol = musicCursor.getColumnIndex(MediaStore.Audio.Media._ID);
                     do {
-                        int id = musicCursor.getInt(idCol);
-                        Uri uri = ContentUris.withAppendedId
-                                (android.provider.MediaStore.Audio.Media.
-                                        EXTERNAL_CONTENT_URI, id);
+                        // NOTE(doyle): For media store files, we need an absolute path NOT a
+                        // content URI. Since serialising a content uri does not preserve the
+                        // content flags, content cannot be played back in MediaPlayer
+                        int absPathIndex = musicCursor.
+                                getColumnIndex(MediaStore.Audio.Media.DATA);
+                        if (Debug.CAREFUL_ASSERT(absPathIndex != -1, TAG, "doInBackground(): " +
+                                "Mediastore file does not have an absolute path field")) {
+                            String absPath = musicCursor.getString(absPathIndex);
+                            Uri uri = Uri.fromFile(new File(absPath));
 
-                        AudioFile audio = extractAudioMetadata(appContext, retriever,
-                                audioId++, uri);
-                        checkAndAddFileToDb(audio, dbHandle);
+                            if (Debug.CAREFUL_ASSERT(uri != null, TAG, "doInBackground(): Uri " +
+                                    "could not be resolved from absolute path")) {
+                                AudioFile audio = extractAudioMetadata(appContext, retriever,
+                                        audioId++, uri);
+                                checkAndAddFileToDb(audio, dbHandle);
+                            }
+                        }
                     } while (musicCursor.moveToNext());
                 } else {
                     Log.v(TAG, "No music files found by MediaStore");
@@ -407,13 +424,13 @@ public class MainActivity extends AppCompatActivity {
 
             // NOTE(doyle): Add remaining files sitting in batch
             if (updateBatch.size() > 0) {
-                audioList.addAll(updateBatch);
+                allAudioFiles.addAll(updateBatch);
                 dbHandle.insertMultiAudioFileToDb(updateBatch);
             }
 
             retriever.release();
                 /* Sort list */
-            Collections.sort(audioList, new Comparator<AudioFile>() {
+            Collections.sort(allAudioFiles, new Comparator<AudioFile>() {
                 public int compare(AudioFile a, AudioFile b) {
                     return a.title.compareTo(b.title);
                 }
@@ -461,7 +478,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private AudioFile extractAudioMetadata(Context context, MediaMetadataRetriever mmr,
-                                           int id, Uri uri) {
+                                                        int id, Uri uri) {
 
         if (uri == null) return null;
         if (mmr == null) return null;
@@ -476,13 +493,24 @@ public class MainActivity extends AppCompatActivity {
                 MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST);
         String artist = extractAudioKeyData(mmr, (MediaMetadataRetriever.METADATA_KEY_ARTIST));
         String author = extractAudioKeyData(mmr, MediaMetadataRetriever.METADATA_KEY_AUTHOR);
-        String bitrate = extractAudioKeyData(mmr, MediaMetadataRetriever.METADATA_KEY_BITRATE);
-        String cdTrackNum = extractAudioKeyData(mmr,
-                MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER);
+
+        String bitrateStr = extractAudioKeyData(mmr, MediaMetadataRetriever.METADATA_KEY_BITRATE);
+        int bitrate = 0;
+        if (bitrateStr.compareTo("Unknown") != 0) {
+            bitrate = Integer.parseInt(bitrateStr);
+        }
+        String cdTrackNum = extractAudioKeyData
+                (mmr, MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER);
         String composer = extractAudioKeyData(mmr, MediaMetadataRetriever.METADATA_KEY_COMPOSER);
         String date = extractAudioKeyData(mmr, MediaMetadataRetriever.METADATA_KEY_DATE);
         String discNum = extractAudioKeyData(mmr, MediaMetadataRetriever.METADATA_KEY_DISC_NUMBER);
-        String duration = extractAudioKeyData(mmr, MediaMetadataRetriever.METADATA_KEY_DURATION);
+
+        String durationStr = extractAudioKeyData(mmr, MediaMetadataRetriever.METADATA_KEY_DURATION);
+        int duration = 0;
+        if (durationStr.compareTo("Unknown") != 0) {
+            duration = Integer.parseInt(durationStr);
+        }
+
         String genre = extractAudioKeyData(mmr, MediaMetadataRetriever.METADATA_KEY_GENRE);
         String title = extractAudioKeyData(mmr, MediaMetadataRetriever.METADATA_KEY_TITLE);
         String writer = extractAudioKeyData(mmr, MediaMetadataRetriever.METADATA_KEY_WRITER);
@@ -510,26 +538,28 @@ public class MainActivity extends AppCompatActivity {
         return result;
     }
 
-    private void playAudio(List<AudioFile> playlist, int index) {
-        audioService.queuePlaylistAndSong(playlist, index);
+    public void audioFileClicked(View view) {
+        AudioFileAdapter.AudioEntryInView entry = (AudioFileAdapter.AudioEntryInView) view.getTag();
+        int index = entry.position;
+
+        // TODO(doyle): Proper playlist creation
+        PlaylistSpec playlist = new PlaylistSpec(allAudioFiles, index);
+        playAudio(playlist);
+    }
+
+    private void playAudio(PlaylistSpec playlist) {
         // TODO(doyle): Parcel vs accessing service class
         if (!serviceBound) {
-            // Debug.CAREFUL_ASSERT(false, TAG, "playAudio(): Service not bound after start up?");
+            Log.d(TAG, "playAudio(): Rebinding audio service");
             Intent playerIntent = new Intent(this, AudioService.class);
             startService(playerIntent);
             bindService(playerIntent, audioConnection, Context.BIND_AUTO_CREATE);
         } else {
+            audioService.queuePlaylistAndSong(playlist);
             // NOTE(doyle): Service is active, send media with broadcast receiver
             Intent broadcastIntent = new Intent(BROADCAST_PLAY_NEW_AUDIO);
             sendBroadcast(broadcastIntent);
         }
-    }
-
-    public void audioFileClicked(View view) {
-        AudioFileAdapter.AudioEntryInView entry = (AudioFileAdapter.AudioEntryInView) view.getTag();
-        int index = entry.position;
-        // TODO(doyle): Look into collapsing into one call ..
-        playAudio(audioList, index);
     }
 
 }

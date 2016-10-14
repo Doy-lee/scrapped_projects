@@ -8,6 +8,9 @@ import android.widget.BaseAdapter;
 import android.widget.TextView;
 
 import java.util.ArrayList;
+import java.util.List;
+
+import com.dqnt.amber.PlaybackData.AudioFile;
 
 /**
  * Created by Doyle on 25/09/2016.
@@ -15,31 +18,45 @@ import java.util.ArrayList;
 class AudioFileAdapter extends BaseAdapter {
     private final String TAG = AudioFileAdapter.class.getName();
 
-    private ArrayList<AudioFile> audioList;
+    List<AudioFile> audioList;
     private LayoutInflater audioInflater;
 
-    AudioFileAdapter(Context context, ArrayList<AudioFile> audioList) {
+    AudioFileAdapter(Context context, List<AudioFile> audioList) {
         this.audioList = audioList;
         audioInflater = LayoutInflater.from(context);
     }
 
     @Override
     public int getCount() {
-        return audioList.size();
+        int result = 0;
+        if (audioList != null) {
+            result = audioList.size();
+        }
+
+        return result;
     }
 
     @Override
     public Object getItem(int position) {
-        return audioList.get(position);
+        if (audioList != null) {
+            return audioList.get(position);
+        }
+
+        return null;
     }
 
     @Override
     public long getItemId(int position) {
-        return audioList.get(position).id;
+        // TODO(doyle): Fix
+        if (audioList != null) {
+            return audioList.get(position).id;
+        }
+
+         return 0;
     }
 
     // NOTE(doyle): Cache the inflated layout elements in a audio entry into the tag of a list item
-    public class AudioEntryInView {
+    class AudioEntryInView {
         int position;
         TextView artist;
         TextView title;

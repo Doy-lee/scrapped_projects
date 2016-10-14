@@ -2,7 +2,7 @@ package com.dqnt.amber;
 
 import android.util.Log;
 
-public class Debug {
+class Debug {
     final static boolean DEBUG_MODE = true;
     final static boolean RESET_DB = false;
     final static boolean RESET_CONFIG = false;
