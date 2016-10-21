@@ -4,7 +4,6 @@ package com.dqnt.amber;
 import android.Manifest;
 import android.content.ComponentName;
 import android.content.ContentResolver;
-import android.content.ContentUris;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
@@ -23,11 +22,14 @@ import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
+import android.support.v7.widget.Toolbar;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
+import android.widget.Button;
 import android.widget.ListView;
+import android.widget.SeekBar;
 import android.widget.Toast;
 
 import java.io.File;
@@ -37,11 +39,10 @@ import java.util.Comparator;
 import java.util.List;
 
 import com.dqnt.amber.PlaybackData.AudioFile;
-import com.dqnt.amber.PlaybackData.PlaylistSpec;
 
 public class MainActivity extends AppCompatActivity {
-    public static final String BROADCAST_PLAY_NEW_AUDIO = "com.dqnt.amber.PlayNewAudio";
     private static final String TAG = MainActivity.class.getName();
+    private static final Class ASSERT_TAG = MainActivity.class;
     private static final int AMBER_READ_EXTERNAL_STORAGE_REQUEST = 1;
     private AudioFileAdapter audioFileAdapter;
 
@@ -49,6 +50,9 @@ public class MainActivity extends AppCompatActivity {
 
     private AudioService audioService;
     private boolean serviceBound = false;
+
+    private List<AudioFile> queuedPlaylist = null;
+    private int queuedPlaylistIndex = -1;
 
     /*
      ***********************************************************************************************
@@ -70,15 +74,32 @@ public class MainActivity extends AppCompatActivity {
             if (Debug.DEBUG_MODE) {
                 Toast.makeText(getApplicationContext(), "Service Bound", Toast.LENGTH_SHORT).show();
             }
+
+            if (queuedPlaylist != null) {
+                if (Debug.CAREFUL_ASSERT(queuedPlaylistIndex != -1, ASSERT_TAG,
+                        "Playlist queued, but no index specified")) {
+                    playAudio(queuedPlaylist, queuedPlaylistIndex);
+                    queuedPlaylist = null;
+                    queuedPlaylistIndex = -1;
+                }
+            }
         }
 
         @Override
         public void onServiceDisconnected(ComponentName name) {
             serviceBound = false;
         }
-
     };
 
+    private class PlayBarItems {
+        Button skipNextButton;
+        Button playPauseButton;
+        Button skipPreviousButton;
+
+        SeekBar seekBar;
+    }
+
+    PlayBarItems playBarItems;
     private void amberCreate() {
         /* Assign UI references */
         allAudioFiles = new ArrayList<>();
@@ -114,6 +135,34 @@ public class MainActivity extends AppCompatActivity {
         if (readPermissionCheck == PackageManager.PERMISSION_GRANTED) {
             queryDeviceForAudioData();
         }
+
+        playBarItems = new PlayBarItems();
+        playBarItems.playPauseButton = (Button) findViewById(R.id.play_bar_play_button);
+        playBarItems.skipNextButton = (Button) findViewById(R.id.play_bar_skip_next_button);
+        playBarItems.skipPreviousButton = (Button) findViewById(R.id.play_bar_skip_previous_button);
+        playBarItems.seekBar = (SeekBar) findViewById(R.id.play_bar_seek_bar);
+
+        playBarItems.playPauseButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+
+            }
+        });
+
+        playBarItems.skipNextButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+
+            }
+        });
+
+        playBarItems.skipPreviousButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+
+            }
+        });
+
     }
 
     private void queryDeviceForAudioData() {
@@ -124,7 +173,7 @@ public class MainActivity extends AppCompatActivity {
                 (getResources().getString(R.string.internal_pref_library_init_key), false);
 
         AudioDatabase dbHandle = AudioDatabase.getHandle(appContext);
-        if (Debug.CAREFUL_ASSERT(dbHandle != null, TAG,
+        if (Debug.CAREFUL_ASSERT(dbHandle != null, ASSERT_TAG,
                 "amberCreate(): Could not get a db handle")) {
             if (libraryInit) {
                 new GetAudioMetadataFromDb(dbHandle).execute();
@@ -144,6 +193,11 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        final Toolbar toolbar = (Toolbar) findViewById(R.id.main_toolbar);
+        setSupportActionBar(toolbar);
+        getSupportActionBar().setDefaultDisplayHomeAsUpEnabled(true);
+
         amberCreate();
     }
 
@@ -176,9 +230,8 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        if (serviceBound) {
-            unbindService(audioConnection);
-        }
+        if (serviceBound) { unbindService(audioConnection); }
+        Log.d(TAG, Debug.GENERATE_COUNTER_STRING());
     }
 
 
@@ -219,7 +272,7 @@ public class MainActivity extends AppCompatActivity {
             }
             default: {
                 Debug.CAREFUL_ASSERT
-                        (false, TAG, "Unrecognised item id selected in options menu: " + id);
+                        (false, ASSERT_TAG, "Unrecognised item id selected in options menu: " + id);
                 break;
             }
         }
@@ -250,8 +303,7 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
             default: {
-                Debug.CAREFUL_ASSERT(false, TAG, "onRequestPermissionsResult(): " +
-                        "Request code not handle: " + requestCode);
+                Debug.CAREFUL_ASSERT(false, ASSERT_TAG, "Request code not handle: " + requestCode);
             }
         }
     }
@@ -276,11 +328,11 @@ public class MainActivity extends AppCompatActivity {
      */
 
     private class GetAudioMetadataFromDb extends AsyncTask<Void, Void, Void> {
-        private final String TAG = GetAudioMetadataFromDb.class.getName();
+        private final Class ASSERT_TAG = GetAudioMetadataFromDb.class;
 
         AudioDatabase dbHandle;
         GetAudioMetadataFromDb(AudioDatabase dbHandle) {
-            if (Debug.CAREFUL_ASSERT(dbHandle != null, TAG, "GetAudioMetadataFromDb(): " +
+            if (Debug.CAREFUL_ASSERT(dbHandle != null, ASSERT_TAG,
                     "dbHandle is null in constructor")) {
                 this.dbHandle = dbHandle;
             }
@@ -320,9 +372,10 @@ public class MainActivity extends AppCompatActivity {
         private Context appContext;
         AudioDatabase dbHandle;
         GetAudioFromDevice(Context appContext, AudioDatabase dbHandle) {
-            if (Debug.CAREFUL_ASSERT(dbHandle != null, TAG, "GetAudioFromDevice(): " +
+            if (Debug.CAREFUL_ASSERT(dbHandle != null, ASSERT_TAG,
                     "dbHandle is null in constructor")) {
                 this.dbHandle = dbHandle;
+                Debug.INCREMENT_COUNTER(this.getClass(), "GetAudio");
             }
 
             this.appContext = appContext;
@@ -361,7 +414,7 @@ public class MainActivity extends AppCompatActivity {
             Cursor musicCursor = musicResolver.query(musicUri, null, null, null, null);
 
             int audioId = 0;
-            if (Debug.CAREFUL_ASSERT(musicCursor != null, TAG, "doInBackground(): " +
+            if (Debug.CAREFUL_ASSERT(musicCursor != null, ASSERT_TAG,
                     "Cursor could not be resolved from ContentResolver")) {
                 if (musicCursor.moveToFirst()) {
                     int idCol = musicCursor.getColumnIndex(MediaStore.Audio.Media._ID);
@@ -371,12 +424,12 @@ public class MainActivity extends AppCompatActivity {
                         // content flags, content cannot be played back in MediaPlayer
                         int absPathIndex = musicCursor.
                                 getColumnIndex(MediaStore.Audio.Media.DATA);
-                        if (Debug.CAREFUL_ASSERT(absPathIndex != -1, TAG, "doInBackground(): " +
+                        if (Debug.CAREFUL_ASSERT(absPathIndex != -1, ASSERT_TAG,
                                 "Mediastore file does not have an absolute path field")) {
                             String absPath = musicCursor.getString(absPathIndex);
                             Uri uri = Uri.fromFile(new File(absPath));
 
-                            if (Debug.CAREFUL_ASSERT(uri != null, TAG, "doInBackground(): Uri " +
+                            if (Debug.CAREFUL_ASSERT(uri != null, ASSERT_TAG,
                                     "could not be resolved from absolute path")) {
                                 AudioFile audio = extractAudioMetadata(appContext, retriever,
                                         audioId++, uri);
@@ -543,23 +596,31 @@ public class MainActivity extends AppCompatActivity {
         int index = entry.position;
 
         // TODO(doyle): Proper playlist creation
-        PlaylistSpec playlist = new PlaylistSpec(allAudioFiles, index);
-        playAudio(playlist);
+        playAudio(allAudioFiles, index);
     }
 
-    private void playAudio(PlaylistSpec playlist) {
-        // TODO(doyle): Parcel vs accessing service class
+    private void playAudio(List<AudioFile> playlist, int index) {
         if (!serviceBound) {
             Log.d(TAG, "playAudio(): Rebinding audio service");
             Intent playerIntent = new Intent(this, AudioService.class);
             startService(playerIntent);
             bindService(playerIntent, audioConnection, Context.BIND_AUTO_CREATE);
+
+            // NOTE(doyle): Queue playlist whereby onServiceConnected will detect and begin playing
+            queuedPlaylist = playlist;
         } else {
-            audioService.queuePlaylistAndSong(playlist);
+            audioService.preparePlaylist(playlist, index);
+            audioService.playMedia();
+
+            // TODO(doyle): Broadcast receiver seems useless here? Whats the point.
+            // isn't it better to just directly access the function? The only way we can send
+            // broadcasts is through the app itself, so it's not like we can rely on it to "wake-up"
+            // our app if it's asleep
+            /*
             // NOTE(doyle): Service is active, send media with broadcast receiver
             Intent broadcastIntent = new Intent(BROADCAST_PLAY_NEW_AUDIO);
             sendBroadcast(broadcastIntent);
+            */
         }
     }
-
 }

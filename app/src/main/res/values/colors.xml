@@ -2,5 +2,52 @@
 <resources>
     <color name="colorPrimary">#3F51B5</color>
     <color name="colorPrimaryDark">#303F9F</color>
-    <color name="colorAccent">#FF4081</color>
+    <color name="colorAccent">#ff4081</color>
+
+    <color name="black_87_percent">#DE000000</color>
+    <color name="black_54_percent">#8A000000</color>
+    <color name="black_38_percent">#61000000</color>
+    <color name="black_12_percent">#1f000000</color>
+
+    <color name="white_87_percent">#deffffff</color>
+    <color name="white_54_percent">#8affffff</color>
+    <color name="white_38_percent">#61ffffff</color>
+    <color name="white_12_percent">#1FFFFFFF</color>
+
+    <color name="primary_text_on_dark_background">@color/black_87_percent</color>
+    <color name="secondary_text_on_dark_background">@color/black_54_percent</color>
+    <color name="hint_text_on_dark_background">@color/black_38_percent</color>
+    <color name="disabled_text_on_dark_background">@color/black_38_percent</color>
+    <color name="icons_on_dark_background">@color/black_38_percent</color>
+
+    <color name="primary_text_on_light_background">@color/black_87_percent</color>
+    <color name="secondary_text_on_light_background">@color/black_54_percent</color>
+    <color name="hint_text_on_light_background">@color/black_38_percent</color>
+    <color name="disabled_text_on_light_background">@color/black_38_percent</color>
+    <color name="icons_on_light_background">@color/black_38_percent</color>
+
+    <color name="divider_line_black">@color/black_12_percent</color>
+    <color name="divider_line_white">@color/white_12_percent</color>
+
+    <color name="material_red_500">#F44336</color>
+    <color name="material_pink_500">#E91E63</color>
+    <color name="material_purple_500">#9C27B0</color>
+    <color name="material_deep_purple_500">#673Ab7</color>
+    <color name="material_indigo_500">#3F51B5</color>
+    <color name="material_blue_500">#2196F3</color>
+    <color name="material_light_blue_500">#03A9F4</color>
+    <color name="material_cyan_500">#00BCD4</color>
+    <color name="material_teal_500">#009688</color>
+    <color name="material_green_500">#4CAF50</color>
+    <color name="material_light_green_500">#8BC34A</color>
+    <color name="material_lime_500">#CDDC39</color>
+    <color name="material_yellow_500">#FFEB3B</color>
+    <color name="material_amber_500">#FFC107</color>
+    <color name="material_orange_500">#FF9800</color>
+    <color name="material_deep_orange_500">#FF5722</color>
+    <color name="material_brown_500">#795548</color>
+    <color name="material_grey_500">#9e9e9e</color>
+    <color name="material_grey_50">#FAFAFA</color>
+    <color name="material_grey100">#F5F5F5</color>
+    <color name="material_blue_grey_500">#607D8B</color>
 </resources>

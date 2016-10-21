@@ -5,25 +5,25 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:fitsSystemWindows="true"
-    tools:context="com.dqnt.amberMainActivity">
+    tools:context="com.dqnt.amber.MainActivity">
 
-    <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-        xmlns:app="http://schemas.android.com/apk/res-auto"
-        xmlns:tools="http://schemas.android.com/tools"
+    <LinearLayout
+        android:orientation="vertical"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        app:layout_behavior="@string/appbar_scrolling_view_behavior"
-        tools:context="com.dqnt.amberMainActivity"
-        tools:showIn="@layout/activity_main">
+        android:layout_height="match_parent">
+
+        <include layout="@layout/toolbar"/>
 
         <ListView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:id="@+id/main_list_view"
-            android:layout_alignParentTop="true"
-            android:layout_alignParentStart="true"
-            android:paddingLeft="?android:attr/listPreferredItemPaddingLeft"
-            android:paddingRight="?android:attr/listPreferredItemPaddingRight" />
-    </RelativeLayout>
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:paddingLeft="@dimen/activity_horizontal_margin"
+            android:paddingRight="@dimen/activity_horizontal_margin"
+            android:layout_weight="1"
+            android:id="@+id/main_list_view" />
+
+        <include layout="@layout/content_divider"/>
+        <include layout="@layout/play_bar"/>
+    </LinearLayout>
 
 </android.support.design.widget.CoordinatorLayout>

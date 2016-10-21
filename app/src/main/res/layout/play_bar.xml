@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="@dimen/material_layout_vertical_spacing_list_item">
+
+    <Button
+        android:layout_width="@dimen/material_icon_clickable_area"
+        android:layout_height="@dimen/material_icon_clickable_area"
+        android:background="@drawable/ic_skip_next"
+        android:id="@+id/play_bar_skip_next_button"
+        android:layout_gravity="center_vertical"
+        />
+
+    <Button
+        android:layout_width="@dimen/material_icon_clickable_area"
+        android:layout_height="@dimen/material_icon_clickable_area"
+        android:id="@+id/play_bar_play_button"
+        android:background="@drawable/ic_play"
+        android:layout_gravity="center_vertical" />
+
+    <Button
+        android:layout_width="@dimen/material_icon_clickable_area"
+        android:layout_height="@dimen/material_icon_clickable_area"
+        android:background="@drawable/ic_skip_previous"
+        android:id="@+id/play_bar_skip_previous_button"
+        android:layout_gravity="center_vertical" />
+
+
+    <SeekBar
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:id="@+id/play_bar_seek_bar"
+        android:layout_gravity="center_vertical" />
+</LinearLayout>

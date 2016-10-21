@@ -5,17 +5,6 @@ import android.net.Uri;
 import java.util.List;
 
 class PlaybackData {
-
-    static class PlaylistSpec {
-        List<PlaybackData.AudioFile> list;
-        int index;
-
-        PlaylistSpec(List<AudioFile> list, int index) {
-            this.list = list;
-            this.index = index;
-        }
-    }
-
     static class AudioFile {
         int id;
         Uri uri;

@@ -15,7 +15,7 @@ import java.util.List;
 import com.dqnt.amber.PlaybackData.AudioFile;
 
 class AudioDatabase extends SQLiteOpenHelper {
-    private static final String TAG = AudioDatabase.class.getName();
+    private static final Class ASSERT_TAG = AudioDatabase.class;
 
     // NOTE(doyle): By implementing the BaseColumns interface, your inner class can inherit a
     // primary key field called _ID that some Android classes such as cursor adaptors will
@@ -90,12 +90,11 @@ class AudioDatabase extends SQLiteOpenHelper {
     }
 
     void insertAudioFileToDb(final PlaybackData.AudioFile file) {
-        if (Debug.CAREFUL_ASSERT(file != null, TAG, "insertAudioFileToDb(): File is null")) {
+        if (Debug.CAREFUL_ASSERT(file != null, ASSERT_TAG, "File is null")) {
 
             // NOTE(doyle): This gets cached according to docs, so okay to open every time
             SQLiteDatabase db = getWritableDatabase();
-            if (Debug.CAREFUL_ASSERT(db != null, TAG, "insertAudioFileToDb(): Could not get " +
-                    "writable database")) {
+            if (Debug.CAREFUL_ASSERT(db != null, ASSERT_TAG, "Could not get writable database")) {
                 ContentValues value = new ContentValues();
                 value.put(Entry.KEY_PATH, file.uri.getPath());
                 value.put(Entry.KEY_ALBUM, file.album);
@@ -120,8 +119,7 @@ class AudioDatabase extends SQLiteOpenHelper {
     }
 
     void insertMultiAudioFileToDb(final List<PlaybackData.AudioFile> files) {
-        if (Debug.CAREFUL_ASSERT(files != null, TAG,
-                "insertMultiAudioFileToDb(): List of files is null")) {
+        if (Debug.CAREFUL_ASSERT(files != null, ASSERT_TAG, "List of files is null")) {
             for (PlaybackData.AudioFile audio: files) insertAudioFileToDb(audio);
         }
     }
@@ -130,8 +128,7 @@ class AudioDatabase extends SQLiteOpenHelper {
         SQLiteDatabase db = this.getReadableDatabase();
         ArrayList<PlaybackData.AudioFile> result = null;
 
-        if (Debug.CAREFUL_ASSERT(db != null, TAG, "getAllAudioFiles(): Could not get readable" +
-                "database")) {
+        if (Debug.CAREFUL_ASSERT(db != null, ASSERT_TAG, "Could not get readable database")) {
             final String[] projection = {
                     Entry._ID,
                     Entry.KEY_PATH,
@@ -183,8 +180,8 @@ class AudioDatabase extends SQLiteOpenHelper {
                 String writer        = cursor.getString(cursorIndex++);
                 String year          = cursor.getString(cursorIndex++);
 
-                Debug.CAREFUL_ASSERT(cursorIndex == projection.length, TAG,
-                        "getAllAudioFiles(): Cursor index exceeded projection bounds");
+                Debug.CAREFUL_ASSERT(cursorIndex == projection.length, ASSERT_TAG,
+                        "Cursor index exceeded projection bounds");
 
                 AudioFile file = new AudioFile(id, uri, album, albumArtist, artist, author, bitrate,
                         cdTrackNumber, composer, date, discNumber, duration, genre, title, writer,
