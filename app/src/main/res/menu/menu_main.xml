@@ -3,18 +3,6 @@
     xmlns:tools="http://schemas.android.com/tools"
     tools:context="com.dqnt.amberMainActivity">
     <item
-        android:id="@+id/action_stop_playback"
-        android:orderInCategory="100"
-        android:title="Stop Playback"
-        app:showAsAction="never" />
-
-    <item
-        android:id="@+id/action_shuffle"
-        android:orderInCategory="100"
-        android:title="Shuffle Songs"
-        app:showAsAction="never" />
-
-    <item
         android:id="@+id/action_settings"
         android:orderInCategory="100"
         android:title="@string/action_settings"
@@ -23,6 +11,6 @@
     <item
         android:id="@+id/action_exit"
         android:orderInCategory="100"
-        android:title="Exit"
+        android:title="@string/action_exit"
         app:showAsAction="never" />
 </menu>

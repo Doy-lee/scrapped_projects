@@ -100,6 +100,8 @@ class Debug {
 
     static String GENERATE_COUNTER_STRING() {
         String result = "";
+        if (functionCounter == null) return result;
+
         for (int i = 0; i < functionCounter.size(); i++) {
             result += functionCounter.get(i) + "\n";
         }
@@ -107,6 +109,48 @@ class Debug {
         return result;
     }
 
+    static void LOG_D(Class assertTag, String log) {
+        String className = assertTag.getName();
+        String methodName = getMethodName(className);
+        String fullLog = methodName + "(): " + log;
+
+        Log.d(className, fullLog);
+    }
+
+    static void LOG_E(Class assertTag, String log) {
+        String className = assertTag.getName();
+        String methodName = getMethodName(className);
+        String fullLog = methodName + "(): " + log;
+
+        Log.e(className, fullLog);
+    }
+
+    static void LOG_W(Class assertTag, String log) {
+        String className = assertTag.getName();
+        String methodName = getMethodName(className);
+        String fullLog = methodName + "(): " + log;
+
+        Log.w(className, fullLog);
+    }
+
+    static void LOG_I(Class assertTag, String log) {
+        String className = assertTag.getName();
+        String methodName = getMethodName(className);
+        String fullLog = methodName + "(): " + log;
+
+        Log.i(className, fullLog);
+    }
+
+    static void LOG_V(Class assertTag, String log) {
+        String className = assertTag.getName();
+        String methodName = getMethodName(className);
+        String fullLog = methodName + "(): " + log;
+
+        Log.v(className, fullLog);
+    }
+
+    // NOTE(doyle): Asserts condition is true if debug mode is on
+    //              Log error message only if debug mode off
     static boolean CAREFUL_ASSERT(boolean flag, Class assertTag, String log) {
         if (!flag) {
             String className = assertTag.getName();

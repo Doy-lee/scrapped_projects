@@ -24,6 +24,7 @@ import android.util.Log;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Random;
 
 import com.dqnt.amber.PlaybackData.AudioFile;
 
@@ -32,8 +33,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
         MediaPlayer.OnErrorListener, MediaPlayer.OnCompletionListener,
         MediaPlayer.OnSeekCompleteListener, MediaPlayer.OnInfoListener,
         MediaPlayer.OnBufferingUpdateListener, AudioManager.OnAudioFocusChangeListener {
-    private final Class ASSERT_TAG = AudioService.class;
-    private final String TAG = AudioService.class.getName();
+    private final Class DEBUG_TAG = AudioService.class;
 
     public static final String ACTION_PLAY = "com.dqnt.amber.ACTION_PLAY";
     public static final String ACTION_PAUSE = "com.dqnt.amber.ACTION_PAUSE";
@@ -45,13 +45,13 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
     private MediaSessionCompat mediaSessionCompat;
     private MediaControllerCompat.TransportControls transportControls;
 
-    public enum PlaybackStatus {
+    public enum PlayState {
         PLAYING,
-        PAUSED
+        PAUSED,
+        STOPPED,
     }
 
     private static final int NOTIFICATION_ID = 101;
-
     private final IBinder binder = new LocalBinder();
 
     // NOTE(doyle): Interface between client and service. Allows client to get service instance from
@@ -67,13 +67,16 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
 
     private final int NOTIFY_ID = 1;
     private AudioManager audioManager;
+    PlayState playState;
+    boolean shuffle;
+    boolean repeat;
 
     private List<AudioFile> playlist;
     private int playlistIndex;
-    private AudioFile activeAudio;
+    AudioFile activeAudio;
 
     private MediaPlayer player;
-    private int resumePosition;
+    int resumePosition;
 
     // NOTE(doyle): The system calls this method when the service is first created, to perform
     // one-time setup procedures (before it calls either onStartCommand() or onBind()). If the
@@ -101,9 +104,10 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
                 e.printStackTrace();
                 stopSelf();
             }
-            // buildNotification(PlaybackStatus.PLAYING);
+            // buildNotification(PlayState.PLAYING);
         }
 
+        playState = PlayState.STOPPED;
         handleIncomingActions(intent);
         return super.onStartCommand(intent, flags, startId);
     }
@@ -127,30 +131,30 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
             public void onPlay() {
                 super.onPlay();
                 resumeMedia();
-                buildNotification(PlaybackStatus.PLAYING);
+                buildNotification(PlayState.PLAYING);
             }
 
             @Override
             public void onPause() {
                 super.onPause();
                 pauseMedia();
-                buildNotification(PlaybackStatus.PAUSED);
+                buildNotification(PlayState.PAUSED);
             }
 
             @Override
             public void onSkipToNext() {
                 super.onSkipToNext();
-                skipToNext();
+                skipToNextOrPrevious(PlaybackSkipDirection.NEXT);
                 updateMetadata();
-                buildNotification(PlaybackStatus.PLAYING);
+                buildNotification(PlayState.PLAYING);
             }
 
             @Override
             public void onSkipToPrevious() {
                 super.onSkipToPrevious();
-                skipToPrevious();
+                skipToNextOrPrevious(PlaybackSkipDirection.PREVIOUS);
                 updateMetadata();
-                buildNotification(PlaybackStatus.PLAYING);
+                buildNotification(PlayState.PLAYING);
             }
 
             @Override
@@ -168,15 +172,15 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
         });
     }
 
-    private void buildNotification(PlaybackStatus status) {
+    private void buildNotification(PlayState status) {
         int notificationAction = android.R.drawable.ic_media_pause;
         PendingIntent playPauseAction = null;
 
-        /* Build a new notification according to current state of the player */
-        if (status == PlaybackStatus.PLAYING) {
+        /* Build a new notification according to current playState of the player */
+        if (status == PlayState.PLAYING) {
             notificationAction = android.R.drawable.ic_media_pause;
             playPauseAction = playbackAction(1);
-        } else if (status == PlaybackStatus.PAUSED) {
+        } else if (status == PlayState.PAUSED) {
             notificationAction = android.R.drawable.ic_media_play;
             playPauseAction = playbackAction(0);
         }
@@ -282,13 +286,13 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
 
     @Override
     public boolean onUnbind(Intent intent) {
-        Log.d(TAG, "onUnbind(): Service unbound from activity");
+        Debug.LOG_D(DEBUG_TAG, "Service unbound from activity");
         return false;
     }
 
     @Override
     public void onDestroy() {
-        Log.d(TAG, "onDestroy(): Service destroyed");
+        Debug.LOG_D(DEBUG_TAG, "Service destroyed");
 
         // NOTE(doyle): Stop notification running in foreground
         stopForeground(true);
@@ -327,11 +331,18 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
      * MEDIA PLAYER INTERFACE IMPLEMENTATION
      ***********************************************************************************************
      */
+
+    // NOTE(doyle): Callback so we know when playback has actually started, because playback is not
+    // immediate. Does not start until player is "prepared()"
+    public interface Response { void audioHasStartedPlayback(); }
+    Response listener;
+
     // NOTE(doyle): Triggers when track finished/skipped or new track is selected
     @Override
     public void onCompletion(MediaPlayer mp) {
-        stopMedia();
-        stopSelf();
+        // stopMedia();
+        // stopSelf();
+        skipToNextOrPrevious(PlaybackSkipDirection.NEXT);
     }
 
     @Override
@@ -340,16 +351,16 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
         mp.reset();
         switch (what) {
             case MediaPlayer.MEDIA_ERROR_NOT_VALID_FOR_PROGRESSIVE_PLAYBACK:
-                Log.e(TAG, "onError(): Media error not valid for progressive playback: " + extra);
+                Debug.LOG_D(DEBUG_TAG, "Media error not valid for progressive playback: " + extra);
                 break;
             case MediaPlayer.MEDIA_ERROR_SERVER_DIED:
-                Log.e(TAG, "onError(): Media error server died: " + extra);
+                Debug.LOG_D(DEBUG_TAG, "Media error server died: " + extra);
                 break;
             case MediaPlayer.MEDIA_ERROR_UNKNOWN:
-                Log.e(TAG, "onError(): Media error unknown: " + extra);
+                Debug.LOG_D(DEBUG_TAG, "Media error unknown: " + extra);
                 break;
             default:
-                Debug.CAREFUL_ASSERT(false, ASSERT_TAG, "onError(): Media error not handled: " + extra);
+                Debug.CAREFUL_ASSERT(false, DEBUG_TAG, "Media error not handled: " + extra);
                 break;
         }
 
@@ -377,6 +388,8 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
         startForeground(NOTIFY_ID, notification);
         */
         player.start();
+        listener.audioHasStartedPlayback();
+        playState = PlayState.PLAYING;
     }
 
 
@@ -424,116 +437,173 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
     }
 
     @Override
-    public void onSeekComplete(MediaPlayer mp) {
-
-    }
-
+    public void onSeekComplete(MediaPlayer mp) {}
 
     /*
      ***********************************************************************************************
      * PLAYBACK CONTROL
      ***********************************************************************************************
      */
-    private void validatePlaylist(List<AudioFile> playlist, int index) {
-        if (Debug.CAREFUL_ASSERT(playlist != null, ASSERT_TAG, "validatePlaylist(): Playlist is null" )) {
-            this.playlist = playlist;
 
-            if (!Debug.CAREFUL_ASSERT(index < playlist.size(), ASSERT_TAG,
-                    "validatePlaylist(): Index out of bounds")) {
-                playlistIndex = 0;
-            } else {
-                playlistIndex = index;
-            }
+    private boolean validatePlaylist(List<AudioFile> playlist, int index) {
+        if (playlist == null) {
+            Debug.LOG_W(DEBUG_TAG, "Playlist was null");
+            return false;
         }
+
+        if (index >= playlist.size() || index < 0) {
+            Debug.LOG_W(DEBUG_TAG, "Index was out of playlist bounds");
+            return false;
+        }
+
+        return true;
     }
 
+    boolean queuedNewSong = false;
     void preparePlaylist(List<AudioFile> playlist, int index) {
         /* Queue playlist and song */
-        if (Debug.CAREFUL_ASSERT(playlist != null, ASSERT_TAG, "playMedia(): Playlist is null" )) {
+        if (validatePlaylist(playlist, index)) {
             this.playlist = playlist;
-
-            if (!Debug.CAREFUL_ASSERT(index < playlist.size(), ASSERT_TAG,
-                    "playMedia(): Index out of bounds")) {
-                playlistIndex = 0;
-            } else {
-                playlistIndex = index;
-            }
-
+            this.playlistIndex = index;
             activeAudio = playlist.get(playlistIndex);
         }
+
+        queuedNewSong = true;
     }
 
-    void playMedia() {
-
+    boolean playMedia() {
         // NOTE(doyle): Reset seems to stop the player if already playing so don't need stopSelf()
+        if (!validatePlaylist(this.playlist, this.playlistIndex)) return false;
+
+        if (playState == PlayState.PAUSED && !queuedNewSong) {
+            return resumeMedia();
+        } else {
+            if (player == null) {
+                initMediaPlayer();
+                Debug.INCREMENT_COUNTER(this.getClass(), "MediaPlayerWasNull");
+            }
+
+            try {
+                player.reset();
+                player.setDataSource(getApplicationContext(), activeAudio.uri);
+                player.prepareAsync();
+                buildNotification(PlayState.PLAYING);
+                queuedNewSong = false;
+                return true;
+            } catch (IOException e) {
+                e.printStackTrace();
+                Debug.CAREFUL_ASSERT(false, DEBUG_TAG, "IOException, could not " +
+                        "set file as source: " + activeAudio.uri.getPath());
+                stopSelf();
+                return false;
+            }
+        }
+    }
+
+    boolean stopMedia() {
         if (player == null) {
-            initMediaPlayer();
-            Debug.INCREMENT_COUNTER(this.getClass(), "MediaPlayerWasNull");
+            Debug.CAREFUL_ASSERT(false, DEBUG_TAG, "Tried to stop null player");
+            return false;
+        } else {
+            if (player.isPlaying()) {
+                player.stop();
+                playState = PlayState.STOPPED;
+                return true;
+            }
         }
 
-        try {
-            player.reset();
-            player.setDataSource(getApplicationContext(), activeAudio.uri);
-            player.prepareAsync();
-            buildNotification(PlaybackStatus.PLAYING);
-        } catch (IOException e) {
-            e.printStackTrace();
-            Debug.CAREFUL_ASSERT(false, ASSERT_TAG, "playMedia(): IOException, could not " +
-                    "set file as source: " + activeAudio.uri.getPath());
-            stopSelf();
-        }
-
+        return false;
     }
 
-    void stopMedia() {
+    boolean pauseMedia() {
         if (player == null) {
-            Debug.CAREFUL_ASSERT(false, ASSERT_TAG, "stopMedia(): Tried to stop null player");
-            return;
+            Debug.CAREFUL_ASSERT(false, DEBUG_TAG, "Tried to pause null player");
+            return false;
+        } else {
+            if (player.isPlaying()) {
+                player.pause();
+                playState = PlayState.PAUSED;
+                resumePosition = player.getCurrentPosition();
+                return true;
+            }
         }
 
-        if (player.isPlaying()) {
-            player.stop();
-        }
+
+        return false;
     }
 
-    void pauseMedia() {
+    private boolean resumeMedia() {
         if (player == null) {
-            Debug.CAREFUL_ASSERT(false, ASSERT_TAG, "pauseMedia(): Tried to pause null player");
-            return;
+            Debug.CAREFUL_ASSERT(false, DEBUG_TAG, "Player is null");
+        } else {
+            if (!player.isPlaying()) {
+                player.seekTo(resumePosition);
+                player.start();
+
+                playState = PlayState.PLAYING;
+                listener.audioHasStartedPlayback();
+                return true;
+            }
         }
 
-        if (player.isPlaying()) {
-            player.pause();
-            resumePosition = player.getCurrentPosition();
-        }
+        return false;
     }
 
-    void resumeMedia() {
-        Debug.CAREFUL_ASSERT(player != null, ASSERT_TAG, "resumeMedia(): Player is null");
-        if (!player.isPlaying()) {
-            player.seekTo(resumePosition);
-            player.start();
-        }
+
+    enum PlaybackSkipDirection {
+        NEXT,
+        PREVIOUS,
     }
 
-    void skipToNext() {
-        // TODO(doyle): To be implemented
-        Debug.CAREFUL_ASSERT(playlist.size() > 0, ASSERT_TAG, "skipToNext(): Playlist is empty: " +
-                "" + playlist.size());
+    boolean skipToNextOrPrevious(PlaybackSkipDirection direction) {
+        if (!validatePlaylist(this.playlist, this.playlistIndex)) return false;
 
-        if (++playlistIndex >= playlist.size()) playlistIndex = 0;
+        // NOTE(doyle): Repeat takes precedence over shuffle
+        if (repeat) {
+        } else if (shuffle) {
+            int newIndex = playlistIndex;
+            while (newIndex == playlistIndex) {
+                newIndex = new Random().nextInt(playlist.size());
+                Debug.INCREMENT_COUNTER(DEBUG_TAG, "Shuffle random index failed count");
+            }
+
+            playlistIndex = newIndex;
+        } else {
+            if (direction == PlaybackSkipDirection.NEXT) {
+                if (++playlistIndex >= playlist.size()) playlistIndex = 0;
+            } else {
+                if (--playlistIndex < 0) playlistIndex = playlist.size() - 1;
+            }
+        }
+
         activeAudio = playlist.get(playlistIndex);
         playMedia();
+
+        return true;
     }
 
-    void skipToPrevious() {
-        // TODO(doyle): To be implemented
-        Debug.CAREFUL_ASSERT(playlist.size() > 0, ASSERT_TAG, "skipToNext(): Playlist is empty: " +
-                "" + playlist.size());
+    int getCurrTrackPosition() {
+        int result = 0;
+        if (Debug.CAREFUL_ASSERT(player != null, DEBUG_TAG, "Player is null")) {
+            result = player.getCurrentPosition();
+        }
 
-        if (--playlistIndex < 0) playlistIndex = playlist.size() - 1;
-        activeAudio = playlist.get(playlistIndex);
-        playMedia();
+        return result;
+    }
+
+    int getTrackDuration() {
+        int result = 0;
+        if (Debug.CAREFUL_ASSERT(player != null, DEBUG_TAG, "Player is null")) {
+            result = player.getDuration();
+        }
+
+        return result;
+    }
+
+    void seekTo(int msec) {
+        if (Debug.CAREFUL_ASSERT(player != null, DEBUG_TAG, "Player is null")) {
+            player.seekTo(msec);
+        }
     }
 
     /*
@@ -545,7 +615,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
         @Override
         public void onReceive(Context context, Intent intent) {
             pauseMedia();
-            buildNotification(PlaybackStatus.PAUSED);
+            buildNotification(PlayState.PAUSED);
         }
     };
 
@@ -559,7 +629,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
     private BroadcastReceiver playNewAudioReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-            Log.d(ASSERT_TAG, "Received play new audio intent");
+            Log.d(DEBUG_TAG, "Received play new audio intent");
             prepareSongAndPlay();
         }
     };
@@ -598,7 +668,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
             }
         };
 
-        // NOTE(doyle): Register the listener for changes to the device call state
+        // NOTE(doyle): Register the listener for changes to the device call playState
         telephonyManager.listen(phoneStateListener, PhoneStateListener.LISTEN_CALL_STATE);
     }
 
