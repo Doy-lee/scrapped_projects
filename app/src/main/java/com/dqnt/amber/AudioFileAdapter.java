@@ -47,12 +47,11 @@ class AudioFileAdapter extends BaseAdapter {
 
     @Override
     public long getItemId(int position) {
-        // TODO(doyle): Fix
         if (audioList != null) {
-            return audioList.get(position).id;
+            return audioList.get(position).dbKey;
         }
 
-         return 0;
+        return -1;
     }
 
     // NOTE(doyle): Cache the inflated layout elements in a audio entry into the tag of a list item

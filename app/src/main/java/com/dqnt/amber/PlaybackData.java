@@ -6,7 +6,7 @@ import java.util.List;
 
 class PlaybackData {
     static class AudioFile {
-        int id;
+        long dbKey;
         Uri uri;
         String album;
         String albumArtist;
@@ -23,7 +23,10 @@ class PlaybackData {
         String writer;
         String year;
 
-        AudioFile(int id,
+        // TODO(doyle): Remove out eventually
+        long sizeInKb;
+
+        AudioFile(long dbKey,
                   Uri uri,
                   String album,
                   String albumArtist,
@@ -38,9 +41,10 @@ class PlaybackData {
                   String genre,
                   String title,
                   String writer,
-                  String year
+                  String year,
+                  long sizeInKb
         ) {
-            this.id = id;
+            this.dbKey = dbKey;
             this.uri = uri;
             this.album = album;
             this.albumArtist = albumArtist;
@@ -56,6 +60,7 @@ class PlaybackData {
             this.title = title;
             this.writer = writer;
             this.year = year;
+            this.sizeInKb = sizeInKb;
         }
     }
 }

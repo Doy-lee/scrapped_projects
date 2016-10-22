@@ -22,8 +22,10 @@ import android.os.IBinder;
 import android.preference.PreferenceManager;
 import android.provider.MediaStore;
 import android.support.annotation.NonNull;
+import android.support.design.widget.NavigationView;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
+import android.support.v4.widget.DrawerLayout;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.util.Log;
@@ -37,6 +39,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.File;
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -112,7 +115,10 @@ public class MainActivity extends AppCompatActivity {
     private Handler seekbarHandler;
     PlayBarItems playBarItems;
     private void amberCreate() {
-        /* Assign UI references */
+        final Toolbar toolbar = (Toolbar) findViewById(R.id.main_toolbar);
+        setSupportActionBar(toolbar);
+        getSupportActionBar().setDefaultDisplayHomeAsUpEnabled(true);
+
         allAudioFiles = new ArrayList<>();
         audioFileAdapter = new AudioFileAdapter(getBaseContext(), allAudioFiles);
 
@@ -258,7 +264,45 @@ public class MainActivity extends AppCompatActivity {
                 whenAudioHasStarted();
             }
         };
+
+        final DrawerLayout drawerLayout = (DrawerLayout)
+                findViewById(R.id.activity_main_drawer_layout);
+        final NavigationView navigationView = (NavigationView)
+                findViewById(R.id.activity_main_navigation_view);
+
+        navigationView.setNavigationItemSelectedListener
+                (new NavigationView.OnNavigationItemSelectedListener() {
+            @Override
+            public boolean onNavigationItemSelected(@NonNull MenuItem item) {
+                switch (item.getItemId()) {
+                    case R.id.menu_main_drawer_album:
+                        toolbar.setTitle(getString(R.string.menu_main_drawer_album));
+                        break;
+                    case R.id.menu_main_drawer_artist:
+                        toolbar.setTitle(getString(R.string.menu_main_drawer_artist));
+                        break;
+                    case R.id.menu_main_drawer_playlist:
+                        toolbar.setTitle(getString(R.string.menu_main_drawer_playlist));
+                        break;
+                    default:
+                        Debug.CAREFUL_ASSERT(false, DEBUG_TAG, "Menu item not handled "
+                                + item.getItemId());
+                        break;
+                }
+
+                drawerLayout.closeDrawers();
+                return true;
+            }
+        });
     }
+
+    private NavigationView.OnNavigationItemSelectedListener navItemSelectedListener =
+            new NavigationView.OnNavigationItemSelectedListener() {
+        @Override
+        public boolean onNavigationItemSelected(@NonNull MenuItem item) {
+            return false;
+        }
+    };
 
     private void queryDeviceForAudioData() {
         Context appContext = getApplicationContext();
@@ -268,14 +312,12 @@ public class MainActivity extends AppCompatActivity {
                 (getResources().getString(R.string.internal_pref_library_init_key), false);
 
         AudioDatabase dbHandle = AudioDatabase.getHandle(appContext);
-        if (Debug.CAREFUL_ASSERT(dbHandle != null, DEBUG_TAG,
-                "amberCreate(): Could not get a db handle")) {
-            if (libraryInit) {
-                new GetAudioMetadataFromDb(dbHandle).execute();
-            } else {
-                GetAudioFromDevice task = new GetAudioFromDevice(appContext, dbHandle);
-                task.execute();
-            }
+        if (libraryInit) {
+            new GetAudioMetadataFromDb(dbHandle).execute();
+        } else {
+            GetAudioFromDevice task = new GetAudioFromDevice(this, allAudioFiles, dbHandle,
+                    audioFileAdapter);
+            task.execute();
         }
     }
 
@@ -288,11 +330,6 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-
-        final Toolbar toolbar = (Toolbar) findViewById(R.id.main_toolbar);
-        setSupportActionBar(toolbar);
-        getSupportActionBar().setDefaultDisplayHomeAsUpEnabled(true);
-
         amberCreate();
     }
 
@@ -361,6 +398,17 @@ public class MainActivity extends AppCompatActivity {
                 break;
             }
 
+            case R.id.action_rescan_music: {
+                // TODO(doyle): For now just drop all the data in the db
+                AudioDatabase dbHandle = AudioDatabase.getHandle(this);
+                allAudioFiles.clear();
+                audioFileAdapter.notifyDataSetChanged();
+                GetAudioFromDevice task = new GetAudioFromDevice
+                        (this, allAudioFiles, dbHandle, audioFileAdapter);
+                task.execute();
+                break;
+            }
+
             default: {
                 Debug.CAREFUL_ASSERT
                         (false, DEBUG_TAG, "Unrecognised item id selected in options menu: " + id);
@@ -423,10 +471,7 @@ public class MainActivity extends AppCompatActivity {
 
         AudioDatabase dbHandle;
         GetAudioMetadataFromDb(AudioDatabase dbHandle) {
-            if (Debug.CAREFUL_ASSERT(dbHandle != null, ASSERT_TAG,
-                    "dbHandle is null in constructor")) {
-                this.dbHandle = dbHandle;
-            }
+            this.dbHandle = dbHandle;
         }
 
         @Override
@@ -446,49 +491,119 @@ public class MainActivity extends AppCompatActivity {
         @Override
         protected void onCancelled(Void aVoid) {
             super.onCancelled(aVoid);
-            dbHandle.close();
         }
 
         @Override
         protected void onPostExecute(Void aVoid) {
             super.onPostExecute(aVoid);
-            dbHandle.close();
             audioFileAdapter.notifyDataSetChanged();
         }
     }
 
-    private class GetAudioFromDevice extends AsyncTask<Void, Void, Void> {
+    private static class GetAudioFromDevice extends AsyncTask<Void, Void, Void> {
         private final Class DEBUG_TAG = GetAudioFromDevice.class;
 
-        private Context appContext;
+        private WeakReference<Context> weakContext;
+        private WeakReference<List<AudioFile>> weakAllAudioFiles;
+        private WeakReference<AudioFileAdapter> weakAudioFileAdapter;
         AudioDatabase dbHandle;
-        GetAudioFromDevice(Context appContext, AudioDatabase dbHandle) {
-            if (Debug.CAREFUL_ASSERT(dbHandle != null, DEBUG_TAG,
-                    "dbHandle is null in constructor")) {
-                this.dbHandle = dbHandle;
-                Debug.INCREMENT_COUNTER(this.getClass(), "GetAudio");
-            }
 
-            this.appContext = appContext;
+        GetAudioFromDevice(Context context, List<AudioFile> allAudioFiles, AudioDatabase dbHandle,
+                           AudioFileAdapter audioFileAdapter) {
+            this.dbHandle = dbHandle;
+
+            this.weakContext = new WeakReference<>(context);
+            this.weakAllAudioFiles = new WeakReference<>(allAudioFiles);
+            this.weakAudioFileAdapter = new WeakReference<>(audioFileAdapter);
         }
 
         private List<AudioFile> updateBatch = new ArrayList<>();
         private int updateCounter = 0;
         private final int UPDATE_THRESHOLD = 20;
         // TODO(doyle): Profile UPDATE_THRESHOLD
-        private void checkAndAddFileToDb(final AudioFile file, final AudioDatabase dbHandle) {
+        private void addToDisplayBatch(final AudioFile file, final List<AudioFile> allAudioFiles) {
             if (file == null) return;
 
             updateBatch.add(file);
-
             if (updateCounter++ >= UPDATE_THRESHOLD) {
                 updateCounter = 0;
-
-                dbHandle.insertMultiAudioFileToDb(updateBatch);
                 allAudioFiles.addAll(updateBatch);
                 updateBatch.clear();
-
                 publishProgress();
+            }
+        }
+
+        private void updateAndCheckAgainstDbList(Context context, MediaMetadataRetriever retriever,
+                                                 File newFile, List<AudioFile> allAudioFiles) {
+
+            if (newFile == null) {
+                Debug.LOG_W(DEBUG_TAG, "File is null, cannot check/add against db");
+                return;
+            }
+
+            String checkFields = AudioDatabase.Entry.KEY_PATH + " =  ? ";
+            String[] checkArgs = new String[] {
+                newFile.getPath(),
+            };
+
+            Uri newFileUri = Uri.fromFile(newFile);
+            long newFileSizeInKb = newFile.length() / 1024;
+            AudioDatabase.EntryCheckResult entryCheck =
+                    dbHandle.checkIfExistFromFieldWithValue(checkFields, checkArgs);
+            if (entryCheck.result == AudioDatabase.CheckResult.EXISTS) {
+
+                // NOTE(doyle): If a result exists, then we check the file sizes to ensure they
+                // still match
+                if (entryCheck.entries.size() == 1) {
+                    AudioFile dbAudioFile = entryCheck.entries.get(0);
+
+                    AudioFile resultingFile;
+                    if (dbAudioFile.sizeInKb == newFileSizeInKb) {
+                        resultingFile = dbAudioFile;
+                    } else {
+                        // NOTE(doyle): File has changed since last db scan, update old entry
+                        AudioFile newAudio =
+                                Util.extractAudioMetadata(context, retriever, newFileUri);
+                        newAudio.dbKey = dbAudioFile.dbKey;
+
+                        dbHandle.updateAudioFileInDbWithKey(newAudio);
+                        resultingFile = newAudio;
+                    }
+
+                    addToDisplayBatch(resultingFile, allAudioFiles);
+                    Debug.LOG_V(DEBUG_TAG, "Parsed audio: " +
+                            resultingFile.artist + " - " + resultingFile.title);
+
+                } else if (entryCheck.entries.size() > 1) {
+                    // NOTE(doyle): There are multiple matching entries in the db with the uri.
+                    // This is likely an invalid situation, not sure how it could occur, so play it
+                    // safe, delete all entries and reinsert the file
+                    Debug.LOG_W(DEBUG_TAG, "Unexpected multiple matching uri entries in db");
+                    Debug.LOG_W(DEBUG_TAG, "New file: " + newFile.getPath() + " "
+                            + newFileSizeInKb);
+
+                    for (int i = 0; i < entryCheck.entries.size(); i++) {
+                        AudioFile checkAgainst = entryCheck.entries.get(i);
+                        if (newFileSizeInKb != checkAgainst.sizeInKb) {
+                            Debug.LOG_W(DEBUG_TAG, "Multiple entries matched: " +
+                                    checkAgainst.uri.getPath() + " " + checkAgainst.sizeInKb);
+                            dbHandle.deleteAudioFileFromDbWithKey(checkAgainst.dbKey);
+                        }
+                    }
+
+                    AudioFile newAudio =
+                            Util.extractAudioMetadata(context, retriever, newFileUri);
+                    addToDisplayBatch(newAudio, allAudioFiles);
+                    dbHandle.insertAudioFileToDb(newAudio);
+
+                } else {
+                    Debug.CAREFUL_ASSERT(false, DEBUG_TAG, "Error! An empty db check " +
+                            "result should not occur when marked existing!");
+                }
+            } else if (entryCheck.result == AudioDatabase.CheckResult.NOT_EXIST) {
+                AudioFile audio = Util.extractAudioMetadata(context, retriever, newFileUri);
+                addToDisplayBatch(audio, allAudioFiles);
+                dbHandle.insertAudioFileToDb(audio);
             }
         }
 
@@ -499,12 +614,24 @@ public class MainActivity extends AppCompatActivity {
              * READ AUDIO FROM MEDIA STORE
              ******************************
              */
+            Context context = weakContext.get();
+            if (context == null) {
+                Debug.LOG_W(DEBUG_TAG, "Context got GC'ed. MediaStore not scanned");
+                return null;
+            }
+
+            List<AudioFile> allAudioFiles = weakAllAudioFiles.get();
+            if (allAudioFiles == null) {
+                Debug.LOG_W(DEBUG_TAG, "Audio list got GC'ed early, scan ending early");
+                return null;
+            }
+
             MediaMetadataRetriever retriever = new MediaMetadataRetriever();
-            ContentResolver musicResolver = getContentResolver();
+            ContentResolver musicResolver = context.getContentResolver();
             Uri musicUri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
             Cursor musicCursor = musicResolver.query(musicUri, null, null, null, null);
 
-            int audioId = 0;
+            List<AudioFile> dbMasterList = dbHandle.getAllAudioFiles();
             if (Debug.CAREFUL_ASSERT(musicCursor != null, DEBUG_TAG,
                     "Cursor could not be resolved from ContentResolver")) {
                 if (musicCursor.moveToFirst()) {
@@ -518,14 +645,9 @@ public class MainActivity extends AppCompatActivity {
                         if (Debug.CAREFUL_ASSERT(absPathIndex != -1, DEBUG_TAG,
                                 "Mediastore file does not have an absolute path field")) {
                             String absPath = musicCursor.getString(absPathIndex);
-                            Uri uri = Uri.fromFile(new File(absPath));
+                            File file = new File(absPath);
 
-                            if (Debug.CAREFUL_ASSERT(uri != null, DEBUG_TAG,
-                                    "could not be resolved from absolute path")) {
-                                AudioFile audio = extractAudioMetadata(appContext, retriever,
-                                        audioId++, uri);
-                                checkAndAddFileToDb(audio, dbHandle);
-                            }
+                            updateAndCheckAgainstDbList(context, retriever, file, allAudioFiles);
                         }
                     } while (musicCursor.moveToNext());
                 } else {
@@ -533,16 +655,15 @@ public class MainActivity extends AppCompatActivity {
                 }
                 musicCursor.close();
             }
-
             /*
-             ************************************
+             ***************************************************************************************
              * READ AUDIO FROM USER DEFINED PATH
-             ************************************
+             ***************************************************************************************
              */
             /* Get music from the path set in preferences */
             // TODO(doyle): Add callback handling on preference change
             SharedPreferences sharedPref = PreferenceManager.
-                    getDefaultSharedPreferences(appContext);
+                    getDefaultSharedPreferences(context);
             String musicPath = sharedPref.getString("pref_music_path_key", "");
             File musicDir = new File(musicPath);
 
@@ -555,25 +676,20 @@ public class MainActivity extends AppCompatActivity {
                 for (File file : fileList) {
                     // TODO(doyle): Better file support
                     if (file.toString().endsWith(".opus")) {
-                        Uri uri = Uri.fromFile(file);
-
-                        AudioFile audio = extractAudioMetadata(appContext, retriever, audioId++,
-                                uri);
-                        checkAndAddFileToDb(audio, dbHandle);
+                        updateAndCheckAgainstDbList(context, retriever, file, allAudioFiles);
                     }
                 }
             } else {
-                Debug.LOG_I(DEBUG_TAG, "Could not find/read music directory: " + musicDir);
+                Debug.LOG_W(DEBUG_TAG, "Could not find/read music directory: " + musicDir);
             }
 
             // NOTE(doyle): Add remaining files sitting in batch
             if (updateBatch.size() > 0) {
                 allAudioFiles.addAll(updateBatch);
-                dbHandle.insertMultiAudioFileToDb(updateBatch);
             }
 
             retriever.release();
-                /* Sort list */
+            /* Sort list */
             Collections.sort(allAudioFiles, new Comparator<AudioFile>() {
                 public int compare(AudioFile a, AudioFile b) {
                     return a.title.compareTo(b.title);
@@ -587,26 +703,46 @@ public class MainActivity extends AppCompatActivity {
         protected void onCancelled() {
             // TODO(doyle): We don't push the remaining batch here, journal? to resume on return
             super.onCancelled();
-            dbHandle.close();
         }
 
         @Override
         protected void onProgressUpdate(Void... args) {
             super.onProgressUpdate();
-            dbHandle.close();
-            audioFileAdapter.notifyDataSetChanged();
+            AudioFileAdapter audioFileAdapter = weakAudioFileAdapter.get();
+            if (audioFileAdapter != null) {
+                audioFileAdapter.notifyDataSetChanged();
+            } else {
+                Debug.LOG_W(DEBUG_TAG, "AudioFileAdapter got GCed, OSD may not be accurate");
+            }
         }
 
         @Override
         protected void onPostExecute(Void aVoid) {
             super.onPostExecute(aVoid);
-            audioFileAdapter.notifyDataSetChanged();
 
-            SharedPreferences sharedPref =
-                    PreferenceManager.getDefaultSharedPreferences(appContext);
-            String libraryInitKey = getResources().
-                    getString(R.string.internal_pref_library_init_key);
-            sharedPref.edit().putBoolean(libraryInitKey, true).apply();
+            AudioFileAdapter audioFileAdapter = weakAudioFileAdapter.get();
+            if (audioFileAdapter != null) {
+                audioFileAdapter.notifyDataSetChanged();
+            } else {
+                Debug.LOG_W(DEBUG_TAG, "AudioFileAdapter got GCed, OSD may not be accurate");
+            }
+
+            Context context = weakContext.get();
+            if (context == null) {
+                Debug.LOG_W(DEBUG_TAG, "Context got GC'ed, library init key not written. " +
+                        "Another rescan needed");
+            } else {
+                SharedPreferences sharedPref =
+                        PreferenceManager.getDefaultSharedPreferences(context);
+                String libraryInitKey = context.getResources().
+                        getString(R.string.internal_pref_library_init_key);
+                sharedPref.edit().putBoolean(libraryInitKey, true).apply();
+
+                if (Debug.DEBUG_MODE) {
+                    Toast.makeText(context, "Library Initialisation has been confirmed",
+                            Toast.LENGTH_SHORT).show();
+                }
+            }
         }
     }
 
@@ -615,72 +751,6 @@ public class MainActivity extends AppCompatActivity {
      * AUDIO METADATA MANIPULATION
      ***********************************************************************************************
      */
-    private String extractAudioKeyData(MediaMetadataRetriever retriever, int key) {
-        String field = retriever.extractMetadata(key);
-        if (field == null) field = "Unknown";
-        return field;
-    }
-
-    private AudioFile extractAudioMetadata(Context context, MediaMetadataRetriever mmr,
-                                                        int id, Uri uri) {
-
-        if (uri == null) return null;
-        if (mmr == null) return null;
-        if (context == null) return null;
-
-        mmr.setDataSource(context, uri);
-
-        // NOTE(doyle): API
-        // developer.android.com/reference/android/media/MediaMetadataRetriever.html
-        String album = extractAudioKeyData(mmr, MediaMetadataRetriever.METADATA_KEY_ALBUM);
-        String albumArtist = extractAudioKeyData(mmr,
-                MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST);
-        String artist = extractAudioKeyData(mmr, (MediaMetadataRetriever.METADATA_KEY_ARTIST));
-        String author = extractAudioKeyData(mmr, MediaMetadataRetriever.METADATA_KEY_AUTHOR);
-
-        String bitrateStr = extractAudioKeyData(mmr, MediaMetadataRetriever.METADATA_KEY_BITRATE);
-        int bitrate = 0;
-        if (bitrateStr.compareTo("Unknown") != 0) {
-            bitrate = Integer.parseInt(bitrateStr);
-        }
-        String cdTrackNum = extractAudioKeyData
-                (mmr, MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER);
-        String composer = extractAudioKeyData(mmr, MediaMetadataRetriever.METADATA_KEY_COMPOSER);
-        String date = extractAudioKeyData(mmr, MediaMetadataRetriever.METADATA_KEY_DATE);
-        String discNum = extractAudioKeyData(mmr, MediaMetadataRetriever.METADATA_KEY_DISC_NUMBER);
-
-        String durationStr = extractAudioKeyData(mmr, MediaMetadataRetriever.METADATA_KEY_DURATION);
-        int duration = 0;
-        if (durationStr.compareTo("Unknown") != 0) {
-            duration = Integer.parseInt(durationStr);
-        }
-
-        String genre = extractAudioKeyData(mmr, MediaMetadataRetriever.METADATA_KEY_GENRE);
-        String title = extractAudioKeyData(mmr, MediaMetadataRetriever.METADATA_KEY_TITLE);
-        String writer = extractAudioKeyData(mmr, MediaMetadataRetriever.METADATA_KEY_WRITER);
-        String year = extractAudioKeyData(mmr, MediaMetadataRetriever.METADATA_KEY_YEAR);
-
-        File file = new File(uri.getPath());
-        Debug.LOG_V(DEBUG_TAG, "File: " + file.getName() + ", Parsed audio: " + artist +  " - " + title);
-
-        AudioFile result = new AudioFile(id,
-                                         uri,
-                                         album,
-                                         albumArtist,
-                                         artist,
-                                         author,
-                                         bitrate,
-                                         cdTrackNum,
-                                         composer,
-                                         date,
-                                         discNum,
-                                         duration,
-                                         genre,
-                                         title,
-                                         writer,
-                                         year);
-        return result;
-    }
 
     public void audioFileClicked(View view) {
         AudioFileAdapter.AudioEntryInView entry = (AudioFileAdapter.AudioEntryInView) view.getTag();

@@ -9,6 +9,12 @@
         app:showAsAction="never" />
 
     <item
+        android:id="@+id/action_rescan_music"
+        android:orderInCategory="100"
+        android:title="@string/action_rescan_music"
+        app:showAsAction="never" />
+
+    <item
         android:id="@+id/action_exit"
         android:orderInCategory="100"
         android:title="@string/action_exit"

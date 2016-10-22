@@ -395,11 +395,12 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
 
     @Override
     public void onAudioFocusChange(int focusState) {
+        if (player == null) return;
+
         //Invoked when the audio focus of the system is updated.
         switch (focusState) {
             case AudioManager.AUDIOFOCUS_GAIN: {
                 // resume playback
-                if (player == null) initMediaPlayer();
                 player.setVolume(1.0f, 1.0f);
                 resumeMedia();
                 break;

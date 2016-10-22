@@ -4,7 +4,13 @@
     <dimen name="activity_vertical_margin">16dp</dimen>
     <dimen name="fab_margin">16dp</dimen>
 
-    <dimen name="material_hint_and_input">16sp</dimen>
+    <!-- Amber icons are 12x12, with 6dp padding of empty space on each side of the icon -->
+    <dimen name="amber_icon_padding">6dp</dimen>
+    <dimen name="amber_play_bar_current_song_height">48dp</dimen>
+    <!-- Top padding should be half the current song height -->
+    <dimen name="amber_play_bar_current_song_text_view_top_padding">8dp</dimen>
+
+    <dimen name="material_hint_and_input_text">16sp</dimen>
 
     <!-- Normal icons should be 40dp, with a clickable total area of 48dp -->
     <dimen name="material_icon">40dp</dimen>
@@ -17,6 +23,12 @@
 
     <!-- List item size -->
     <dimen name="material_layout_vertical_spacing_list_item">72dp</dimen>
+
+    <dimen name="material_component_lists_single_line_height">48dp</dimen>
+    <dimen name="material_component_lists_single_line_text_size">16sp</dimen>
+    <dimen name="material_component_lists_two_line_height">56dp</dimen>
+    <dimen name="material_component_lists_two_line_text_size">16sp</dimen>
+    <dimen name="material_component_lists_two_line_secondary_text_size">14sp</dimen>
 
     <!-- Buttons -->
     <dimen name="material_button_height">36dp</dimen>
@@ -115,13 +127,8 @@
     <dimen name="material_component_grid_lists_padding_small">1dp</dimen>
     <!-- Lists -->
     <dimen name="material_component_lists_text_left_padding">72dp</dimen>
-    <dimen name="material_component_lists_single_line_height">48dp</dimen>
     <dimen name="material_component_lists_padding_above_list">8dp</dimen>
     <dimen name="material_component_lists_single_line_with_avatar_height">56dp</dimen>
-    <dimen name="material_component_lists_single_line_text_size">16sp</dimen>
-    <dimen name="material_component_lists_two_line_height">56dp</dimen>
-    <dimen name="material_component_lists_two_line_text_size">16sp</dimen>
-    <dimen name="material_component_lists_two_line_secondary_text_size">14sp</dimen>
     <dimen name="material_component_lists_three_line_height">88dp</dimen>
     <dimen name="material_component_lists_text_padding_bottom">20dp</dimen>
     <!-- Lists: Controls -->

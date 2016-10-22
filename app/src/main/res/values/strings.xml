@@ -1,6 +1,7 @@
 <resources>
     <string name="app_name">Amber</string>
     <string name="action_settings">Settings</string>
+    <string name="action_rescan_music">Rescan Music</string>
     <string name="action_exit">Exit</string>
 
     <!-- Strings related to Settings -->
@@ -12,4 +13,9 @@
     <string name="play_bar_current_song_text_view_placeholder">[Artist Name - Title]</string>
 
     <string name="internal_pref_library_init_key">internal_pref_library_init_key</string>
+
+    <string name="menu_main_drawer_artist">Artist</string>
+    <string name="menu_main_drawer_album">Album</string>
+    <string name="menu_main_drawer_playlist">Playlist</string>
+    <string name="menu_main_drawer_settings">Settings</string>
 </resources>
