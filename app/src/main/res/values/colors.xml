@@ -4,6 +4,10 @@
     <color name="colorPrimaryDark">#303F9F</color>
     <color name="colorAccent">#ff4081</color>
 
+    <color name="debug_text_background">#C8000000</color>
+    <color name="debug_text_variable_name_color">#00FF00</color>
+    <color name="debug_text_variable_value_color">#FFFF00</color>
+
     <color name="transparent">#00000000</color>
 
     <color name="black_87_percent">#DE000000</color>

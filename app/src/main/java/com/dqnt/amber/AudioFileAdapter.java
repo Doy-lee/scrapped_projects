@@ -16,8 +16,6 @@ import com.dqnt.amber.PlaybackData.AudioFile;
  * Created by Doyle on 25/09/2016.
  */
 class AudioFileAdapter extends BaseAdapter {
-    private final Class ASSERT_TAG = AudioFileAdapter.class;
-
     List<AudioFile> audioList;
     private LayoutInflater audioInflater;
 
@@ -80,7 +78,7 @@ class AudioFileAdapter extends BaseAdapter {
         }
 
         AudioFile audio = audioList.get(position);
-        if (Debug.CAREFUL_ASSERT(audio != null, ASSERT_TAG, "Audio file is null")) {
+        if (Debug.CAREFUL_ASSERT(audio != null, this, "Audio file is null")) {
             /* Set view data */
             audioEntry.artist.setText(audio.title);
             audioEntry.title.setText(audio.artist);

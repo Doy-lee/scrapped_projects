@@ -14,13 +14,14 @@ import android.os.Binder;
 import android.os.IBinder;
 import android.os.PowerManager;
 import android.os.RemoteException;
+import android.support.v4.media.session.MediaButtonReceiver;
 import android.support.v7.app.NotificationCompat;
 import android.support.v4.media.MediaMetadataCompat;
 import android.support.v4.media.session.MediaControllerCompat;
 import android.support.v4.media.session.MediaSessionCompat;
 import android.telephony.PhoneStateListener;
 import android.telephony.TelephonyManager;
-import android.util.Log;
+import android.widget.Toast;
 
 import java.io.IOException;
 import java.util.List;
@@ -33,7 +34,6 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
         MediaPlayer.OnErrorListener, MediaPlayer.OnCompletionListener,
         MediaPlayer.OnSeekCompleteListener, MediaPlayer.OnInfoListener,
         MediaPlayer.OnBufferingUpdateListener, AudioManager.OnAudioFocusChangeListener {
-    private final Class DEBUG_TAG = AudioService.class;
 
     public static final String ACTION_PLAY = "com.dqnt.amber.ACTION_PLAY";
     public static final String ACTION_PAUSE = "com.dqnt.amber.ACTION_PAUSE";
@@ -86,8 +86,6 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
 
         // NOTE(doyle): Manage incoming phone calls during playback
         registerCallStateListener();
-        registerBecomingNoisyReceiver();
-
         // TODO(doyle): Revise broadcast audio
         // registerPlayNewAudio();
     }
@@ -95,8 +93,6 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
     // NOTE(doyle): Called when an activity requests the service be started
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        if (!requestAudioFocus()) stopSelf();
-
         if (mediaSessionManager == null) {
             try {
                 initMediaSession();
@@ -106,6 +102,8 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
             }
             // buildNotification(PlayState.PLAYING);
         }
+
+        MediaButtonReceiver.handleIntent(mediaSessionCompat, intent);
 
         playState = PlayState.STOPPED;
         handleIncomingActions(intent);
@@ -119,18 +117,16 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
         mediaSessionCompat = new MediaSessionCompat(getApplicationContext(), "AudioPlayer");
         transportControls = mediaSessionCompat.getController().getTransportControls();
 
-        /* Indicate media session ready to receive media commands */
-        mediaSessionCompat.setActive(true);
-
         /* Set media session to handle control commands through the call back */
-        mediaSessionCompat.setFlags(MediaSessionCompat.FLAG_HANDLES_TRANSPORT_CONTROLS);
+        mediaSessionCompat.setFlags(MediaSessionCompat.FLAG_HANDLES_TRANSPORT_CONTROLS |
+                                    MediaSessionCompat.FLAG_HANDLES_MEDIA_BUTTONS);
         // Attach Callback to receive MediaSession updates
         mediaSessionCompat.setCallback(new MediaSessionCompat.Callback() {
             // Implement callbacks
             @Override
             public void onPlay() {
                 super.onPlay();
-                resumeMedia();
+                playMedia();
                 buildNotification(PlayState.PLAYING);
             }
 
@@ -286,13 +282,13 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
 
     @Override
     public boolean onUnbind(Intent intent) {
-        Debug.LOG_D(DEBUG_TAG, "Service unbound from activity");
+        Debug.LOG_D(this, "Service unbound from activity");
         return false;
     }
 
     @Override
     public void onDestroy() {
-        Debug.LOG_D(DEBUG_TAG, "Service destroyed");
+        Debug.LOG_D(this, "Service destroyed");
 
         // NOTE(doyle): Stop notification running in foreground
         stopForeground(true);
@@ -318,7 +314,10 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
         int result = audioManager.requestAudioFocus(this, AudioManager.STREAM_MUSIC,
                 AudioManager.AUDIOFOCUS_GAIN);
 
-        if (result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) return true;
+
+        if (result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+            return true;
+        }
         return false;
     }
 
@@ -351,16 +350,16 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
         mp.reset();
         switch (what) {
             case MediaPlayer.MEDIA_ERROR_NOT_VALID_FOR_PROGRESSIVE_PLAYBACK:
-                Debug.LOG_D(DEBUG_TAG, "Media error not valid for progressive playback: " + extra);
+                Debug.LOG_D(this, "Media error not valid for progressive playback: " + extra);
                 break;
             case MediaPlayer.MEDIA_ERROR_SERVER_DIED:
-                Debug.LOG_D(DEBUG_TAG, "Media error server died: " + extra);
+                Debug.LOG_D(this, "Media error server died: " + extra);
                 break;
             case MediaPlayer.MEDIA_ERROR_UNKNOWN:
-                Debug.LOG_D(DEBUG_TAG, "Media error unknown: " + extra);
+                Debug.LOG_D(this, "Media error unknown: " + extra);
                 break;
             default:
-                Debug.CAREFUL_ASSERT(false, DEBUG_TAG, "Media error not handled: " + extra);
+                Debug.CAREFUL_ASSERT(false, this, "Media error not handled: " + extra);
                 break;
         }
 
@@ -387,9 +386,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
 
         startForeground(NOTIFY_ID, notification);
         */
-        player.start();
-        listener.audioHasStartedPlayback();
-        playState = PlayState.PLAYING;
+        startPlayback();
     }
 
 
@@ -400,12 +397,15 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
         //Invoked when the audio focus of the system is updated.
         switch (focusState) {
             case AudioManager.AUDIOFOCUS_GAIN: {
+                /* Indicate media session ready to receive media commands */
+                mediaSessionCompat.setActive(true);
                 // resume playback
                 player.setVolume(1.0f, 1.0f);
-                resumeMedia();
+                playMedia();
                 break;
             }
             case AudioManager.AUDIOFOCUS_LOSS: {
+                mediaSessionCompat.setActive(false);
                 // Lost focus for an amount of time stop playback and release media player
                 stopMedia();
                 player.release();
@@ -448,12 +448,12 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
 
     private boolean validatePlaylist(List<AudioFile> playlist, int index) {
         if (playlist == null) {
-            Debug.LOG_W(DEBUG_TAG, "Playlist was null");
+            Debug.LOG_W(this, "Playlist was null");
             return false;
         }
 
         if (index >= playlist.size() || index < 0) {
-            Debug.LOG_W(DEBUG_TAG, "Index was out of playlist bounds");
+            Debug.LOG_W(this, "Index was out of playlist bounds");
             return false;
         }
 
@@ -461,94 +461,107 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
     }
 
     boolean queuedNewSong = false;
-    void preparePlaylist(List<AudioFile> playlist, int index) {
+    boolean preparePlaylist(List<AudioFile> playlist, int index) {
         /* Queue playlist and song */
         if (validatePlaylist(playlist, index)) {
             this.playlist = playlist;
             this.playlistIndex = index;
             activeAudio = playlist.get(playlistIndex);
+            return true;
         }
 
         queuedNewSong = true;
-    }
-
-    boolean playMedia() {
-        // NOTE(doyle): Reset seems to stop the player if already playing so don't need stopSelf()
-        if (!validatePlaylist(this.playlist, this.playlistIndex)) return false;
-
-        if (playState == PlayState.PAUSED && !queuedNewSong) {
-            return resumeMedia();
-        } else {
-            if (player == null) {
-                initMediaPlayer();
-                Debug.INCREMENT_COUNTER(this.getClass(), "MediaPlayerWasNull");
-            }
-
-            try {
-                player.reset();
-                player.setDataSource(getApplicationContext(), activeAudio.uri);
-                player.prepareAsync();
-                buildNotification(PlayState.PLAYING);
-                queuedNewSong = false;
-                return true;
-            } catch (IOException e) {
-                e.printStackTrace();
-                Debug.CAREFUL_ASSERT(false, DEBUG_TAG, "IOException, could not " +
-                        "set file as source: " + activeAudio.uri.getPath());
-                stopSelf();
-                return false;
-            }
-        }
-    }
-
-    boolean stopMedia() {
-        if (player == null) {
-            Debug.CAREFUL_ASSERT(false, DEBUG_TAG, "Tried to stop null player");
-            return false;
-        } else {
-            if (player.isPlaying()) {
-                player.stop();
-                playState = PlayState.STOPPED;
-                return true;
-            }
-        }
-
         return false;
     }
 
-    boolean pauseMedia() {
-        if (player == null) {
-            Debug.CAREFUL_ASSERT(false, DEBUG_TAG, "Tried to pause null player");
-            return false;
-        } else {
-            if (player.isPlaying()) {
-                player.pause();
-                playState = PlayState.PAUSED;
-                resumePosition = player.getCurrentPosition();
-                return true;
-            }
-        }
+    void playMedia() { controlPlayback(PlayCommand.PLAY); }
+    void stopMedia() { controlPlayback(PlayCommand.STOP); }
+    void pauseMedia() { controlPlayback(PlayCommand.PAUSE); }
 
-
-        return false;
+    private enum PlayCommand {
+        PLAY,
+        PAUSE,
+        STOP,
     }
 
-    private boolean resumeMedia() {
-        if (player == null) {
-            Debug.CAREFUL_ASSERT(false, DEBUG_TAG, "Player is null");
-        } else {
-            if (!player.isPlaying()) {
-                player.seekTo(resumePosition);
-                player.start();
+    private void startPlayback() {
+        registerBecomingNoisyReceiver();
+        player.start();
 
-                playState = PlayState.PLAYING;
-                listener.audioHasStartedPlayback();
-                return true;
-            }
-        }
-
-        return false;
+        playState = PlayState.PLAYING;
+        listener.audioHasStartedPlayback();
     }
+
+    private void controlPlayback(PlayCommand command) {
+        switch (command) {
+            case PLAY: {
+                if (!requestAudioFocus()) {
+                    stopSelf();
+                    Debug.LOG_W(this, "Could not request audio focus");
+                    return;
+                }
+
+                if (playState == PlayState.PAUSED && !queuedNewSong) {
+                    player.seekTo(resumePosition);
+                    startPlayback();
+                } else {
+                    if (player == null) {
+                        initMediaPlayer();
+                        Debug.INCREMENT_COUNTER(this, "Media player instance reinitialised");
+                    }
+
+                    try {
+                        player.reset();
+                        player.setDataSource(getApplicationContext(), activeAudio.uri);
+                        player.prepareAsync();
+                        buildNotification(PlayState.PLAYING);
+                        queuedNewSong = false;
+                        resumePosition = 0;
+                        return;
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                        Debug.CAREFUL_ASSERT(false, this, "IOException, could not " +
+                                "set file as source: " + activeAudio.uri.getPath());
+                        Debug.TOAST(this, "Stopping service, file load error", Toast.LENGTH_SHORT);
+                        stopSelf();
+                        return;
+                    }
+                }
+            } break;
+
+            case PAUSE: {
+
+                if (player == null) {
+                    Debug.CAREFUL_ASSERT(false, this, "Player is null");
+                    return;
+                }
+
+                if (player.isPlaying()) {
+                    player.pause();
+                    playState = PlayState.PAUSED;
+                    resumePosition = player.getCurrentPosition();
+                    unregisterReceiver(becomingNoisyReceiver);
+                    return;
+                }
+            } break;
+
+            case STOP: {
+
+                if (player == null) {
+                    Debug.CAREFUL_ASSERT(false, this, "Player is null");
+                    return;
+                }
+
+                if (player.isPlaying()) {
+                    removeAudioFocus();
+                    player.stop();
+                    playState = PlayState.STOPPED;
+                    return;
+                }
+            } break;
+        }
+    }
+
 
 
     enum PlaybackSkipDirection {
@@ -565,7 +578,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
             int newIndex = playlistIndex;
             while (newIndex == playlistIndex) {
                 newIndex = new Random().nextInt(playlist.size());
-                Debug.INCREMENT_COUNTER(DEBUG_TAG, "Shuffle random index failed count");
+                Debug.INCREMENT_COUNTER(this, "Shuffle random index failed count");
             }
 
             playlistIndex = newIndex;
@@ -585,7 +598,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
 
     int getCurrTrackPosition() {
         int result = 0;
-        if (Debug.CAREFUL_ASSERT(player != null, DEBUG_TAG, "Player is null")) {
+        if (Debug.CAREFUL_ASSERT(player != null, this, "Player is null")) {
             result = player.getCurrentPosition();
         }
 
@@ -594,7 +607,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
 
     int getTrackDuration() {
         int result = 0;
-        if (Debug.CAREFUL_ASSERT(player != null, DEBUG_TAG, "Player is null")) {
+        if (Debug.CAREFUL_ASSERT(player != null, this, "Player is null")) {
             result = player.getDuration();
         }
 
@@ -602,7 +615,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
     }
 
     void seekTo(int msec) {
-        if (Debug.CAREFUL_ASSERT(player != null, DEBUG_TAG, "Player is null")) {
+        if (Debug.CAREFUL_ASSERT(player != null, this, "Player is null")) {
             player.seekTo(msec);
         }
     }
@@ -630,7 +643,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
     private BroadcastReceiver playNewAudioReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-            Log.d(DEBUG_TAG, "Received play new audio intent");
+            Log.d(this, "Received play new audio intent");
             prepareSongAndPlay();
         }
     };
@@ -662,7 +675,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
                     case TelephonyManager.CALL_STATE_IDLE:
                         if (player != null && ongoingCall) {
                             ongoingCall = false;
-                            resumeMedia();
+                            playMedia();
                         }
                         break;
                 }

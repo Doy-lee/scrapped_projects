@@ -31,10 +31,24 @@
                 android:value="com.dqnt.amber.MainActivity" />
         </activity>
 
+        <receiver
+            android:name="android.support.v4.media.session.MediaButtonReceiver" >
+            <intent-filter>
+                <action android:name="android.intent.action.MEDIA_BUTTON" />
+            </intent-filter>
+        </receiver>
+
         <service
             android:name="com.dqnt.amber.AudioService"
             android:enabled="true"
-            android:exported="false"/>
+            android:exported="false">
+
+            <!-- Intents received by MediaButtonReceiver will now be available in
+                 AudioService's onStartCommand() -->
+            <intent-filter>
+                <action android:name="android.intent.action.MEDIA_BUTTON" />
+            </intent-filter>
+        </service>
     </application>
 
 </manifest>

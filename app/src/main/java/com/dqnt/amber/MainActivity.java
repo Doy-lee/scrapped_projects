@@ -2,6 +2,7 @@ package com.dqnt.amber;
 
 
 import android.Manifest;
+import android.app.Activity;
 import android.content.ComponentName;
 import android.content.ContentResolver;
 import android.content.Context;
@@ -44,11 +45,13 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Random;
 
 import com.dqnt.amber.PlaybackData.AudioFile;
 
+import static com.dqnt.amber.Debug.LOG_D;
+
 public class MainActivity extends AppCompatActivity {
-    private static final Class DEBUG_TAG = MainActivity.class;
     private static final int AMBER_READ_EXTERNAL_STORAGE_REQUEST = 1;
     private AudioFileAdapter audioFileAdapter;
 
@@ -86,7 +89,7 @@ public class MainActivity extends AppCompatActivity {
             }
 
             if (queuedPlaylist != null) {
-                if (Debug.CAREFUL_ASSERT(queuedPlaylistIndex != -1, DEBUG_TAG,
+                if (Debug.CAREFUL_ASSERT(queuedPlaylistIndex != -1, this,
                         "Playlist queued, but no index specified")) {
                     enqueueToPlayer(queuedPlaylist, queuedPlaylistIndex);
                     queuedPlaylist = null;
@@ -112,13 +115,25 @@ public class MainActivity extends AppCompatActivity {
         SeekBar seekBar;
     }
 
-    private Handler seekbarHandler;
+    private Handler handler;
     PlayBarItems playBarItems;
     private void amberCreate() {
         final Toolbar toolbar = (Toolbar) findViewById(R.id.main_toolbar);
         setSupportActionBar(toolbar);
         getSupportActionBar().setDefaultDisplayHomeAsUpEnabled(true);
 
+        handler = new Handler();
+        Debug.UiUpdateAndRender debugRenderer = new Debug.UiUpdateAndRender(this, handler, 2) {
+            @Override
+            public void renderElements() {
+                pushText("Debug Text");
+                pushClass(audioService, true, false);
+                pushClass(this, true, false);
+                pushText(Debug.GENERATE_COUNTER_STRING());
+            }
+        };
+
+        // Setting the RelativeLayout as our content view
         allAudioFiles = new ArrayList<>();
         audioFileAdapter = new AudioFileAdapter(getBaseContext(), allAudioFiles);
 
@@ -255,8 +270,6 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        seekbarHandler = new Handler();
-
         audioServiceResponse = new AudioService.Response() {
             @Override
             public void audioHasStartedPlayback() {
@@ -285,7 +298,7 @@ public class MainActivity extends AppCompatActivity {
                         toolbar.setTitle(getString(R.string.menu_main_drawer_playlist));
                         break;
                     default:
-                        Debug.CAREFUL_ASSERT(false, DEBUG_TAG, "Menu item not handled "
+                        Debug.CAREFUL_ASSERT(false, this, "Menu item not handled "
                                 + item.getItemId());
                         break;
                 }
@@ -337,7 +350,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onStart() {
         super.onStart();
         if (!serviceBound) {
-            Debug.LOG_D(DEBUG_TAG, "Starting audio service");
+            LOG_D(this, "Starting audio service");
             Intent playerIntent = new Intent(this, AudioService.class);
             startService(playerIntent);
             bindService(playerIntent, audioConnection, Context.BIND_AUTO_CREATE);
@@ -411,7 +424,7 @@ public class MainActivity extends AppCompatActivity {
 
             default: {
                 Debug.CAREFUL_ASSERT
-                        (false, DEBUG_TAG, "Unrecognised item id selected in options menu: " + id);
+                        (false, this, "Unrecognised item id selected in options menu: " + id);
                 break;
             }
         }
@@ -427,22 +440,22 @@ public class MainActivity extends AppCompatActivity {
             case AMBER_READ_EXTERNAL_STORAGE_REQUEST: {
                 // If request is cancelled, the result arrays are empty.
                 if (grantResults.length == 0) {
-                    Debug.LOG_I(DEBUG_TAG, "Read external storage permission request cancelled");
+                    Debug.LOG_I(this, "Read external storage permission request cancelled");
                     return;
                 }
 
                 if (grantResults.length > 1) {
-                    Debug.LOG_W(DEBUG_TAG, "Read external storage permission request has unexpected argument " +
+                    Debug.LOG_W(this, "Read external storage permission request has unexpected argument " +
                             "results expected length 1, got " + grantResults.length +
                             ". Ignoring additional arguments");
                 }
 
                 if (grantResults[0] == PackageManager.PERMISSION_GRANTED) queryDeviceForAudioData();
-                else Debug.LOG_I(DEBUG_TAG, "Read external storage permission request denied");
+                else Debug.LOG_I(this, "Read external storage permission request denied");
                 return;
             }
             default: {
-                Debug.CAREFUL_ASSERT(false, DEBUG_TAG, "Request code not handle: " + requestCode);
+                Debug.CAREFUL_ASSERT(false, this, "Request code not handle: " + requestCode);
             }
         }
     }
@@ -467,8 +480,6 @@ public class MainActivity extends AppCompatActivity {
      */
 
     private class GetAudioMetadataFromDb extends AsyncTask<Void, Void, Void> {
-        private final Class ASSERT_TAG = GetAudioMetadataFromDb.class;
-
         AudioDatabase dbHandle;
         GetAudioMetadataFromDb(AudioDatabase dbHandle) {
             this.dbHandle = dbHandle;
@@ -501,8 +512,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private static class GetAudioFromDevice extends AsyncTask<Void, Void, Void> {
-        private final Class DEBUG_TAG = GetAudioFromDevice.class;
-
         private WeakReference<Context> weakContext;
         private WeakReference<List<AudioFile>> weakAllAudioFiles;
         private WeakReference<AudioFileAdapter> weakAudioFileAdapter;
@@ -537,7 +546,7 @@ public class MainActivity extends AppCompatActivity {
                                                  File newFile, List<AudioFile> allAudioFiles) {
 
             if (newFile == null) {
-                Debug.LOG_W(DEBUG_TAG, "File is null, cannot check/add against db");
+                Debug.LOG_W(this, "File is null, cannot check/add against db");
                 return;
             }
 
@@ -571,21 +580,21 @@ public class MainActivity extends AppCompatActivity {
                     }
 
                     addToDisplayBatch(resultingFile, allAudioFiles);
-                    Debug.LOG_V(DEBUG_TAG, "Parsed audio: " +
+                    Debug.LOG_V(this, "Parsed audio: " +
                             resultingFile.artist + " - " + resultingFile.title);
 
                 } else if (entryCheck.entries.size() > 1) {
                     // NOTE(doyle): There are multiple matching entries in the db with the uri.
                     // This is likely an invalid situation, not sure how it could occur, so play it
                     // safe, delete all entries and reinsert the file
-                    Debug.LOG_W(DEBUG_TAG, "Unexpected multiple matching uri entries in db");
-                    Debug.LOG_W(DEBUG_TAG, "New file: " + newFile.getPath() + " "
+                    Debug.LOG_W(this, "Unexpected multiple matching uri entries in db");
+                    Debug.LOG_W(this, "New file: " + newFile.getPath() + " "
                             + newFileSizeInKb);
 
                     for (int i = 0; i < entryCheck.entries.size(); i++) {
                         AudioFile checkAgainst = entryCheck.entries.get(i);
                         if (newFileSizeInKb != checkAgainst.sizeInKb) {
-                            Debug.LOG_W(DEBUG_TAG, "Multiple entries matched: " +
+                            Debug.LOG_W(this, "Multiple entries matched: " +
                                     checkAgainst.uri.getPath() + " " + checkAgainst.sizeInKb);
                             dbHandle.deleteAudioFileFromDbWithKey(checkAgainst.dbKey);
                         }
@@ -597,7 +606,7 @@ public class MainActivity extends AppCompatActivity {
                     dbHandle.insertAudioFileToDb(newAudio);
 
                 } else {
-                    Debug.CAREFUL_ASSERT(false, DEBUG_TAG, "Error! An empty db check " +
+                    Debug.CAREFUL_ASSERT(false, this, "Error! An empty db check " +
                             "result should not occur when marked existing!");
                 }
             } else if (entryCheck.result == AudioDatabase.CheckResult.NOT_EXIST) {
@@ -616,13 +625,13 @@ public class MainActivity extends AppCompatActivity {
              */
             Context context = weakContext.get();
             if (context == null) {
-                Debug.LOG_W(DEBUG_TAG, "Context got GC'ed. MediaStore not scanned");
+                Debug.LOG_W(this, "Context got GC'ed. MediaStore not scanned");
                 return null;
             }
 
             List<AudioFile> allAudioFiles = weakAllAudioFiles.get();
             if (allAudioFiles == null) {
-                Debug.LOG_W(DEBUG_TAG, "Audio list got GC'ed early, scan ending early");
+                Debug.LOG_W(this, "Audio list got GC'ed early, scan ending early");
                 return null;
             }
 
@@ -632,7 +641,7 @@ public class MainActivity extends AppCompatActivity {
             Cursor musicCursor = musicResolver.query(musicUri, null, null, null, null);
 
             List<AudioFile> dbMasterList = dbHandle.getAllAudioFiles();
-            if (Debug.CAREFUL_ASSERT(musicCursor != null, DEBUG_TAG,
+            if (Debug.CAREFUL_ASSERT(musicCursor != null, this,
                     "Cursor could not be resolved from ContentResolver")) {
                 if (musicCursor.moveToFirst()) {
                     int idCol = musicCursor.getColumnIndex(MediaStore.Audio.Media._ID);
@@ -642,7 +651,7 @@ public class MainActivity extends AppCompatActivity {
                         // content flags, content cannot be played back in MediaPlayer
                         int absPathIndex = musicCursor.
                                 getColumnIndex(MediaStore.Audio.Media.DATA);
-                        if (Debug.CAREFUL_ASSERT(absPathIndex != -1, DEBUG_TAG,
+                        if (Debug.CAREFUL_ASSERT(absPathIndex != -1, this,
                                 "Mediastore file does not have an absolute path field")) {
                             String absPath = musicCursor.getString(absPathIndex);
                             File file = new File(absPath);
@@ -651,7 +660,7 @@ public class MainActivity extends AppCompatActivity {
                         }
                     } while (musicCursor.moveToNext());
                 } else {
-                    Debug.LOG_V(DEBUG_TAG, "No music files found by MediaStore");
+                    Debug.LOG_V(this, "No music files found by MediaStore");
                 }
                 musicCursor.close();
             }
@@ -668,7 +677,7 @@ public class MainActivity extends AppCompatActivity {
             File musicDir = new File(musicPath);
 
             if (musicDir.exists() && musicDir.canRead()) {
-                Debug.LOG_D(DEBUG_TAG, "Music directory exists and is readable: " + musicDir.getAbsolutePath());
+                LOG_D(this, "Music directory exists and is readable: " + musicDir.getAbsolutePath());
 
                 ArrayList<File> fileList = new ArrayList<>();
                 Util.getFilesFromDirRecursive(fileList, musicDir);
@@ -680,7 +689,7 @@ public class MainActivity extends AppCompatActivity {
                     }
                 }
             } else {
-                Debug.LOG_W(DEBUG_TAG, "Could not find/read music directory: " + musicDir);
+                Debug.LOG_W(this, "Could not find/read music directory: " + musicDir);
             }
 
             // NOTE(doyle): Add remaining files sitting in batch
@@ -712,7 +721,7 @@ public class MainActivity extends AppCompatActivity {
             if (audioFileAdapter != null) {
                 audioFileAdapter.notifyDataSetChanged();
             } else {
-                Debug.LOG_W(DEBUG_TAG, "AudioFileAdapter got GCed, OSD may not be accurate");
+                Debug.LOG_W(this, "AudioFileAdapter got GCed, OSD may not be accurate");
             }
         }
 
@@ -724,12 +733,12 @@ public class MainActivity extends AppCompatActivity {
             if (audioFileAdapter != null) {
                 audioFileAdapter.notifyDataSetChanged();
             } else {
-                Debug.LOG_W(DEBUG_TAG, "AudioFileAdapter got GCed, OSD may not be accurate");
+                Debug.LOG_W(this, "AudioFileAdapter got GCed, OSD may not be accurate");
             }
 
             Context context = weakContext.get();
             if (context == null) {
-                Debug.LOG_W(DEBUG_TAG, "Context got GC'ed, library init key not written. " +
+                Debug.LOG_W(this, "Context got GC'ed, library init key not written. " +
                         "Another rescan needed");
             } else {
                 SharedPreferences sharedPref =
@@ -765,7 +774,7 @@ public class MainActivity extends AppCompatActivity {
     // callback
     private void enqueueToPlayer(List<AudioFile> playlist, int index) {
         if (!serviceBound) {
-            Debug.LOG_D(DEBUG_TAG, "Rebinding audio service");
+            LOG_D(this, "Rebinding audio service");
             Intent playerIntent = new Intent(this, AudioService.class);
             startService(playerIntent);
             bindService(playerIntent, audioConnection, Context.BIND_AUTO_CREATE);
@@ -807,7 +816,7 @@ public class MainActivity extends AppCompatActivity {
                         int position = audioService.getCurrTrackPosition();
                         playBarItems.seekBar.setProgress(position);
                     }
-                    seekbarHandler.postDelayed(this, 1000);
+                    handler.postDelayed(this, 1000);
                 }
             }
         });

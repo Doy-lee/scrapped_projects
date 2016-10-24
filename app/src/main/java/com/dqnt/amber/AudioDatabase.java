@@ -15,8 +15,6 @@ import java.util.List;
 import com.dqnt.amber.PlaybackData.AudioFile;
 
 class AudioDatabase extends SQLiteOpenHelper {
-    private static final Class DEBUG_TAG = AudioDatabase.class;
-
     // NOTE(doyle): By implementing the BaseColumns interface, your inner class can inherit a
     // primary key field called _ID that some Android classes such as cursor adaptors will
     // expect it to have. It's not required, but this can help your database work harmoniously
@@ -93,21 +91,21 @@ class AudioDatabase extends SQLiteOpenHelper {
     }
 
     synchronized void insertAudioFileToDb(final PlaybackData.AudioFile file) {
-        if (Debug.CAREFUL_ASSERT(file != null, DEBUG_TAG, "File is null")) {
+        if (Debug.CAREFUL_ASSERT(file != null, this, "File is null")) {
 
-            if (Debug.CAREFUL_ASSERT(file.dbKey == -1, DEBUG_TAG,
+            if (Debug.CAREFUL_ASSERT(file.dbKey == -1, this,
                     "Inserting new audio files must not have a db key already defined: "
                             + file.dbKey)) {
 
                 // NOTE(doyle): This gets cached according to docs, so okay to open every time
                 SQLiteDatabase db = getWritableDatabase();
-                if (Debug.CAREFUL_ASSERT(db != null, DEBUG_TAG,
+                if (Debug.CAREFUL_ASSERT(db != null, this,
                         "Could not get writable database")) {
 
                     ContentValues value = serialiseAudioFileToContentValues(file);
                     long dbKey = db.insert(Entry.TABLE_NAME, null, value);
 
-                    Debug.CAREFUL_ASSERT(dbKey != -1, DEBUG_TAG,
+                    Debug.CAREFUL_ASSERT(dbKey != -1, this,
                             "Could not insert audio file to db " + file.uri.getPath());
 
                     file.dbKey = dbKey;
@@ -118,7 +116,7 @@ class AudioDatabase extends SQLiteOpenHelper {
     }
 
     void insertMultiAudioFileToDb(final List<PlaybackData.AudioFile> files) {
-        if (Debug.CAREFUL_ASSERT(files != null, DEBUG_TAG, "List of files is null")) {
+        if (Debug.CAREFUL_ASSERT(files != null, this, "List of files is null")) {
             for (PlaybackData.AudioFile audio: files) insertAudioFileToDb(audio);
         }
     }
@@ -152,18 +150,18 @@ class AudioDatabase extends SQLiteOpenHelper {
     void updateAudioFileInDbWithKey(AudioFile file) {
 
         if (file == null) {
-            Debug.LOG_W(DEBUG_TAG, "Attempted to update db with null file");
+            Debug.LOG_W(this, "Attempted to update db with null file");
             return;
         }
 
-        if (Debug.CAREFUL_ASSERT(file.dbKey > 0, DEBUG_TAG, "Cannot insert audio file with < 0 " +
+        if (Debug.CAREFUL_ASSERT(file.dbKey > 0, this, "Cannot insert audio file with < 0 " +
                 "primary key: " + file.dbKey)) {
             SQLiteDatabase db = this.getWritableDatabase();
-            if (Debug.CAREFUL_ASSERT(db != null, DEBUG_TAG, "Could not get readable database")) {
+            if (Debug.CAREFUL_ASSERT(db != null, this, "Could not get readable database")) {
                 ContentValues value = serialiseAudioFileToContentValues(file);
                 int result = db.update(Entry.TABLE_NAME, value, Entry._ID + " = " + file.dbKey, null);
 
-                Debug.CAREFUL_ASSERT(result == 1, DEBUG_TAG,
+                Debug.CAREFUL_ASSERT(result == 1, this,
                         "Db update affected more/less than one row: " + result);
             }
 
@@ -185,7 +183,7 @@ class AudioDatabase extends SQLiteOpenHelper {
         SQLiteDatabase db = this.getWritableDatabase();
         int result = db.delete(Entry.TABLE_NAME, Entry._ID + " = " + key, null);
 
-        Debug.CAREFUL_ASSERT(result == 1, DEBUG_TAG, "Db deleted more/less than one row: "
+        Debug.CAREFUL_ASSERT(result == 1, this, "Db deleted more/less than one row: "
                 + result);
     }
 
@@ -201,7 +199,7 @@ class AudioDatabase extends SQLiteOpenHelper {
         entryCheck.result = CheckResult.DB_OPEN_FAILED;
         entryCheck.entries = new ArrayList<>();
 
-        if (Debug.CAREFUL_ASSERT(db != null, DEBUG_TAG, "Could not get readable database handle")) {
+        if (Debug.CAREFUL_ASSERT(db != null, this, "Could not get readable database handle")) {
             String tableName = Entry.TABLE_NAME;
             String tableColumns[] = null;
             String groupBy = null;
@@ -269,7 +267,7 @@ class AudioDatabase extends SQLiteOpenHelper {
         String year           = cursor.getString(cursorIndex++);
         long sizeInKb         = cursor.getLong(cursorIndex++);
 
-        Debug.CAREFUL_ASSERT(cursorIndex == projection.length, DEBUG_TAG,
+        Debug.CAREFUL_ASSERT(cursorIndex == projection.length, this,
                 "Cursor index exceeded projection bounds");
 
         AudioFile file = new AudioFile(dbKey, uri, album, albumArtist, artist, author, bitrate,
@@ -282,7 +280,7 @@ class AudioDatabase extends SQLiteOpenHelper {
         SQLiteDatabase db = this.getReadableDatabase();
         ArrayList<PlaybackData.AudioFile> result = null;
 
-        if (Debug.CAREFUL_ASSERT(db != null, DEBUG_TAG, "Could not get readable database")) {
+        if (Debug.CAREFUL_ASSERT(db != null, this, "Could not get readable database")) {
             Cursor cursor = db.query(Entry.TABLE_NAME,
                     projection,
                     null,
