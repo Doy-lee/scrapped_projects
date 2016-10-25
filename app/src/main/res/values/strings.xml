@@ -1,6 +1,7 @@
 <resources>
     <string name="app_name">Amber</string>
     <string name="action_settings">Settings</string>
+    <string name="action_debug_overlay">Debug Overlay</string>
     <string name="action_rescan_music">Rescan Music</string>
     <string name="action_exit">Exit</string>
 

@@ -461,17 +461,14 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
     }
 
     boolean queuedNewSong = false;
-    boolean preparePlaylist(List<AudioFile> playlist, int index) {
+    void preparePlaylist(List<AudioFile> playlist, int index) {
         /* Queue playlist and song */
         if (validatePlaylist(playlist, index)) {
             this.playlist = playlist;
             this.playlistIndex = index;
             activeAudio = playlist.get(playlistIndex);
-            return true;
+            queuedNewSong = true;
         }
-
-        queuedNewSong = true;
-        return false;
     }
 
     void playMedia() { controlPlayback(PlayCommand.PLAY); }
@@ -507,7 +504,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
                 } else {
                     if (player == null) {
                         initMediaPlayer();
-                        Debug.INCREMENT_COUNTER(this, "Media player instance reinitialised");
+                        Debug.INCREMENT_COUNTER(this, "Player reinit from null");
                     }
 
                     try {
@@ -590,6 +587,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
             }
         }
 
+        queuedNewSong = true;
         activeAudio = playlist.get(playlistIndex);
         playMedia();
 

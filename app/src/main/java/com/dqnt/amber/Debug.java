@@ -26,12 +26,22 @@ class Debug {
     private static String getMethodName(String className) {
         StackTraceElement[] stack = Thread.currentThread().getStackTrace();
         int i = 0;
+        boolean matched = false;
         for (StackTraceElement element : stack) {
-            if (element.getClassName().equals(className)) break;
+            if (element.getClassName().equals(className)) {
+                matched = true;
+                break;
+            }
             i++;
         }
 
-        String result = stack[i].getMethodName();
+        String result;
+        if (matched) {
+            result = stack[i].getMethodName();
+        } else {
+            result = null;
+        }
+
         return result;
     }
 
@@ -132,9 +142,12 @@ class Debug {
         } else {
             className = object.getClass().getName();
         }
-        String methodName = getMethodName(className);
-
         result.className = className;
+
+        String methodName = getMethodName(className);
+        if (methodName == null) {
+            methodName = "Unresolvable";
+        }
         result.methodName = methodName + "(): ";
 
         return result;
@@ -175,6 +188,10 @@ class Debug {
         return flag;
     }
 
+    static void ASSERT(boolean flag) {
+        if (!flag) throw new RuntimeException();
+    }
+
     static void TOAST(Context context, String log, int length) {
         Toast.makeText(context, log, length).show();
     }
@@ -210,13 +227,12 @@ class Debug {
         private WeakReference<Activity> weakActivity;
         private WeakReference<Handler> weakHandler;
         private float updateRateInMilliseconds;
-        private boolean isRunning;
+        boolean isRunning;
 
         UiUpdateAndRender(Activity activity, Handler handler, int updateRateInSeconds) {
-            CAREFUL_ASSERT(activity != null, Debug.class, "Activity is null");
-            CAREFUL_ASSERT(handler != null, Debug.class, "Handler is null");
-            CAREFUL_ASSERT(updateRateInSeconds > 0, Debug.class,
-                    "Update rate can must be >= 0: " + updateRateInSeconds);
+            ASSERT(activity != null);
+            ASSERT(handler != null);
+            ASSERT(updateRateInSeconds > 0);
 
             this.weakActivity = new WeakReference<Activity>(activity);
             this.weakHandler = new WeakReference<Handler>(handler);
@@ -233,13 +249,11 @@ class Debug {
             Activity activity = weakActivity.get();
             Handler handler = weakHandler.get();
             if (activity != null && handler != null) {
+                clearView(activity);
                 if (isRunning) {
-                    clearView(activity);
                     renderElements();
-                    handler.postDelayed(this, (long) updateRateInMilliseconds);
-                } else {
-                    isRunning = true;
                 }
+                handler.postDelayed(this, (long) updateRateInMilliseconds);
             }
         }
 
@@ -248,10 +262,7 @@ class Debug {
             if (view == null) return;
 
             view.removeAllViewsInLayout();
-        }
-
-        public void end() {
-            this.isRunning = false;
+            view.invalidate();
         }
 
         void pushVariable(String name, Object value) {
@@ -314,7 +325,8 @@ class Debug {
                                 }
                             }
                         } catch (IllegalAccessException e) {
-                            e.printStackTrace();
+                            // NOTE: Not important, just let it print what it can
+                            // e.printStackTrace();
                         }
                     }
                 }
