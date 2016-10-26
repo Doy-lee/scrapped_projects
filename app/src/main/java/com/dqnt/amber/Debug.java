@@ -20,8 +20,9 @@ import java.util.List;
 
 class Debug {
     final static boolean DEBUG_MODE = true;
-    final static boolean RESET_DB = true;
+    final static boolean RESET_DB = false;
     final static boolean RESET_CONFIG = false;
+    final static boolean RESET_PLAYLIST = false;
 
     private static String getMethodName(String className) {
         StackTraceElement[] stack = Thread.currentThread().getStackTrace();

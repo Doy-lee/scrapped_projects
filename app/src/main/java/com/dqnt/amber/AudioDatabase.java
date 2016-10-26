@@ -9,7 +9,6 @@ import android.net.Uri;
 import android.provider.BaseColumns;
 
 import java.io.File;
-import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -17,6 +16,13 @@ import com.dqnt.amber.PlaybackData.AudioFile;
 import com.dqnt.amber.PlaybackData.Playlist;
 
 class AudioDatabase extends SQLiteOpenHelper {
+
+    enum TableType {
+        AUDIO_FILE,
+        PLAYLIST,
+        PLAYLIST_CONTENTS
+    }
+
     // NOTE(doyle): By implementing the BaseColumns interface, your inner class can inherit a
     // primary key field called _ID that some Android classes such as cursor adaptors will
     // expect it to have. It's not required, but this can help your database work harmoniously
@@ -154,29 +160,106 @@ class AudioDatabase extends SQLiteOpenHelper {
         onCreate(db);
     }
 
+    private synchronized long insert_(String tableName, String nullColumnHack,
+                                     ContentValues values) {
+        SQLiteDatabase db = getWritableDatabase();
+        long result = db.insert(tableName, nullColumnHack, values);
+        db.close();
+
+        return result;
+    }
+
+    private synchronized int delete_(String tableName, String whereClause,
+                                     String[] whereArgs) {
+        SQLiteDatabase db = getWritableDatabase();
+        int result = db.delete(tableName, whereClause, whereArgs);
+        db.close();
+
+        return result;
+    }
+
+    private synchronized int update_(String tableName, ContentValues values, String whereClause,
+                                    String[] whereArgs) {
+        SQLiteDatabase db = getWritableDatabase();
+        int result = db.update(tableName, values, whereClause, whereArgs);
+        db.close();
+
+        return result;
+    }
+
+    void deleteAllEntries(TableType type) {
+        String tableName;
+        switch (type) {
+            case AUDIO_FILE: {
+                tableName = AudioFileEntry.TABLE_NAME;
+            } break;
+
+            case PLAYLIST: {
+                tableName = PlaylistEntry.TABLE_NAME;
+            } break;
+
+            case PLAYLIST_CONTENTS: {
+                tableName = PlaylistContentsEntry.TABLE_NAME;
+            } break;
+
+            default: {
+                Debug.CAREFUL_ASSERT(false, this, "Unhandled table type name: " + type.toString());
+                return;
+            }
+        }
+        delete_(tableName, null, null);
+    }
+
+    void deleteEntryFromDbWithKey(TableType type, long key) {
+        String tableName = null;
+        String keyField = null;
+        switch (type) {
+            case AUDIO_FILE: {
+                tableName = AudioFileEntry.TABLE_NAME;
+                keyField = AudioFileEntry._ID;
+            } break;
+
+            case PLAYLIST: {
+                tableName = PlaylistEntry.TABLE_NAME;
+                keyField = PlaylistEntry._ID;
+            } break;
+
+            case PLAYLIST_CONTENTS: {
+                tableName = PlaylistContentsEntry.TABLE_NAME;
+                keyField = PlaylistContentsEntry._ID;
+            } break;
+
+            default: {
+                Debug.CAREFUL_ASSERT(false, this, "Unhandled table type name: " + type.toString() +
+                        " entry key not deleted: " + key);
+                return;
+            }
+        }
+
+        int result = delete_(tableName, keyField + " = " + key, null);
+        Debug.CAREFUL_ASSERT(result == 1, this, "Db deleted more/less than one row: "
+                + result);
+    }
+
     /***********************************************************************************************
      * AUDIO FILE FUNCTIONS
      **********************************************************************************************/
     // TODO(doyle): Synchronisation problem on all db manipulation methods, since all tables sharing same db
-    synchronized void insertAudioFileToDb(final PlaybackData.AudioFile file) {
+    void insertAudioFileToDb(final PlaybackData.AudioFile file) {
         if (Debug.CAREFUL_ASSERT(file != null, this, "File is null")) {
             if (Debug.CAREFUL_ASSERT(file.dbKey == -1, this,
                     "Inserting new audio files must not have a db key already defined: "
                             + file.dbKey)) {
 
                 // NOTE(doyle): This gets cached according to docs, so okay to open every time
-                SQLiteDatabase db = getWritableDatabase();
-                if (Debug.CAREFUL_ASSERT(db != null, this, "Could not get writable database")) {
+                ContentValues value = serialiseAudioFileToContentValues(file);
 
-                    ContentValues value = serialiseAudioFileToContentValues(file);
-                    long dbKey = db.insert(AudioFileEntry.TABLE_NAME, null, value);
+                long dbKey = insert_(AudioFileEntry.TABLE_NAME, null, value);
 
-                    Debug.CAREFUL_ASSERT(dbKey != -1, this,
-                            "Could not insert audio file to db " + file.uri.getPath());
+                Debug.CAREFUL_ASSERT(dbKey != -1, this,
+                        "Could not insert audio file to db " + file.uri.getPath());
 
-                    file.dbKey = dbKey;
-                    db.close();
-                }
+                file.dbKey = dbKey;
             }
         }
     }
@@ -208,7 +291,6 @@ class AudioDatabase extends SQLiteOpenHelper {
     }
 
     void updateAudioFileInDbWithKey(AudioFile file) {
-
         if (file == null) {
             Debug.LOG_W(this, "Attempted to update db with null file");
             return;
@@ -216,14 +298,13 @@ class AudioDatabase extends SQLiteOpenHelper {
 
         if (Debug.CAREFUL_ASSERT(file.dbKey > 0, this, "Cannot insert audio file with < 0 " +
                 "primary key: " + file.dbKey)) {
-            SQLiteDatabase db = this.getWritableDatabase();
-            if (Debug.CAREFUL_ASSERT(db != null, this, "Could not get readable database")) {
-                ContentValues value = serialiseAudioFileToContentValues(file);
-                int result = db.update(AudioFileEntry.TABLE_NAME, value, AudioFileEntry._ID + " = " + file.dbKey, null);
+            ContentValues value = serialiseAudioFileToContentValues(file);
 
-                Debug.CAREFUL_ASSERT(result == 1, this,
-                        "Db update affected more/less than one row: " + result);
-            }
+            int result = update_(AudioFileEntry.TABLE_NAME, value,
+                    AudioFileEntry._ID + " = " + file.dbKey, null);
+
+            Debug.CAREFUL_ASSERT(result == 1, this,
+                    "Db update affected more/less than one row: " + result);
 
         }
     }
@@ -240,11 +321,7 @@ class AudioDatabase extends SQLiteOpenHelper {
     }
 
     void deleteAudioFileFromDbWithKey(long key) {
-        SQLiteDatabase db = this.getWritableDatabase();
-        int result = db.delete(AudioFileEntry.TABLE_NAME, AudioFileEntry._ID + " = " + key, null);
-
-        Debug.CAREFUL_ASSERT(result == 1, this, "Db deleted more/less than one row: "
-                + result);
+        deleteEntryFromDbWithKey(TableType.AUDIO_FILE, key);
     }
 
     // NOTE: WhereClause is where you specify what fields, to check against, any "?" get replaced
@@ -316,7 +393,7 @@ class AudioDatabase extends SQLiteOpenHelper {
         return file;
     }
 
-    ArrayList<PlaybackData.AudioFile> getAllAudioFiles() {
+    synchronized ArrayList<PlaybackData.AudioFile> getAllAudioFiles() {
         SQLiteDatabase db = this.getReadableDatabase();
         ArrayList<PlaybackData.AudioFile> result = null;
 
@@ -343,7 +420,7 @@ class AudioDatabase extends SQLiteOpenHelper {
         return result;
     }
 
-    private AudioFile getAudioFileEntryFromKey(SQLiteDatabase db, int key) {
+    synchronized private AudioFile getAudioFileEntryFromKey(SQLiteDatabase db, int key) {
         AudioFile result = null;
 
         if (db == null) {
@@ -380,80 +457,90 @@ class AudioDatabase extends SQLiteOpenHelper {
         return result;
     }
 
-    synchronized void insertPlaylistFileToDb(Playlist playlist) {
-        if (Debug.CAREFUL_ASSERT(playlist != null, this, "Playlist is null")) {
-            SQLiteDatabase db = getWritableDatabase();
+    void insertPlaylistContentToPlaylistKey(List<AudioFile> playlistContents,
+                                                         long playlistKey) {
+        for (AudioFile file: playlistContents) {
+            if (Debug.CAREFUL_ASSERT(file.dbKey != -1, this,
+                    "Playlist entry has no db entry " + file.uri.getPath())) {
+                ContentValues playlistFileValue = new ContentValues();
+                playlistFileValue.put
+                        (PlaylistContentsEntry.KEY_FOREIGN_KEY_TO_AUDIO_FILE, file.dbKey);
+                playlistFileValue.put
+                        (PlaylistContentsEntry.KEY_FOREIGN_KEY_TO_PLAYLIST, playlistKey);
 
-            if (Debug.CAREFUL_ASSERT(db != null, this, "Could not get writable database")) {
-                ContentValues playlistValue = serialisePlaylistToContentValues(playlist);
-                long playlistDbKey = db.insert(PlaylistEntry.TABLE_NAME, null, playlistValue);
+                long key = insert_(PlaylistContentsEntry.TABLE_NAME, null, playlistFileValue);
 
-                if (playlistDbKey == -1)  {
+                if (key == -1) {
                     Debug.CAREFUL_ASSERT(false, this,
-                            "Playlist could not be inserted to db exiting early");
-                    return;
+                            "Playlist entry could not be inserted to db."
+                                    + file.uri.getPath());
                 }
-
-                List<AudioFile> playlistContents = playlist.contents;
-                for (AudioFile file: playlistContents) {
-                    if (Debug.CAREFUL_ASSERT(file.dbKey != -1, this,
-                            "Playlist entry has no db entry " + file.uri.getPath())) {
-                        ContentValues playlistFileValue = new ContentValues();
-                        playlistFileValue.put
-                                (PlaylistContentsEntry.KEY_FOREIGN_KEY_TO_AUDIO_FILE, file.dbKey);
-                        playlistFileValue.put
-                                (PlaylistContentsEntry.KEY_FOREIGN_KEY_TO_PLAYLIST, playlistDbKey);
-
-                        long key =
-                                db.insert(PlaylistContentsEntry.TABLE_NAME, null, playlistFileValue);
-
-                        if (key == -1) {
-                            Debug.CAREFUL_ASSERT(false, this,
-                                    "Playlist entry could not be inserted to db."
-                                            + file.uri.getPath());
-                        }
-                    }
-                }
-
-                db.close();
             }
+        }
+    }
+
+    void insertPlaylistFileToDb(Playlist playlist) {
+        if (Debug.CAREFUL_ASSERT(playlist != null, this, "Playlist is null")) {
+            ContentValues playlistValue = serialisePlaylistToContentValues(playlist);
+
+            long playlistDbKey = insert_(PlaylistEntry.TABLE_NAME, null, playlistValue);
+
+            if (playlistDbKey == -1)  {
+                Debug.CAREFUL_ASSERT(false, this,
+                        "Playlist could not be inserted to db exiting early");
+                return;
+            }
+
+            insertPlaylistContentToPlaylistKey(playlist.contents, playlistDbKey);
 
         }
     }
 
-    ArrayList<Playlist> getAllPlaylists() {
+    void deletePlaylistContentsFromDbWithPlaylistKey(long key) {
+        String whereClause = PlaylistContentsEntry.KEY_FOREIGN_KEY_TO_PLAYLIST + " = ? ";
+        String[] whereArgs = { String.valueOf(key) };
+
+        int entriesDeleted = delete_(PlaylistContentsEntry.TABLE_NAME, whereClause, whereArgs);
+
+        Debug.LOG_D(this, "Entries deleted from db: " + entriesDeleted);
+    }
+
+    void deletePlaylistFromDbWithKey(long key) {
+        deletePlaylistContentsFromDbWithPlaylistKey(key);
+        deleteEntryFromDbWithKey(TableType.PLAYLIST, key);
+    }
+
+    synchronized ArrayList<Playlist> getAllPlaylists() {
         SQLiteDatabase db = this.getReadableDatabase();
-        ArrayList<Playlist> result = null;
+        ArrayList<Playlist> result = new ArrayList<>();
 
-        if (Debug.CAREFUL_ASSERT(db != null, this, "Could not get readable database")) {
-            Cursor cursor = db.query(PlaylistEntry.TABLE_NAME, PLAYLIST_PROJECTION,
-                    null, null, null, null, null);
+        Cursor cursor = db.query(PlaylistEntry.TABLE_NAME, PLAYLIST_PROJECTION,
+                null, null, null, null, null);
 
-            result = new ArrayList<>();
-            cursor.moveToFirst();
-            while (!cursor.isAfterLast()) {
-                int cursorIndex = 0;
+        cursor.moveToFirst();
+        while (!cursor.isAfterLast()) {
+            int cursorIndex = 0;
 
-                int playlistKey = cursor.getInt(cursorIndex++);
-                String name = cursor.getString(cursorIndex++);
-                Uri uri = Uri.fromFile(new File(cursor.getString(cursorIndex++)));
+            int playlistKey = cursor.getInt(cursorIndex++);
+            String name = cursor.getString(cursorIndex++);
+            Uri uri = Uri.fromFile(new File(cursor.getString(cursorIndex++)));
 
-                Debug.CAREFUL_ASSERT(cursorIndex == PLAYLIST_PROJECTION.length, this,
-                        "Cursor index exceeded projection bounds");
+            Debug.CAREFUL_ASSERT(cursorIndex == PLAYLIST_PROJECTION.length, this,
+                    "Cursor index exceeded projection bounds");
 
-                Playlist playlist = new Playlist(name, uri);
-                playlist.contents = getPlaylistContents(db, playlistKey);
-                result.add(playlist);
-                cursor.moveToNext();
-            }
-
-            cursor.close();
+            Playlist playlist = new Playlist(name, uri);
+            playlist.dbKey = playlistKey;
+            playlist.contents = getPlaylistContents(db, playlistKey);
+            result.add(playlist);
+            cursor.moveToNext();
         }
 
+        cursor.close();
+        db.close();
         return result;
     }
 
-    private List<AudioFile> getPlaylistContents(SQLiteDatabase db, int playlistKey) {
+    synchronized private List<AudioFile> getPlaylistContents(SQLiteDatabase db, int playlistKey) {
         List<AudioFile> result = null;
         if (db == null) {
             Debug.CAREFUL_ASSERT(false, this, "Db argument was null");

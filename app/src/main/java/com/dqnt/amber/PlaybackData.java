@@ -9,6 +9,7 @@ class PlaybackData {
     static final int AUDIO_NOT_IN_DB = -1;
 
     static class Playlist {
+        long dbKey;
         String name;
         Uri uri;
         List<AudioFile> contents;

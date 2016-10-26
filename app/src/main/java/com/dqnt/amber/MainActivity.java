@@ -11,6 +11,7 @@ import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
+import android.database.sqlite.SQLiteOpenHelper;
 import android.graphics.PorterDuff;
 import android.graphics.drawable.Drawable;
 import android.media.MediaMetadataRetriever;
@@ -72,29 +73,19 @@ public class MainActivity extends AppCompatActivity {
         // list index because we clear the playlist list on load from DB, so save having to recreate
         // a library list every time we init from DB.
         Playlist libraryList;
-
-        int activePlaylistIndex;
-
         List<Playlist> playlistList;
+
+        Playlist activePlaylist;
+
         PlaySpec() {
 
             allAudioFiles = new ArrayList<>();
             playlistList = new ArrayList<>();
 
-            activePlaylistIndex = 0;
-
             libraryList = new Playlist("Library");
             libraryList.contents = allAudioFiles;
-        }
 
-        Playlist getActivePlaylist() {
-            Playlist result = libraryList;
-
-            if (activePlaylistIndex < playlistList.size()) {
-                result = playlistList.get(activePlaylistIndex);
-            }
-
-            return result;
+            activePlaylist = libraryList;
         }
     }
     PlaySpec playSpec;
@@ -182,6 +173,12 @@ public class MainActivity extends AppCompatActivity {
                                 toolbar.setTitle(getString(R.string.menu_main_drawer_artist));
                             } break;
 
+                            case R.id.menu_main_drawer_library: {
+                                playSpec.activePlaylist = playSpec.libraryList;
+                                audioFileAdapter.audioList = playSpec.libraryList.contents;
+                                audioFileAdapter.notifyDataSetChanged();
+                            } break;
+
                             default: {
                             } break;
                         }
@@ -210,6 +207,7 @@ public class MainActivity extends AppCompatActivity {
 
                     case R.id.menu_main_drawer_library: {
                         audioFileAdapter.audioList = playSpec.libraryList.contents;
+                        audioFileAdapter.notifyDataSetChanged();
                     } break;
                 }
 
@@ -224,14 +222,22 @@ public class MainActivity extends AppCompatActivity {
         /*******************************************************************************************
          * DEBUG INITIALISATION
          ******************************************************************************************/
-        SharedPreferences sharedPref = PreferenceManager.
-                getDefaultSharedPreferences(getApplicationContext());
+        {
+            SharedPreferences sharedPref = PreferenceManager.
+                    getDefaultSharedPreferences(getApplicationContext());
 
-        if (Debug.RESET_DB) this.deleteDatabase(AudioDatabase.DB_NAME);
-        if (Debug.RESET_CONFIG) {
-            sharedPref.edit().clear().apply();
-            sharedPref.edit().putString(getString(R.string.pref_music_path_key),
-                    "/storage/emulated/0/Music").apply();
+            if (Debug.RESET_DB) this.deleteDatabase(AudioDatabase.DB_NAME);
+            if (Debug.RESET_CONFIG) {
+                sharedPref.edit().clear().apply();
+                sharedPref.edit().putString(getString(R.string.pref_music_path_key),
+                        "/storage/emulated/0/Music").apply();
+            }
+
+            AudioDatabase dbHandle = AudioDatabase.getHandle(this);
+            if (Debug.RESET_PLAYLIST) {
+                dbHandle.deleteAllEntries(AudioDatabase.TableType.PLAYLIST);
+                dbHandle.deleteAllEntries(AudioDatabase.TableType.PLAYLIST_CONTENTS);
+            }
         }
 
         handler = new Handler();
@@ -242,11 +248,8 @@ public class MainActivity extends AppCompatActivity {
                 pushClass(audioService, true, false);
                 pushClass(this, true, false);
 
-                Playlist activePlaylist = playSpec.getActivePlaylist();
-                if (activePlaylist != null) {
-                    pushVariable("Active Playlist Index", playSpec.activePlaylistIndex);
-                    pushVariable("Active Playlist", activePlaylist.name);
-                }
+                Playlist activePlaylist = playSpec.activePlaylist;
+                pushVariable("Active Playlist", activePlaylist.name);
 
                 pushText(Debug.GENERATE_COUNTER_STRING());
             }
@@ -653,7 +656,7 @@ public class MainActivity extends AppCompatActivity {
 
         }
 
-        private void loadWithoutValidationFromDb(PlaySpec playSpec) {
+        private void quickLoadFromDb(PlaySpec playSpec) {
             List<AudioFile> fileListFromDb = dbHandle.getAllAudioFiles();
             List<Playlist> playlistListFromDb = dbHandle.getAllPlaylists();
 
@@ -695,8 +698,27 @@ public class MainActivity extends AppCompatActivity {
 
             // NOTE(doyle): Load whatever is in the DB first and let the user interact with that,
             // then recheck information is valid afterwards
-            loadWithoutValidationFromDb(playSpec);
+            quickLoadFromDb(playSpec);
 
+            // After load, delete any invalid entries first- so that scanning new files has a
+            // smaller list to compare to
+            for (AudioFile audioFile: playSpec.allAudioFiles) {
+                File file = new File(audioFile.uri.getPath());
+                if (!file.exists()) {
+                    dbHandle.deleteAudioFileFromDbWithKey(audioFile.dbKey);
+                    playSpec.allAudioFiles.remove(audioFile);
+                }
+            }
+
+            for (Playlist playlist: playSpec.playlistList) {
+                File file = new File(playlist.uri.getPath());
+                if (!file.exists()) {
+                    dbHandle.deletePlaylistFromDbWithKey(playlist.dbKey);
+                    playSpec.playlistList.remove(playlist);
+                }
+            }
+
+            /* Start scanning from device */
             MediaMetadataRetriever retriever = new MediaMetadataRetriever();
             ContentResolver musicResolver = context.getContentResolver();
             Uri musicUri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
@@ -724,11 +746,10 @@ public class MainActivity extends AppCompatActivity {
                 }
                 musicCursor.close();
             }
-            /*
-             ***************************************************************************************
+
+            /***************************************************************************************
              * READ AUDIO FROM USER DEFINED PATH
-             ***************************************************************************************
-             */
+             **************************************************************************************/
             /* Get music from the path set in preferences */
             // TODO(doyle): Add callback handling on preference change
             SharedPreferences sharedPref = PreferenceManager.
@@ -781,7 +802,6 @@ public class MainActivity extends AppCompatActivity {
                 private RawPlaylist() { contents = new ArrayList<>(); }
             }
 
-            // TODO(doyle): Remove playlist if it already exists in DB
             for (File playlistFile: listOfPlaylistsFiles) {
                 RawPlaylist rawPlaylist = new RawPlaylist();
 
@@ -821,16 +841,34 @@ public class MainActivity extends AppCompatActivity {
                         }
                     }
 
-                    Playlist playlist = new Playlist(rawPlaylist.name, Uri.fromFile(playlistFile));
+                    Playlist newPlaylist =
+                            new Playlist(rawPlaylist.name, Uri.fromFile(playlistFile));
                     // TODO(doyle): Improve from linear search
+                    /* Replace file entries with references to the global audio list */
                     for (AudioFile findFile: rawPlaylist.contents) {
                         int index = findAudioFileInList(allAudioFiles, findFile);
                         ASSERT(index != -1);
 
-                        playlist.contents.add(allAudioFiles.get(index));
+                        newPlaylist.contents.add(allAudioFiles.get(index));
                     }
 
-                    dbHandle.insertPlaylistFileToDb(playlist);
+                    String newPlaylistPath = newPlaylist.uri.getPath();
+                    boolean matched = false;
+                    // TODO(doyle): Improve from linear search
+                    for (Playlist list: playSpec.playlistList) {
+                        if (newPlaylistPath.equals(list.uri.getPath())) {
+                            matched = true;
+
+                            // TODO(doyle): For now just delete playlist and regenerate
+                            dbHandle.deletePlaylistContentsFromDbWithPlaylistKey(list.dbKey);
+                            dbHandle.insertPlaylistContentToPlaylistKey(newPlaylist.contents,
+                                    list.dbKey);
+                            break;
+                        }
+                    }
+
+                    /* Else if not matched, it's a new playlist- insert into db */
+                    if (!matched) dbHandle.insertPlaylistFileToDb(newPlaylist);
                 } catch (FileNotFoundException e) {
                     CAREFUL_ASSERT(false, this, "Could not find file, " +
                             "should never happen!");
@@ -891,7 +929,7 @@ public class MainActivity extends AppCompatActivity {
                             for (int i = 0; i < playlistList.size(); i++) {
                                 Playlist checkPlaylist = playlistList.get(i);
                                 if (checkPlaylist.menuId == item.getItemId()) {
-                                    playSpec.activePlaylistIndex = i;
+                                    playSpec.activePlaylist = checkPlaylist;
                                     updateDisplay();
                                     break;
                                 }
@@ -912,7 +950,7 @@ public class MainActivity extends AppCompatActivity {
             final PlaySpec playSpec = weakPlaySpec.get();
             AudioFileAdapter audioFileAdapter = weakAudioFileAdapter.get();
             if (audioFileAdapter != null && playSpec != null) {
-                audioFileAdapter.audioList = playSpec.getActivePlaylist().contents;
+                audioFileAdapter.audioList = playSpec.activePlaylist.contents;
                 audioFileAdapter.notifyDataSetChanged();
                 updateSideNavWithPlaylists(playSpec);
 
@@ -978,8 +1016,9 @@ public class MainActivity extends AppCompatActivity {
             // NOTE(doyle): Queue playlist whereby onServiceConnected will detect and begin playing
             queuedPlaylistIndex = index;
         } else {
-            Playlist activePlaylist = playSpec.playlistList.get(playSpec.activePlaylistIndex);
+            Playlist activePlaylist = playSpec.activePlaylist;
             List<AudioFile> playlistFiles = activePlaylist.contents;
+
             audioService.preparePlaylist(playlistFiles, index);
             audioService.playMedia();
             // TODO(doyle): Broadcast receiver seems useless here? Whats the point.
