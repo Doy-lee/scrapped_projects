@@ -9,10 +9,12 @@ import android.net.Uri;
 import android.provider.BaseColumns;
 
 import java.io.File;
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
 
 import com.dqnt.amber.PlaybackData.AudioFile;
+import com.dqnt.amber.PlaybackData.Playlist;
 
 class AudioDatabase extends SQLiteOpenHelper {
     // NOTE(doyle): By implementing the BaseColumns interface, your inner class can inherit a
@@ -20,7 +22,7 @@ class AudioDatabase extends SQLiteOpenHelper {
     // expect it to have. It's not required, but this can help your database work harmoniously
     // with the Android framework.
     // public static final String COLUMN_NAME_ID = "_ID";
-    static class Entry implements BaseColumns {
+    class AudioFileEntry implements BaseColumns {
         static final String TABLE_NAME          = "AudioFile";
         static final String KEY_PATH            = "file_path";
         static final String KEY_ALBUM           = "album";
@@ -41,29 +43,89 @@ class AudioDatabase extends SQLiteOpenHelper {
         static final String KEY_KNOWN_SIZE_IN_KB = "last_known_size";
     }
 
-    static final String DB_NAME = "Amber.db";
-    private static final int DB_VERSION = 2;
-    private static final String DB_TABLE_CREATE =
-        "CREATE TABLE " + Entry.TABLE_NAME + " ("
-                + Entry._ID + " INTEGER PRIMARY KEY AUTOINCREMENT, "
-                + Entry.KEY_PATH             + " TEXT, "
-                + Entry.KEY_ALBUM            + " TEXT, "
-                + Entry.KEY_ALBUM_ARTIST     + " TEXT, "
-                + Entry.KEY_ARTIST           + " TEXT, "
-                + Entry.KEY_AUTHOR           + " TEXT, "
-                + Entry.KEY_BITRATE          + " INTEGER, "
-                + Entry.KEY_CD_TRACK_NUMBER  + " INTEGER, "
-                + Entry.KEY_COMPOSER         + " TEXT, "
-                + Entry.KEY_DATE             + " TEXT, "
-                + Entry.KEY_DISC_NUMBER      + " INTEGER, "
-                + Entry.KEY_DURATION         + " INTEGER, "
-                + Entry.KEY_GENRE            + " TEXT, "
-                + Entry.KEY_TITLE            + " TEXT, "
-                + Entry.KEY_WRITER           + " TEXT, "
-                + Entry.KEY_YEAR             + " INTEGER,"
-                + Entry.KEY_KNOWN_SIZE_IN_KB + " INTEGER"
-                + ")";
+    private class PlaylistEntry implements BaseColumns {
+        static final String TABLE_NAME          = "Playlist";
+        static final String KEY_NAME            = "name";
+        static final String KEY_PATH            = "file_path";
+    }
 
+    private class PlaylistContentsEntry implements BaseColumns {
+        static final String TABLE_NAME                     = "PlaylistContent";
+        static final String KEY_FOREIGN_KEY_TO_PLAYLIST    = "foreign_key_to_playlist";
+        static final String KEY_FOREIGN_KEY_TO_AUDIO_FILE  = "foreign_key_to_audio_file";
+    }
+
+    static final String DB_NAME = "Amber.db";
+    private static final int DB_VERSION = 4;
+    private static final String[] DB_CREATE_COMMANDS = {
+            // Audio File Table
+            "CREATE TABLE " + AudioFileEntry.TABLE_NAME + " ("
+                    + AudioFileEntry._ID + " INTEGER PRIMARY KEY AUTOINCREMENT, "
+                    + AudioFileEntry.KEY_PATH             + " TEXT, "
+                    + AudioFileEntry.KEY_ALBUM            + " TEXT, "
+                    + AudioFileEntry.KEY_ALBUM_ARTIST     + " TEXT, "
+                    + AudioFileEntry.KEY_ARTIST           + " TEXT, "
+                    + AudioFileEntry.KEY_AUTHOR           + " TEXT, "
+                    + AudioFileEntry.KEY_BITRATE          + " INTEGER, "
+                    + AudioFileEntry.KEY_CD_TRACK_NUMBER  + " INTEGER, "
+                    + AudioFileEntry.KEY_COMPOSER         + " TEXT, "
+                    + AudioFileEntry.KEY_DATE             + " TEXT, "
+                    + AudioFileEntry.KEY_DISC_NUMBER      + " INTEGER, "
+                    + AudioFileEntry.KEY_DURATION         + " INTEGER, "
+                    + AudioFileEntry.KEY_GENRE            + " TEXT, "
+                    + AudioFileEntry.KEY_TITLE            + " TEXT, "
+                    + AudioFileEntry.KEY_WRITER           + " TEXT, "
+                    + AudioFileEntry.KEY_YEAR             + " INTEGER, "
+                    + AudioFileEntry.KEY_KNOWN_SIZE_IN_KB + " INTEGER"
+                    + ")",
+
+            // Playlist File Table
+            "CREATE TABLE " + PlaylistEntry.TABLE_NAME + " ("
+                    + PlaylistEntry._ID + " INTEGER PRIMARY KEY AUTOINCREMENT, "
+                    + PlaylistEntry.KEY_PATH             + " TEXT, "
+                    + PlaylistEntry.KEY_NAME             + " TEXT "
+                    + ")",
+
+            // Playlist Contents Table
+            "CREATE TABLE " + PlaylistContentsEntry.TABLE_NAME + " ("
+                    + PlaylistContentsEntry._ID + " INTEGER PRIMARY KEY AUTOINCREMENT, "
+                    + PlaylistContentsEntry.KEY_FOREIGN_KEY_TO_PLAYLIST + " INTEGER, "
+                    + PlaylistContentsEntry.KEY_FOREIGN_KEY_TO_AUDIO_FILE + " INTEGER, "
+
+                    + "FOREIGN KEY (" + PlaylistContentsEntry.KEY_FOREIGN_KEY_TO_PLAYLIST + ") REFERENCES "
+                    + PlaylistEntry.TABLE_NAME + " (" + PlaylistEntry._ID + "), "
+
+                    + "FOREIGN KEY (" + PlaylistContentsEntry.KEY_FOREIGN_KEY_TO_AUDIO_FILE + ") REFERENCES "
+                    + AudioFileEntry.TABLE_NAME + " (" + AudioFileEntry._ID + ")"
+
+                    + ")",
+    };
+
+    private final String[] AUDIO_FILE_PROJECTION = {
+            AudioFileEntry._ID,
+            AudioFileEntry.KEY_PATH,
+            AudioFileEntry.KEY_ALBUM,
+            AudioFileEntry.KEY_ALBUM_ARTIST,
+            AudioFileEntry.KEY_ARTIST,
+            AudioFileEntry.KEY_AUTHOR,
+            AudioFileEntry.KEY_BITRATE,
+            AudioFileEntry.KEY_CD_TRACK_NUMBER,
+            AudioFileEntry.KEY_COMPOSER,
+            AudioFileEntry.KEY_DATE,
+            AudioFileEntry.KEY_DISC_NUMBER,
+            AudioFileEntry.KEY_DURATION,
+            AudioFileEntry.KEY_GENRE,
+            AudioFileEntry.KEY_TITLE,
+            AudioFileEntry.KEY_WRITER,
+            AudioFileEntry.KEY_YEAR,
+            AudioFileEntry.KEY_KNOWN_SIZE_IN_KB,
+    };
+
+    private final String[] PLAYLIST_PROJECTION = {
+            PlaylistEntry._ID,
+            PlaylistEntry.KEY_NAME,
+            PlaylistEntry.KEY_PATH
+    };
 
     private static AudioDatabase handle;
     static synchronized AudioDatabase getHandle(Context context) {
@@ -80,30 +142,34 @@ class AudioDatabase extends SQLiteOpenHelper {
 
     @Override
     public void onCreate(SQLiteDatabase db) {
-        db.execSQL(DB_TABLE_CREATE);
+        for (String command : DB_CREATE_COMMANDS) db.execSQL(command);
     }
 
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
         /* Create tables again */
-        db.execSQL("DROP TABLE IF EXISTS " + DB_NAME);
+        db.execSQL("DROP TABLE IF EXISTS " + AudioFileEntry.TABLE_NAME);
+        db.execSQL("DROP TABLE IF EXISTS " + PlaylistEntry.TABLE_NAME);
+        db.execSQL("DROP TABLE IF EXISTS " + PlaylistContentsEntry.TABLE_NAME);
         onCreate(db);
     }
 
+    /***********************************************************************************************
+     * AUDIO FILE FUNCTIONS
+     **********************************************************************************************/
+    // TODO(doyle): Synchronisation problem on all db manipulation methods, since all tables sharing same db
     synchronized void insertAudioFileToDb(final PlaybackData.AudioFile file) {
         if (Debug.CAREFUL_ASSERT(file != null, this, "File is null")) {
-
             if (Debug.CAREFUL_ASSERT(file.dbKey == -1, this,
                     "Inserting new audio files must not have a db key already defined: "
                             + file.dbKey)) {
 
                 // NOTE(doyle): This gets cached according to docs, so okay to open every time
                 SQLiteDatabase db = getWritableDatabase();
-                if (Debug.CAREFUL_ASSERT(db != null, this,
-                        "Could not get writable database")) {
+                if (Debug.CAREFUL_ASSERT(db != null, this, "Could not get writable database")) {
 
                     ContentValues value = serialiseAudioFileToContentValues(file);
-                    long dbKey = db.insert(Entry.TABLE_NAME, null, value);
+                    long dbKey = db.insert(AudioFileEntry.TABLE_NAME, null, value);
 
                     Debug.CAREFUL_ASSERT(dbKey != -1, this,
                             "Could not insert audio file to db " + file.uri.getPath());
@@ -115,34 +181,28 @@ class AudioDatabase extends SQLiteOpenHelper {
         }
     }
 
-    void insertMultiAudioFileToDb(final List<PlaybackData.AudioFile> files) {
-        if (Debug.CAREFUL_ASSERT(files != null, this, "List of files is null")) {
-            for (PlaybackData.AudioFile audio: files) insertAudioFileToDb(audio);
-        }
-    }
-
     private ContentValues serialiseAudioFileToContentValues(AudioFile file)  {
         ContentValues result = new ContentValues();
         if (file.dbKey > 0) {
-            result.put(Entry._ID, file.dbKey);
+            result.put(AudioFileEntry._ID, file.dbKey);
         }
 
-        result.put(Entry.KEY_PATH, file.uri.getPath());
-        result.put(Entry.KEY_ALBUM, file.album);
-        result.put(Entry.KEY_ALBUM_ARTIST, file.albumArtist);
-        result.put(Entry.KEY_ARTIST, file.artist);
-        result.put(Entry.KEY_AUTHOR, file.author);
-        result.put(Entry.KEY_BITRATE, file.bitrate);
-        result.put(Entry.KEY_CD_TRACK_NUMBER, file.cdTrackNumber);
-        result.put(Entry.KEY_COMPOSER, file.composer);
-        result.put(Entry.KEY_DATE, file.date);
-        result.put(Entry.KEY_DISC_NUMBER, file.discNumber);
-        result.put(Entry.KEY_DURATION, file.duration);
-        result.put(Entry.KEY_GENRE, file.genre);
-        result.put(Entry.KEY_TITLE, file.title);
-        result.put(Entry.KEY_WRITER, file.writer);
-        result.put(Entry.KEY_YEAR, file.year);
-        result.put(Entry.KEY_KNOWN_SIZE_IN_KB, file.sizeInKb);
+        result.put(AudioFileEntry.KEY_PATH, file.uri.getPath());
+        result.put(AudioFileEntry.KEY_ALBUM, file.album);
+        result.put(AudioFileEntry.KEY_ALBUM_ARTIST, file.albumArtist);
+        result.put(AudioFileEntry.KEY_ARTIST, file.artist);
+        result.put(AudioFileEntry.KEY_AUTHOR, file.author);
+        result.put(AudioFileEntry.KEY_BITRATE, file.bitrate);
+        result.put(AudioFileEntry.KEY_CD_TRACK_NUMBER, file.cdTrackNumber);
+        result.put(AudioFileEntry.KEY_COMPOSER, file.composer);
+        result.put(AudioFileEntry.KEY_DATE, file.date);
+        result.put(AudioFileEntry.KEY_DISC_NUMBER, file.discNumber);
+        result.put(AudioFileEntry.KEY_DURATION, file.duration);
+        result.put(AudioFileEntry.KEY_GENRE, file.genre);
+        result.put(AudioFileEntry.KEY_TITLE, file.title);
+        result.put(AudioFileEntry.KEY_WRITER, file.writer);
+        result.put(AudioFileEntry.KEY_YEAR, file.year);
+        result.put(AudioFileEntry.KEY_KNOWN_SIZE_IN_KB, file.sizeInKb);
 
         return result;
     }
@@ -159,7 +219,7 @@ class AudioDatabase extends SQLiteOpenHelper {
             SQLiteDatabase db = this.getWritableDatabase();
             if (Debug.CAREFUL_ASSERT(db != null, this, "Could not get readable database")) {
                 ContentValues value = serialiseAudioFileToContentValues(file);
-                int result = db.update(Entry.TABLE_NAME, value, Entry._ID + " = " + file.dbKey, null);
+                int result = db.update(AudioFileEntry.TABLE_NAME, value, AudioFileEntry._ID + " = " + file.dbKey, null);
 
                 Debug.CAREFUL_ASSERT(result == 1, this,
                         "Db update affected more/less than one row: " + result);
@@ -181,7 +241,7 @@ class AudioDatabase extends SQLiteOpenHelper {
 
     void deleteAudioFileFromDbWithKey(long key) {
         SQLiteDatabase db = this.getWritableDatabase();
-        int result = db.delete(Entry.TABLE_NAME, Entry._ID + " = " + key, null);
+        int result = db.delete(AudioFileEntry.TABLE_NAME, AudioFileEntry._ID + " = " + key, null);
 
         Debug.CAREFUL_ASSERT(result == 1, this, "Db deleted more/less than one row: "
                 + result);
@@ -200,7 +260,7 @@ class AudioDatabase extends SQLiteOpenHelper {
         entryCheck.entries = new ArrayList<>();
 
         if (Debug.CAREFUL_ASSERT(db != null, this, "Could not get readable database handle")) {
-            String tableName = Entry.TABLE_NAME;
+            String tableName = AudioFileEntry.TABLE_NAME;
             String tableColumns[] = null;
             String groupBy = null;
             String having = null;
@@ -211,7 +271,7 @@ class AudioDatabase extends SQLiteOpenHelper {
             cursor.moveToFirst();
             entryCheck.result = CheckResult.EXISTS;
             while (!cursor.isAfterLast()) {
-                AudioFile file = convertDbEntryToAudioFile(cursor);
+                AudioFile file = convertCursorEntryToAudioFile(cursor);
                 entryCheck.entries.add(file);
                 cursor.moveToNext();
             }
@@ -224,27 +284,7 @@ class AudioDatabase extends SQLiteOpenHelper {
         return entryCheck;
     }
 
-    final String[] projection = {
-            Entry._ID,
-            Entry.KEY_PATH,
-            Entry.KEY_ALBUM,
-            Entry.KEY_ALBUM_ARTIST,
-            Entry.KEY_ARTIST,
-            Entry.KEY_AUTHOR,
-            Entry.KEY_BITRATE,
-            Entry.KEY_CD_TRACK_NUMBER,
-            Entry.KEY_COMPOSER,
-            Entry.KEY_DATE,
-            Entry.KEY_DISC_NUMBER,
-            Entry.KEY_DURATION,
-            Entry.KEY_GENRE,
-            Entry.KEY_TITLE,
-            Entry.KEY_WRITER,
-            Entry.KEY_YEAR,
-            Entry.KEY_KNOWN_SIZE_IN_KB
-    };
-
-    private AudioFile convertDbEntryToAudioFile(Cursor cursor) {
+    private AudioFile convertCursorEntryToAudioFile(Cursor cursor) {
         int cursorIndex = 0;
 
         // NOTE(doyle): Since DB primary keys start from 1
@@ -267,7 +307,7 @@ class AudioDatabase extends SQLiteOpenHelper {
         String year           = cursor.getString(cursorIndex++);
         long sizeInKb         = cursor.getLong(cursorIndex++);
 
-        Debug.CAREFUL_ASSERT(cursorIndex == projection.length, this,
+        Debug.CAREFUL_ASSERT(cursorIndex == AUDIO_FILE_PROJECTION.length, this,
                 "Cursor index exceeded projection bounds");
 
         AudioFile file = new AudioFile(dbKey, uri, album, albumArtist, artist, author, bitrate,
@@ -281,8 +321,8 @@ class AudioDatabase extends SQLiteOpenHelper {
         ArrayList<PlaybackData.AudioFile> result = null;
 
         if (Debug.CAREFUL_ASSERT(db != null, this, "Could not get readable database")) {
-            Cursor cursor = db.query(Entry.TABLE_NAME,
-                    projection,
+            Cursor cursor = db.query(AudioFileEntry.TABLE_NAME,
+                    AUDIO_FILE_PROJECTION,
                     null,
                     null,
                     null,
@@ -292,7 +332,7 @@ class AudioDatabase extends SQLiteOpenHelper {
             result = new ArrayList<>();
             cursor.moveToFirst();
             while (!cursor.isAfterLast()) {
-                AudioFile file = convertDbEntryToAudioFile(cursor);
+                AudioFile file = convertCursorEntryToAudioFile(cursor);
                 result.add(file);
                 cursor.moveToNext();
             }
@@ -300,6 +340,147 @@ class AudioDatabase extends SQLiteOpenHelper {
             db.close();
         }
 
+        return result;
+    }
+
+    private AudioFile getAudioFileEntryFromKey(SQLiteDatabase db, int key) {
+        AudioFile result = null;
+
+        if (db == null) {
+            Debug.CAREFUL_ASSERT(false, this, "Db argument was null");
+            return result;
+        }
+
+        String tableName = AudioFileEntry.TABLE_NAME;
+        String tableColumns[] = null;
+        String whereClause = AudioFileEntry._ID + " = ? ";
+        String whereArgs[] = new String[] { String.valueOf(key) };
+        String groupBy = null;
+        String having = null;
+        String orderBy = null;
+
+        Cursor cursor = db.query(tableName, tableColumns, whereClause, whereArgs, groupBy, having,
+                orderBy);
+        cursor.moveToFirst();
+        result = convertCursorEntryToAudioFile(cursor);
+        cursor.close();
+
+        return result;
+    }
+
+    /***********************************************************************************************
+     * PLAYLIST FUNCTIONS
+     **********************************************************************************************/
+
+    private ContentValues serialisePlaylistToContentValues(Playlist playlist) {
+        ContentValues result = new ContentValues();
+        result.put(PlaylistEntry.KEY_PATH, playlist.uri.getPath());
+        result.put(PlaylistEntry.KEY_NAME, playlist.name);
+
+        return result;
+    }
+
+    synchronized void insertPlaylistFileToDb(Playlist playlist) {
+        if (Debug.CAREFUL_ASSERT(playlist != null, this, "Playlist is null")) {
+            SQLiteDatabase db = getWritableDatabase();
+
+            if (Debug.CAREFUL_ASSERT(db != null, this, "Could not get writable database")) {
+                ContentValues playlistValue = serialisePlaylistToContentValues(playlist);
+                long playlistDbKey = db.insert(PlaylistEntry.TABLE_NAME, null, playlistValue);
+
+                if (playlistDbKey == -1)  {
+                    Debug.CAREFUL_ASSERT(false, this,
+                            "Playlist could not be inserted to db exiting early");
+                    return;
+                }
+
+                List<AudioFile> playlistContents = playlist.contents;
+                for (AudioFile file: playlistContents) {
+                    if (Debug.CAREFUL_ASSERT(file.dbKey != -1, this,
+                            "Playlist entry has no db entry " + file.uri.getPath())) {
+                        ContentValues playlistFileValue = new ContentValues();
+                        playlistFileValue.put
+                                (PlaylistContentsEntry.KEY_FOREIGN_KEY_TO_AUDIO_FILE, file.dbKey);
+                        playlistFileValue.put
+                                (PlaylistContentsEntry.KEY_FOREIGN_KEY_TO_PLAYLIST, playlistDbKey);
+
+                        long key =
+                                db.insert(PlaylistContentsEntry.TABLE_NAME, null, playlistFileValue);
+
+                        if (key == -1) {
+                            Debug.CAREFUL_ASSERT(false, this,
+                                    "Playlist entry could not be inserted to db."
+                                            + file.uri.getPath());
+                        }
+                    }
+                }
+
+                db.close();
+            }
+
+        }
+    }
+
+    ArrayList<Playlist> getAllPlaylists() {
+        SQLiteDatabase db = this.getReadableDatabase();
+        ArrayList<Playlist> result = null;
+
+        if (Debug.CAREFUL_ASSERT(db != null, this, "Could not get readable database")) {
+            Cursor cursor = db.query(PlaylistEntry.TABLE_NAME, PLAYLIST_PROJECTION,
+                    null, null, null, null, null);
+
+            result = new ArrayList<>();
+            cursor.moveToFirst();
+            while (!cursor.isAfterLast()) {
+                int cursorIndex = 0;
+
+                int playlistKey = cursor.getInt(cursorIndex++);
+                String name = cursor.getString(cursorIndex++);
+                Uri uri = Uri.fromFile(new File(cursor.getString(cursorIndex++)));
+
+                Debug.CAREFUL_ASSERT(cursorIndex == PLAYLIST_PROJECTION.length, this,
+                        "Cursor index exceeded projection bounds");
+
+                Playlist playlist = new Playlist(name, uri);
+                playlist.contents = getPlaylistContents(db, playlistKey);
+                result.add(playlist);
+                cursor.moveToNext();
+            }
+
+            cursor.close();
+        }
+
+        return result;
+    }
+
+    private List<AudioFile> getPlaylistContents(SQLiteDatabase db, int playlistKey) {
+        List<AudioFile> result = null;
+        if (db == null) {
+            Debug.CAREFUL_ASSERT(false, this, "Db argument was null");
+            return result;
+        }
+
+        String tableName = PlaylistContentsEntry.TABLE_NAME;
+        String tableColumns[] = new String[]
+                { PlaylistContentsEntry.KEY_FOREIGN_KEY_TO_AUDIO_FILE };
+        String whereClause = PlaylistContentsEntry.KEY_FOREIGN_KEY_TO_PLAYLIST + " = ? ";
+        String whereArgs[] = new String[] { String.valueOf(playlistKey) };
+        String groupBy = null;
+        String having = null;
+        String orderBy = null;
+        Cursor cursor =
+                db.query(tableName, tableColumns, whereClause, whereArgs, groupBy, having, orderBy);
+        cursor.moveToFirst();
+
+        result = new ArrayList<>();
+        while (!cursor.isAfterLast()) {
+            int audioKey = cursor.getInt(0);
+            AudioFile file = getAudioFileEntryFromKey(db, audioKey);
+            if (file != null) result.add(file);
+            cursor.moveToNext();
+        }
+
+        cursor.close();
         return result;
     }
 }

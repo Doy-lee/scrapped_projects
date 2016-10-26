@@ -64,23 +64,23 @@ class Util {
         Debug.LOG_V(DEBUG_TAG, "File: " + file.getName() + ", Parsed audio: " + artist +  " - " + title);
 
 
-        AudioFile result = new AudioFile(-1,
-                uri,
-                album,
-                albumArtist,
-                artist,
-                author,
-                bitrate,
-                cdTrackNum,
-                composer,
-                date,
-                discNum,
-                duration,
-                genre,
-                title,
-                writer,
-                year,
-                sizeInKb);
+        AudioFile result = new AudioFile(PlaybackData.AUDIO_NOT_IN_DB,
+                                         uri,
+                                         album,
+                                         albumArtist,
+                                         artist,
+                                         author,
+                                         bitrate,
+                                         cdTrackNum,
+                                         composer,
+                                         date,
+                                         discNum,
+                                         duration,
+                                         genre,
+                                         title,
+                                         writer,
+                                         year,
+                                         sizeInKb);
 
         return result;
     }

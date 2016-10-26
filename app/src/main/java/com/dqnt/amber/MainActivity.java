@@ -32,6 +32,7 @@ import android.support.v7.widget.Toolbar;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.SubMenu;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ListView;
@@ -49,8 +50,10 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Random;
 
 import com.dqnt.amber.PlaybackData.AudioFile;
+import com.dqnt.amber.PlaybackData.Playlist;
 
 import static com.dqnt.amber.Debug.ASSERT;
 import static com.dqnt.amber.Debug.CAREFUL_ASSERT;
@@ -60,14 +63,46 @@ public class MainActivity extends AppCompatActivity {
     private static final int AMBER_READ_EXTERNAL_STORAGE_REQUEST = 1;
     private AudioFileAdapter audioFileAdapter;
 
-    private List<AudioFile> allAudioFiles;
-    private List<Playlist> playlistList;
-    private int activePlaylist = -1;
+    private static final int AMBER_VERSION = 1;
+
+    private class PlaySpec {
+        List<AudioFile> allAudioFiles;
+
+        // NOTE(doyle): Permanent list that has all the files the app has scanned, separate from the
+        // list index because we clear the playlist list on load from DB, so save having to recreate
+        // a library list every time we init from DB.
+        Playlist libraryList;
+
+        int activePlaylistIndex;
+
+        List<Playlist> playlistList;
+        PlaySpec() {
+
+            allAudioFiles = new ArrayList<>();
+            playlistList = new ArrayList<>();
+
+            activePlaylistIndex = 0;
+
+            libraryList = new Playlist("Library");
+            libraryList.contents = allAudioFiles;
+        }
+
+        Playlist getActivePlaylist() {
+            Playlist result = libraryList;
+
+            if (activePlaylistIndex < playlistList.size()) {
+                result = playlistList.get(activePlaylistIndex);
+            }
+
+            return result;
+        }
+    }
+    PlaySpec playSpec;
 
     private AudioService audioService;
     private boolean serviceBound = false;
 
-    private List<AudioFile> queuedPlaylist = null;
+    private Playlist queuedPlaylist = null;
     private int queuedPlaylistIndex = -1;
 
     private AudioService.Response audioServiceResponse;
@@ -98,8 +133,7 @@ public class MainActivity extends AppCompatActivity {
             if (queuedPlaylist != null) {
                 if (Debug.CAREFUL_ASSERT(queuedPlaylistIndex != -1, this,
                         "Playlist queued, but no index specified")) {
-                    enqueueToPlayer(queuedPlaylist, queuedPlaylistIndex);
-                    queuedPlaylist = null;
+                    enqueueToPlayer(queuedPlaylistIndex);
                     queuedPlaylistIndex = -1;
                 }
             }
@@ -131,26 +165,65 @@ public class MainActivity extends AppCompatActivity {
         setSupportActionBar(toolbar);
         getSupportActionBar().setDefaultDisplayHomeAsUpEnabled(true);
 
-        handler = new Handler();
-        debugRenderer = new Debug.UiUpdateAndRender(this, handler, 10) {
-            @Override
-            public void renderElements() {
-                pushText("Debug Text");
-                pushClass(audioService, true, false);
-                pushClass(this, true, false);
-                pushText(Debug.GENERATE_COUNTER_STRING());
-            }
-        };
+        final DrawerLayout drawerLayout = (DrawerLayout)
+                findViewById(R.id.activity_main_drawer_layout);
+        navigationView = (NavigationView) findViewById(R.id.activity_main_navigation_view);
+        navigationView.setNavigationItemSelectedListener
+                (new NavigationView.OnNavigationItemSelectedListener() {
+                    @Override
+                    public boolean onNavigationItemSelected(@NonNull MenuItem item) {
+                        switch (item.getItemId()) {
+
+                            case R.id.menu_main_drawer_album: {
+                                toolbar.setTitle(getString(R.string.menu_main_drawer_album));
+                            } break;
+
+                            case R.id.menu_main_drawer_artist: {
+                                toolbar.setTitle(getString(R.string.menu_main_drawer_artist));
+                            } break;
+
+                            default: {
+                            } break;
+                        }
+
+                        drawerLayout.closeDrawers();
+                        return true;
+                    }
+                });
 
         // Setting the RelativeLayout as our content view
-        allAudioFiles = new ArrayList<>();
-        audioFileAdapter = new AudioFileAdapter(getBaseContext(), allAudioFiles);
+        playSpec = new PlaySpec();
+        audioFileAdapter = new AudioFileAdapter(this, null);
 
-        playlistList = new ArrayList<>();
+        Menu drawerMenu = navigationView.getMenu();
+        for (int i = 0; i < drawerMenu.size(); i++) {
+            MenuItem item = drawerMenu.getItem(i);
+            if (item.isChecked()) {
+                switch (item.getItemId()) {
+                    case R.id.menu_main_drawer_album: {
+                        ASSERT(false);
+                    } break;
+
+                    case R.id.menu_main_drawer_artist: {
+                        ASSERT(false);
+                    } break;
+
+                    case R.id.menu_main_drawer_library: {
+                        audioFileAdapter.audioList = playSpec.libraryList.contents;
+                    } break;
+                }
+
+                break;
+            }
+        }
+
         ListView audioFileListView = (ListView) findViewById(R.id.main_list_view);
         audioFileListView.setAdapter(audioFileAdapter);
 
-        /* DEBUG CLEAR preferences */
+
+        /*******************************************************************************************
+         * DEBUG INITIALISATION
+         ******************************************************************************************/
         SharedPreferences sharedPref = PreferenceManager.
                 getDefaultSharedPreferences(getApplicationContext());
 
@@ -160,6 +233,24 @@ public class MainActivity extends AppCompatActivity {
             sharedPref.edit().putString(getString(R.string.pref_music_path_key),
                     "/storage/emulated/0/Music").apply();
         }
+
+        handler = new Handler();
+        debugRenderer = new Debug.UiUpdateAndRender(this, handler, 10) {
+            @Override
+            public void renderElements() {
+                pushVariable("Amber Version", AMBER_VERSION);
+                pushClass(audioService, true, false);
+                pushClass(this, true, false);
+
+                Playlist activePlaylist = playSpec.getActivePlaylist();
+                if (activePlaylist != null) {
+                    pushVariable("Active Playlist Index", playSpec.activePlaylistIndex);
+                    pushVariable("Active Playlist", activePlaylist.name);
+                }
+
+                pushText(Debug.GENERATE_COUNTER_STRING());
+            }
+        };
 
         // NOTE(doyle): Only ask for permissions if version >= Android M (API 23)
         int readPermissionCheck = ContextCompat.checkSelfPermission(this,
@@ -177,6 +268,7 @@ public class MainActivity extends AppCompatActivity {
         if (readPermissionCheck == PackageManager.PERMISSION_GRANTED) {
             queryDeviceForAudioData();
         }
+
 
         playBarItems = new PlayBarItems();
         playBarItems.playPauseButton = (Button) findViewById(R.id.play_bar_play_button);
@@ -288,58 +380,13 @@ public class MainActivity extends AppCompatActivity {
             }
         };
 
-        final DrawerLayout drawerLayout = (DrawerLayout)
-                findViewById(R.id.activity_main_drawer_layout);
-        navigationView = (NavigationView) findViewById(R.id.activity_main_navigation_view);
-        navigationView.setNavigationItemSelectedListener
-                (new NavigationView.OnNavigationItemSelectedListener() {
-            @Override
-            public boolean onNavigationItemSelected(@NonNull MenuItem item) {
-                switch (item.getItemId()) {
-                    case R.id.menu_main_drawer_album:
-                        toolbar.setTitle(getString(R.string.menu_main_drawer_album));
-                        break;
-                    case R.id.menu_main_drawer_artist:
-                        toolbar.setTitle(getString(R.string.menu_main_drawer_artist));
-                        break;
-                    case R.id.menu_main_drawer_playlist:
-                        toolbar.setTitle(getString(R.string.menu_main_drawer_playlist));
-                        break;
-                    default:
-                        Debug.CAREFUL_ASSERT(false, this, "Menu item not handled "
-                                + item.getItemId());
-                        break;
-                }
-
-                drawerLayout.closeDrawers();
-                return true;
-            }
-        });
     }
 
-    private NavigationView.OnNavigationItemSelectedListener navItemSelectedListener =
-            new NavigationView.OnNavigationItemSelectedListener() {
-        @Override
-        public boolean onNavigationItemSelected(@NonNull MenuItem item) {
-            return false;
-        }
-    };
-
     private void queryDeviceForAudioData() {
-        Context appContext = getApplicationContext();
-        SharedPreferences sharedPref = PreferenceManager.
-                getDefaultSharedPreferences(appContext);
-        boolean libraryInit = sharedPref.getBoolean
-                (getResources().getString(R.string.internal_pref_library_init_key), false);
-
-        AudioDatabase dbHandle = AudioDatabase.getHandle(appContext);
-        if (libraryInit) {
-            new GetAudioMetadataFromDb(dbHandle).execute();
-        } else {
-            GetAudioFromDevice task = new GetAudioFromDevice(this, allAudioFiles, dbHandle,
-                    audioFileAdapter, playlistList, navigationView.getMenu());
-            task.execute();
-        }
+        AudioDatabase dbHandle = AudioDatabase.getHandle(this);
+        GetAudioFromDevice task = new GetAudioFromDevice(this, playSpec, dbHandle,
+                audioFileAdapter, navigationView.getMenu());
+        task.execute();
     }
 
     /*
@@ -433,11 +480,10 @@ public class MainActivity extends AppCompatActivity {
             case R.id.action_rescan_music: {
                 // TODO(doyle): For now just drop all the data in the db
                 AudioDatabase dbHandle = AudioDatabase.getHandle(this);
-                allAudioFiles.clear();
+                playSpec.allAudioFiles.clear();
                 audioFileAdapter.notifyDataSetChanged();
                 GetAudioFromDevice task = new GetAudioFromDevice
-                        (this, allAudioFiles, dbHandle, audioFileAdapter, playlistList,
-                                navigationView.getMenu());
+                        (this, playSpec, dbHandle, audioFileAdapter, navigationView.getMenu());
                 task.execute();
             } break;
 
@@ -497,87 +543,36 @@ public class MainActivity extends AppCompatActivity {
      ***********************************************************************************************
      */
 
-    private class GetAudioMetadataFromDb extends AsyncTask<Void, Void, Void> {
-        AudioDatabase dbHandle;
-        GetAudioMetadataFromDb(AudioDatabase dbHandle) {
-            this.dbHandle = dbHandle;
-        }
-
-        @Override
-        protected Void doInBackground(Void... params) {
-            // TODO(doyle): Look at again, we copy since other activities use a reference to our master list
-            List<AudioFile> list = dbHandle.getAllAudioFiles();
-            allAudioFiles.addAll(list);
-
-            Collections.sort(allAudioFiles, new Comparator<AudioFile>() {
-                public int compare(AudioFile a, AudioFile b) {
-                    return a.title.compareTo(b.title);
-                }
-            });
-            return null;
-        }
-
-        @Override
-        protected void onCancelled(Void aVoid) {
-            super.onCancelled(aVoid);
-        }
-
-        @Override
-        protected void onPostExecute(Void aVoid) {
-            super.onPostExecute(aVoid);
-            audioFileAdapter.notifyDataSetChanged();
-        }
-    }
-
-    private static class Playlist {
-        String name;
-        List<AudioFile> contents;
-
-        Playlist() {
-            contents = new ArrayList<>();
-        }
-    }
-
     private static class GetAudioFromDevice extends AsyncTask<Void, Void, Void> {
         private WeakReference<Activity> weakContext;
-        private WeakReference<List<AudioFile>> weakAllAudioFiles;
-        private WeakReference<List<Playlist>> weakPlaylistList;
+        private WeakReference<PlaySpec> weakPlaySpec;
         private WeakReference<AudioFileAdapter> weakAudioFileAdapter;
         private WeakReference<Menu> weakSideMenu;
-        AudioDatabase dbHandle;
 
-        GetAudioFromDevice(Activity context, List<AudioFile> allAudioFiles, AudioDatabase dbHandle,
-                           AudioFileAdapter audioFileAdapter, List<Playlist> playlistList,
-                           Menu sideMenu) {
+        private AudioDatabase dbHandle;
+
+        GetAudioFromDevice(Activity context, PlaySpec playSpec, AudioDatabase dbHandle,
+                           AudioFileAdapter audioFileAdapter, Menu sideMenu) {
             this.dbHandle = dbHandle;
 
             this.weakContext = new WeakReference<>(context);
-            this.weakAllAudioFiles = new WeakReference<>(allAudioFiles);
             this.weakAudioFileAdapter = new WeakReference<>(audioFileAdapter);
-            this.weakPlaylistList = new WeakReference<>(playlistList);
+            this.weakPlaySpec = new WeakReference<>(playSpec);
             this.weakSideMenu = new WeakReference<>(sideMenu);
+
         }
 
-        private class CheckResult {
-            AudioFile file;
-            boolean isNew;
+        private AudioFile updateAndCheckAgainstDbList(Context context,
+                                                      MediaMetadataRetriever retriever,
+                                                      File newFile) {
 
-            CheckResult() {
-                isNew = false;
-            }
-        }
-
-        private CheckResult updateAndCheckAgainstDbList(Context context,
-                                                        MediaMetadataRetriever retriever,
-                                                        File newFile) {
-
-            CheckResult result = new CheckResult();
+            AudioFile result = null;
             if (newFile == null || !newFile.exists()) {
                 Debug.LOG_W(this, "File is null or does not exist, cannot check/add against db");
                 return null;
             }
 
-            String checkFields = AudioDatabase.Entry.KEY_PATH + " =  ? ";
+            String checkFields = AudioDatabase.AudioFileEntry.KEY_PATH + " =  ? ";
             String[] checkArgs = new String[] {
                 newFile.getPath(),
             };
@@ -595,7 +590,7 @@ public class MainActivity extends AppCompatActivity {
                     AudioFile dbAudioFile = dbCheck.entries.get(0);
 
                     if (dbAudioFile.sizeInKb == newFileSizeInKb) {
-                        result.file = dbAudioFile;
+                        result = dbAudioFile;
 
                     } else {
                         // NOTE(doyle): File has changed since last db scan, update old entry
@@ -604,12 +599,11 @@ public class MainActivity extends AppCompatActivity {
                         newAudio.dbKey = dbAudioFile.dbKey;
 
                         dbHandle.updateAudioFileInDbWithKey(newAudio);
-                        result.file = newAudio;
+                        result = newAudio;
                     }
 
-                    result.isNew = true;
                     Debug.LOG_V(this, "Parsed audio: " +
-                            result.file.artist + " - " + result.file.title);
+                            result.artist + " - " + result.title);
                 } else if (dbCheck.entries.size() > 1) {
                     // NOTE(doyle): There are multiple matching entries in the db with the uri.
                     // This is likely an invalid situation, not sure how it could occur, so play it
@@ -628,27 +622,22 @@ public class MainActivity extends AppCompatActivity {
                         }
                     }
 
-                    result.file =
-                            Util.extractAudioMetadata(context, retriever, newFileUri);
-                    dbHandle.insertAudioFileToDb(result.file);
+                    result = Util.extractAudioMetadata(context, retriever, newFileUri);
+                    dbHandle.insertAudioFileToDb(result);
                 } else {
                     Debug.CAREFUL_ASSERT(false, this, "Error! An empty db check " +
                             "result should not occur when marked existing!");
                 }
 
             } else if (dbCheck.result == AudioDatabase.CheckResult.NOT_EXIST) {
-                result.file = Util.extractAudioMetadata(context, retriever, newFileUri);
-                dbHandle.insertAudioFileToDb(result.file);
-                result.isNew = true;
+                result = Util.extractAudioMetadata(context, retriever, newFileUri);
+                dbHandle.insertAudioFileToDb(result);
             }
+
             return result;
         }
 
-        private AudioFile copyAudioFields(AudioFile from, AudioFile to) {
-            from.artist = "test";
-            return from;
-        }
-
+        // TODO(doyle): Binary search
         private int findAudioFileInList(List<AudioFile> list, AudioFile findFile) {
 
             for (int i = 0; i < list.size(); i++) {
@@ -664,6 +653,27 @@ public class MainActivity extends AppCompatActivity {
 
         }
 
+        private void loadWithoutValidationFromDb(PlaySpec playSpec) {
+            List<AudioFile> fileListFromDb = dbHandle.getAllAudioFiles();
+            List<Playlist> playlistListFromDb = dbHandle.getAllPlaylists();
+
+            if (fileListFromDb != null) {
+                if (fileListFromDb.size() > 0) {
+                    playSpec.allAudioFiles.clear();
+                    playSpec.allAudioFiles.addAll(fileListFromDb);
+                }
+            }
+
+            if (playlistListFromDb != null) {
+                if (playlistListFromDb.size() > 0) {
+                    playSpec.playlistList.clear();
+                    playSpec.playlistList.addAll(playlistListFromDb);
+                }
+            }
+
+            publishProgress();
+        }
+
         @Override
         protected Void doInBackground(Void... params) {
             /*
@@ -677,11 +687,15 @@ public class MainActivity extends AppCompatActivity {
                 return null;
             }
 
-            List<AudioFile> allAudioFiles = weakAllAudioFiles.get();
-            if (allAudioFiles == null) {
-                Debug.LOG_W(this, "Audio list got GC'ed early, scan ending early");
+            PlaySpec playSpec = weakPlaySpec.get();
+            if (playSpec == null) {
+                Debug.LOG_W(this, "playSpec got GC'ed early, scan ending early");
                 return null;
             }
+
+            // NOTE(doyle): Load whatever is in the DB first and let the user interact with that,
+            // then recheck information is valid afterwards
+            loadWithoutValidationFromDb(playSpec);
 
             MediaMetadataRetriever retriever = new MediaMetadataRetriever();
             ContentResolver musicResolver = context.getContentResolver();
@@ -702,8 +716,7 @@ public class MainActivity extends AppCompatActivity {
                             String absPath = musicCursor.getString(absPathIndex);
                             File file = new File(absPath);
 
-                            CheckResult result = updateAndCheckAgainstDbList(context, retriever,
-                                    file);
+                            updateAndCheckAgainstDbList(context, retriever, file);
                         }
                     } while (musicCursor.moveToNext());
                 } else {
@@ -735,7 +748,7 @@ public class MainActivity extends AppCompatActivity {
                     String fileName = file.getName();
 
                     if (fileName.endsWith(".opus")) {
-                        CheckResult result = updateAndCheckAgainstDbList(context, retriever, file);
+                        updateAndCheckAgainstDbList(context, retriever, file);
                     } else if (fileName.endsWith(".m3u") || fileName.endsWith(".m3u8")) {
                         if (file.canRead()) {
                             listOfPlaylistsFiles.add(file);
@@ -750,13 +763,25 @@ public class MainActivity extends AppCompatActivity {
                 Debug.LOG_W(this, "Could not find/read music directory: " + musicDir);
             }
 
+            List<AudioFile> filesFromDb = dbHandle.getAllAudioFiles();
+            playSpec.allAudioFiles.clear();
+            playSpec.allAudioFiles.addAll(filesFromDb);
+            List<AudioFile> allAudioFiles = playSpec.allAudioFiles;
+
+            /* Sort list */
+            Collections.sort(allAudioFiles, new Comparator<AudioFile>() {
+                public int compare(AudioFile a, AudioFile b) {
+                    return a.title.compareTo(b.title);
+                }
+            });
+
             class RawPlaylist {
-                String name;
-                List<AudioFile> contents;
-                RawPlaylist() { contents = new ArrayList<>(); }
+                private String name;
+                private List<AudioFile> contents;
+                private RawPlaylist() { contents = new ArrayList<>(); }
             }
 
-            List<RawPlaylist> rawPlaylistList = new ArrayList<>();
+            // TODO(doyle): Remove playlist if it already exists in DB
             for (File playlistFile: listOfPlaylistsFiles) {
                 RawPlaylist rawPlaylist = new RawPlaylist();
 
@@ -778,7 +803,7 @@ public class MainActivity extends AppCompatActivity {
 
                         File actualFile;
 
-                                /* Determine if playlist is in absolute paths or relative */
+                        /* Determine if playlist is in absolute paths or relative */
                         File testIfAbsolutePath = new File(playlistEntry);
                         if (testIfAbsolutePath.exists()) {
                             actualFile = testIfAbsolutePath;
@@ -789,13 +814,23 @@ public class MainActivity extends AppCompatActivity {
                             actualFile = new File(entryFolder, playlistEntry);
                         }
 
-                        CheckResult result = updateAndCheckAgainstDbList(context, retriever, actualFile);
-                        if (result != null) {
-                            rawPlaylist.contents.add(result.file);
+                        AudioFile file = updateAndCheckAgainstDbList(context, retriever,
+                                actualFile);
+                        if (file != null) {
+                            rawPlaylist.contents.add(file);
                         }
                     }
 
-                    rawPlaylistList.add(rawPlaylist);
+                    Playlist playlist = new Playlist(rawPlaylist.name, Uri.fromFile(playlistFile));
+                    // TODO(doyle): Improve from linear search
+                    for (AudioFile findFile: rawPlaylist.contents) {
+                        int index = findAudioFileInList(allAudioFiles, findFile);
+                        ASSERT(index != -1);
+
+                        playlist.contents.add(allAudioFiles.get(index));
+                    }
+
+                    dbHandle.insertPlaylistFileToDb(playlist);
                 } catch (FileNotFoundException e) {
                     CAREFUL_ASSERT(false, this, "Could not find file, " +
                             "should never happen!");
@@ -804,35 +839,11 @@ public class MainActivity extends AppCompatActivity {
                             + playlistFile.getAbsolutePath());
                 }
             }
+
             retriever.release();
 
-            allAudioFiles = dbHandle.getAllAudioFiles();
-
-            /* Sort list */
-            Collections.sort(allAudioFiles, new Comparator<AudioFile>() {
-                public int compare(AudioFile a, AudioFile b) {
-                    return a.title.compareTo(b.title);
-                }
-            });
-
-            List<Playlist> playlistList = weakPlaylistList.get();
-            if (playlistList != null) {
-                for (RawPlaylist rawPlaylist: rawPlaylistList) {
-                    Playlist playlist = new Playlist();
-                    playlist.name = rawPlaylist.name;
-
-                    for (AudioFile findFile: rawPlaylist.contents) {
-                        int index = findAudioFileInList(allAudioFiles, findFile);
-                        Debug.ASSERT(index != -1);
-                        playlist.contents.add(allAudioFiles.get(index));
-                    }
-
-                    playlistList.add(playlist);
-                }
-            } else {
-                Debug.LOG_D(this, "playlistList got GC'ed early, unable to parse");
-            }
-
+            playSpec.playlistList.clear();
+            playSpec.playlistList = dbHandle.getAllPlaylists();
             return null;
         }
 
@@ -842,53 +853,86 @@ public class MainActivity extends AppCompatActivity {
             super.onCancelled();
         }
 
+        private void updateSideNavWithPlaylists(final PlaySpec playSpec) {
+            Menu sideMenu = weakSideMenu.get();
+            final List<Playlist> playlistList = playSpec.playlistList;
+            if (sideMenu != null && playlistList != null) {
+
+                sideMenu.removeGroup(MENU_PLAYLIST_GROUP_ID);
+                SubMenu playlistSubMenu = sideMenu.addSubMenu(MENU_PLAYLIST_GROUP_ID,
+                        Menu.NONE, Menu.NONE,
+                        "Playlist");
+                for (final Playlist playlist : playlistList) {
+
+                    int uniqueId;
+                    boolean matched;
+                    do {
+                        // TODO(doyle): Revise this size limit
+                        uniqueId = new Random().nextInt(1024);
+                        matched = false;
+                        for (int i = 0; i < playlistSubMenu.size(); i++) {
+                            MenuItem item = playlistSubMenu.getItem(i);
+                            if (item.getItemId() == uniqueId) {
+                                matched = true;
+                                break;
+                            }
+                        }
+                    } while (matched);
+
+                    MenuItem playlistMenuItem = playlistSubMenu.add
+                            (MENU_PLAYLIST_GROUP_ID, uniqueId, Menu.NONE, playlist.name);
+                    playlist.menuId = playlistMenuItem.getItemId();
+                    playlistMenuItem.
+                            setOnMenuItemClickListener(new MenuItem.OnMenuItemClickListener() {
+
+                        @Override
+                        public boolean onMenuItemClick(MenuItem item) {
+                            // TODO(doyle): Improve linear search maybe? Typical use case doesn't have many playlists
+                            for (int i = 0; i < playlistList.size(); i++) {
+                                Playlist checkPlaylist = playlistList.get(i);
+                                if (checkPlaylist.menuId == item.getItemId()) {
+                                    playSpec.activePlaylistIndex = i;
+                                    updateDisplay();
+                                    break;
+                                }
+                            }
+                            return false;
+                        }
+
+                    });
+                }
+            } else {
+                Debug.LOG_W(this, "PlaySpec got GCed, menu not init with playlist. " +
+                        "Another rescan needed");
+            }
+        }
+
+        final int MENU_PLAYLIST_GROUP_ID = 1000;
+        private void updateDisplay() {
+            final PlaySpec playSpec = weakPlaySpec.get();
+            AudioFileAdapter audioFileAdapter = weakAudioFileAdapter.get();
+            if (audioFileAdapter != null && playSpec != null) {
+                audioFileAdapter.audioList = playSpec.getActivePlaylist().contents;
+                audioFileAdapter.notifyDataSetChanged();
+                updateSideNavWithPlaylists(playSpec);
+
+            } else {
+                Debug.LOG_W(this, "PlaySpec got GCed, " +
+                        "OSD may not be accurate");
+            }
+
+        }
+
         @Override
         protected void onProgressUpdate(Void... args) {
             super.onProgressUpdate();
-            AudioFileAdapter audioFileAdapter = weakAudioFileAdapter.get();
-            List<AudioFile> allAudioFiles = weakAllAudioFiles.get();
-            if (audioFileAdapter != null && allAudioFiles != null) {
-                audioFileAdapter.audioList = allAudioFiles;
-                audioFileAdapter.notifyDataSetChanged();
-            } else {
-                Debug.LOG_W(this, "AudioFileAdapter/List of audio files got GCed, " +
-                        "OSD may not be accurate");
-            }
+            updateDisplay();
         }
 
         @Override
         protected void onPostExecute(Void aVoid) {
             super.onPostExecute(aVoid);
-
-            AudioFileAdapter audioFileAdapter = weakAudioFileAdapter.get();
-            List<AudioFile> allAudioFiles = weakAllAudioFiles.get();
-            if (audioFileAdapter != null && allAudioFiles != null) {
-                audioFileAdapter.audioList = allAudioFiles;
-                audioFileAdapter.notifyDataSetChanged();
-            } else {
-                Debug.LOG_W(this, "AudioFileAdapter/List of audio files got GCed, " +
-                        "OSD may not be accurate");
-            }
-
-            Menu sideMenu = weakSideMenu.get();
-            List<Playlist> playlistList = weakPlaylistList.get();
-            if (sideMenu != null && playlistList != null) {
-                for (Playlist playlist: playlistList) {
-
-                    // TODO: Implement
-                    MenuItem playlistItem = sideMenu.add(playlist.name);
-                    playlistItem.setOnMenuItemClickListener(new MenuItem.OnMenuItemClickListener() {
-                        @Override
-                        public boolean onMenuItemClick(MenuItem item) {
-
-                            return false;
-                        }
-                    });
-                }
-            } else {
-                Debug.LOG_W(this, "Menu or playlist got GC'ed, menu not init with playlist. " +
-                        "Another rescan needed");
-            }
+            updateDisplay();
 
             Context context = weakContext.get();
             if (context == null) {
@@ -918,14 +962,13 @@ public class MainActivity extends AppCompatActivity {
     public void audioFileClicked(View view) {
         AudioFileAdapter.AudioEntryInView entry = (AudioFileAdapter.AudioEntryInView) view.getTag();
         int index = entry.position;
-        // TODO(doyle): Proper playlist creation
-        enqueueToPlayer(allAudioFiles, index);
+        enqueueToPlayer(index);
     }
 
     // NOTE(doyle): When we request a song to be played, the media player has to be prepared first!
     // Playback does not happen until it is complete! We know when playback is complete in the
     // callback
-    private void enqueueToPlayer(List<AudioFile> playlist, int index) {
+    private void enqueueToPlayer(int index) {
         if (!serviceBound) {
             LOG_D(this, "Rebinding audio service");
             Intent playerIntent = new Intent(this, AudioService.class);
@@ -933,9 +976,11 @@ public class MainActivity extends AppCompatActivity {
             bindService(playerIntent, audioConnection, Context.BIND_AUTO_CREATE);
 
             // NOTE(doyle): Queue playlist whereby onServiceConnected will detect and begin playing
-            queuedPlaylist = playlist;
+            queuedPlaylistIndex = index;
         } else {
-            audioService.preparePlaylist(playlist, index);
+            Playlist activePlaylist = playSpec.playlistList.get(playSpec.activePlaylistIndex);
+            List<AudioFile> playlistFiles = activePlaylist.contents;
+            audioService.preparePlaylist(playlistFiles, index);
             audioService.playMedia();
             // TODO(doyle): Broadcast receiver seems useless here? Whats the point.
             // isn't it better to just directly access the function? The only way we can send

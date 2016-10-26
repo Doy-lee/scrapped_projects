@@ -20,7 +20,7 @@ import java.util.List;
 
 class Debug {
     final static boolean DEBUG_MODE = true;
-    final static boolean RESET_DB = false;
+    final static boolean RESET_DB = true;
     final static boolean RESET_CONFIG = false;
 
     private static String getMethodName(String className) {
@@ -280,8 +280,9 @@ class Debug {
                     } else if (value instanceof Boolean) {
                         boolean tmp = (boolean) value;
                         if (tmp) debugValue = "true";
-                        else     debugValue = "false";
-
+                        else debugValue = "false";
+                    } else if (value instanceof String) {
+                        debugValue = (String) value;
                     } else {
                         CAREFUL_ASSERT(false, Debug.class, "Debug type not handled yet");
                     }

@@ -2,9 +2,35 @@ package com.dqnt.amber;
 
 import android.net.Uri;
 
+import java.util.ArrayList;
 import java.util.List;
 
 class PlaybackData {
+    static final int AUDIO_NOT_IN_DB = -1;
+
+    static class Playlist {
+        String name;
+        Uri uri;
+        List<AudioFile> contents;
+
+        int menuId;
+
+        Playlist(String name) {
+            this.name = name;
+
+            menuId = -1;
+            contents = new ArrayList<>();
+        }
+
+        Playlist(String name, Uri uri) {
+            this.uri = uri;
+            this.name = name;
+
+            menuId = -1;
+            contents = new ArrayList<>();
+        }
+    }
+
     static class AudioFile {
         long dbKey;
         Uri uri;
