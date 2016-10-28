@@ -100,11 +100,17 @@ public class MainActivity extends AppCompatActivity {
 
     private class UiSpec {
         private AudioFileAdapter audioFileAdapter;
+        private ListView audioListView;
+
         private PlayBarItems playBarItems;
         private Handler handler;
 
         NavigationView navigationView;
         Debug.UiUpdateAndRender debugRenderer;
+
+        int primaryColor;
+        int accentColor;
+        int primaryTextColor;
     }
 
     private PlaySpec playSpec_;
@@ -181,10 +187,14 @@ public class MainActivity extends AppCompatActivity {
         getSupportActionBar().setDefaultDisplayHomeAsUpEnabled(true);
 
         uiSpec_ = new UiSpec();
-        uiSpec_.audioFileAdapter = new AudioFileAdapter(this, null);
+        uiSpec_.primaryColor = ContextCompat.getColor(this, R.color.colorPrimary);
+        uiSpec_.accentColor = ContextCompat.getColor(this, R.color.colorAccent);
+        uiSpec_.primaryTextColor
+                = ContextCompat.getColor(this, R.color.primary_text_on_light_background);
 
-        ListView audioFileListView = (ListView) findViewById(R.id.main_list_view);
-        audioFileListView.setAdapter(uiSpec_.audioFileAdapter);
+        uiSpec_.audioListView = (ListView) findViewById(R.id.main_list_view);
+        uiSpec_.audioFileAdapter = new AudioFileAdapter(this, uiSpec_.audioListView, null,
+                uiSpec_.accentColor);
 
         final DrawerLayout drawerLayout = (DrawerLayout)
                 findViewById(R.id.activity_main_drawer_layout);
@@ -256,6 +266,11 @@ public class MainActivity extends AppCompatActivity {
                 pushText(Debug.GENERATE_COUNTER_STRING());
             }
         };
+
+        SharedPreferences sharedPref = PreferenceManager.getDefaultSharedPreferences(this);
+        boolean showDebug =
+                sharedPref.getBoolean(getString(R.string.internal_pref_show_debug), false);
+        uiSpec_.debugRenderer.isRunning = showDebug;
 
         uiSpec_.playBarItems = new PlayBarItems();
         PlayBarItems playBarItems = uiSpec_.playBarItems;
@@ -452,6 +467,11 @@ public class MainActivity extends AppCompatActivity {
             case R.id.action_debug_overlay: {
                 if (uiSpec_.debugRenderer != null)
                     uiSpec_.debugRenderer.isRunning = !uiSpec_.debugRenderer.isRunning;
+
+                SharedPreferences sharedPref = PreferenceManager.getDefaultSharedPreferences(this);
+                sharedPref.edit().putBoolean(
+                        getString(R.string.internal_pref_show_debug),
+                        uiSpec_.debugRenderer.isRunning).apply();
             } break;
 
             case R.id.action_rescan_music: {
@@ -1016,9 +1036,11 @@ public class MainActivity extends AppCompatActivity {
         AudioFileAdapter.AudioEntryInView entry = (AudioFileAdapter.AudioEntryInView) view.getTag();
         int index = entry.position;
 
-        Playlist playlist = playSpec_.activePlaylist;
-        playlist.index = index;
-        enqueueToPlayer(playlist);
+        playSpec_.activePlaylist.index = index;
+        uiSpec_.audioFileAdapter.activeIndex = index;
+        uiSpec_.audioFileAdapter.listView.invalidateViews();
+
+        enqueueToPlayer(playSpec_.activePlaylist);
     }
 
     // NOTE(doyle): When we request a song to be played, the media player has to be prepared first!
@@ -1066,8 +1088,9 @@ public class MainActivity extends AppCompatActivity {
             playBarItems.playPauseButton.setBackgroundResource(R.drawable.ic_pause);
 
             int max = audioService.getTrackDuration();
-            playBarItems.seekBar.setMax(max);
             int position = audioService.getCurrTrackPosition();
+
+            playBarItems.seekBar.setMax(max);
             playBarItems.seekBar.setProgress(position);
 
             String artist = audioService.activeAudio.artist;

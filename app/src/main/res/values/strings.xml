@@ -14,6 +14,7 @@
     <string name="play_bar_current_song_text_view_placeholder">[Artist Name - Title]</string>
 
     <string name="internal_pref_library_init_key">internal_pref_library_init_key</string>
+    <string name="internal_pref_show_debug">internal_pref_show_debug</string>
 
     <string name="menu_main_drawer_library">Library</string>
     <string name="menu_main_drawer_artist">Artist</string>

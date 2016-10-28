@@ -5,9 +5,9 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
+import android.widget.ListView;
 import android.widget.TextView;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import com.dqnt.amber.PlaybackData.AudioFile;
@@ -17,14 +17,23 @@ import com.dqnt.amber.PlaybackData.AudioFile;
  */
 class AudioFileAdapter extends BaseAdapter {
     List<AudioFile> audioList;
-    private LayoutInflater audioInflater;
+    ListView listView;
+    int activeIndex;
 
-    AudioFileAdapter(Context context, List<AudioFile> audioList) {
+    private LayoutInflater audioInflater;
+    private int highlightColor;
+
+    AudioFileAdapter(Context context, ListView listView, List<AudioFile> audioList, int highlightColor) {
         this.audioList = audioList;
+
         audioInflater = LayoutInflater.from(context);
+        activeIndex = -1;
+
+        this.highlightColor = highlightColor;
+        this.listView = listView;
+        listView.setAdapter(this);
     }
 
-    @Override
     public int getCount() {
         int result = 0;
         if (audioList != null) {
@@ -59,6 +68,7 @@ class AudioFileAdapter extends BaseAdapter {
         TextView title;
     }
 
+    int inactiveColor = -1;
     @Override
     public View getView(int position, View convertView, ViewGroup parent) {
         AudioEntryInView audioEntry;
@@ -73,6 +83,10 @@ class AudioFileAdapter extends BaseAdapter {
             audioEntry.title = (TextView) convertView.findViewById(R.id.audio_title);
 
             convertView.setTag(audioEntry);
+
+            if (inactiveColor == -1) {
+                inactiveColor = audioEntry.artist.getCurrentTextColor();
+            }
         } else {
             audioEntry = (AudioEntryInView) convertView.getTag();
         }
@@ -83,6 +97,14 @@ class AudioFileAdapter extends BaseAdapter {
             audioEntry.artist.setText(audio.title);
             audioEntry.title.setText(audio.artist);
             audioEntry.position = position;
+
+            if (activeIndex == position) {
+                audioEntry.artist.setTextColor(highlightColor);
+                audioEntry.title.setTextColor(highlightColor);
+            } else {
+                audioEntry.artist.setTextColor(inactiveColor);
+                audioEntry.title.setTextColor(inactiveColor);
+            }
         }
 
         return convertView;
