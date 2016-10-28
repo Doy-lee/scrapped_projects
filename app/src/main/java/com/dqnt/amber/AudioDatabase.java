@@ -439,7 +439,12 @@ class AudioDatabase extends SQLiteOpenHelper {
         Cursor cursor = db.query(tableName, tableColumns, whereClause, whereArgs, groupBy, having,
                 orderBy);
         cursor.moveToFirst();
-        result = convertCursorEntryToAudioFile(cursor);
+        if (!cursor.isAfterLast()) {
+            result = convertCursorEntryToAudioFile(cursor);
+        } else {
+            Debug.LOG_D(this, "Key entry does not exist: " + key);
+        }
+
         cursor.close();
 
         return result;

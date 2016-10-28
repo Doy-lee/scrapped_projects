@@ -12,10 +12,11 @@ class PlaybackData {
         long dbKey;
         String name;
         Uri uri;
+
         List<AudioFile> contents;
+        int index;
 
         int menuId;
-
         Playlist(String name) {
             this.name = name;
 

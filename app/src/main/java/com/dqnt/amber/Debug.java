@@ -103,8 +103,8 @@ class Debug {
             if (functionCounterSorter == null) functionCounterSorter = new FunctionCounterSorter();
 
             final FunctionTag functionTag = generateFunctionTag(object);
-            final String counterName = functionTag.className + ":"
-                                       + functionTag.methodName + ":" + tag;
+            String counterName = functionTag.className + ":" + functionTag.methodName;
+            if (tag != null) { counterName += tag; }
 
             int index = functionCounter.indexOf(counterName);
             if (index == -1) {

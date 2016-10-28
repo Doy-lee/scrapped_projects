@@ -315,10 +315,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
                 AudioManager.AUDIOFOCUS_GAIN);
 
 
-        if (result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
-            return true;
-        }
-        return false;
+        return (result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED);
     }
 
     private boolean removeAudioFocus() {

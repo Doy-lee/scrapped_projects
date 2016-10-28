@@ -3,15 +3,16 @@ package com.dqnt.amber;
 
 import android.Manifest;
 import android.app.Activity;
+import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
-import android.database.sqlite.SQLiteOpenHelper;
 import android.graphics.PorterDuff;
 import android.graphics.drawable.Drawable;
 import android.media.MediaMetadataRetriever;
@@ -30,7 +31,6 @@ import android.support.v4.content.ContextCompat;
 import android.support.v4.widget.DrawerLayout;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
-import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.SubMenu;
@@ -61,9 +61,8 @@ import static com.dqnt.amber.Debug.CAREFUL_ASSERT;
 import static com.dqnt.amber.Debug.LOG_D;
 
 public class MainActivity extends AppCompatActivity {
+    public static final String BROADCAST_UPDATE_UI = "com.dqnt.amber.BroadcastUpdateUi";
     private static final int AMBER_READ_EXTERNAL_STORAGE_REQUEST = 1;
-    private AudioFileAdapter audioFileAdapter;
-
     private static final int AMBER_VERSION = 1;
 
     private class PlaySpec {
@@ -78,7 +77,6 @@ public class MainActivity extends AppCompatActivity {
         Playlist activePlaylist;
 
         PlaySpec() {
-
             allAudioFiles = new ArrayList<>();
             playlistList = new ArrayList<>();
 
@@ -88,14 +86,33 @@ public class MainActivity extends AppCompatActivity {
             activePlaylist = libraryList;
         }
     }
-    PlaySpec playSpec;
 
-    private AudioService audioService;
+    private class PlayBarItems {
+        Button skipNextButton;
+        Button playPauseButton;
+        Button skipPreviousButton;
+        Button shuffleButton;
+        Button repeatButton;
+        TextView currentSongTextView;
+
+        SeekBar seekBar;
+    }
+
+    private class UiSpec {
+        private AudioFileAdapter audioFileAdapter;
+        private PlayBarItems playBarItems;
+        private Handler handler;
+
+        NavigationView navigationView;
+        Debug.UiUpdateAndRender debugRenderer;
+    }
+
+    private PlaySpec playSpec_;
+    private UiSpec uiSpec_;
+
+    private boolean playlistQueued = false;
     private boolean serviceBound = false;
-
-    private Playlist queuedPlaylist = null;
-    private int queuedPlaylistIndex = -1;
-
+    private AudioService audioService;
     private AudioService.Response audioServiceResponse;
 
     /*
@@ -103,8 +120,6 @@ public class MainActivity extends AppCompatActivity {
      * INITIALISATION CODE
      ***********************************************************************************************
      */
-
-
     // NOTE(doyle): When the Android system creates the connection between the client and service,
     // (bindService()) it calls onServiceConnected() on the ServiceConnection, to deliver the
     // IBinder that the client can use to communicate with the service. (i.e. callback).
@@ -121,12 +136,9 @@ public class MainActivity extends AppCompatActivity {
                 Toast.makeText(getApplicationContext(), "Service Bound", Toast.LENGTH_SHORT).show();
             }
 
-            if (queuedPlaylist != null) {
-                if (Debug.CAREFUL_ASSERT(queuedPlaylistIndex != -1, this,
-                        "Playlist queued, but no index specified")) {
-                    enqueueToPlayer(queuedPlaylistIndex);
-                    queuedPlaylistIndex = -1;
-                }
+            if (playlistQueued) {
+                enqueueToPlayer(playSpec_.activePlaylist);
+                playlistQueued = false;
             }
         }
 
@@ -136,88 +148,8 @@ public class MainActivity extends AppCompatActivity {
         }
     };
 
-    private class PlayBarItems {
-        Button skipNextButton;
-        Button playPauseButton;
-        Button skipPreviousButton;
-        Button shuffleButton;
-        Button repeatButton;
-        TextView currentSongTextView;
-
-        SeekBar seekBar;
-    }
-
-    private Handler handler;
-    PlayBarItems playBarItems;
-    Debug.UiUpdateAndRender debugRenderer;
-    NavigationView navigationView;
     private void amberCreate() {
-        final Toolbar toolbar = (Toolbar) findViewById(R.id.main_toolbar);
-        setSupportActionBar(toolbar);
-        getSupportActionBar().setDefaultDisplayHomeAsUpEnabled(true);
-
-        final DrawerLayout drawerLayout = (DrawerLayout)
-                findViewById(R.id.activity_main_drawer_layout);
-        navigationView = (NavigationView) findViewById(R.id.activity_main_navigation_view);
-        navigationView.setNavigationItemSelectedListener
-                (new NavigationView.OnNavigationItemSelectedListener() {
-                    @Override
-                    public boolean onNavigationItemSelected(@NonNull MenuItem item) {
-                        switch (item.getItemId()) {
-
-                            case R.id.menu_main_drawer_album: {
-                                toolbar.setTitle(getString(R.string.menu_main_drawer_album));
-                            } break;
-
-                            case R.id.menu_main_drawer_artist: {
-                                toolbar.setTitle(getString(R.string.menu_main_drawer_artist));
-                            } break;
-
-                            case R.id.menu_main_drawer_library: {
-                                playSpec.activePlaylist = playSpec.libraryList;
-                                audioFileAdapter.audioList = playSpec.libraryList.contents;
-                                audioFileAdapter.notifyDataSetChanged();
-                            } break;
-
-                            default: {
-                            } break;
-                        }
-
-                        drawerLayout.closeDrawers();
-                        return true;
-                    }
-                });
-
-        // Setting the RelativeLayout as our content view
-        playSpec = new PlaySpec();
-        audioFileAdapter = new AudioFileAdapter(this, null);
-
-        Menu drawerMenu = navigationView.getMenu();
-        for (int i = 0; i < drawerMenu.size(); i++) {
-            MenuItem item = drawerMenu.getItem(i);
-            if (item.isChecked()) {
-                switch (item.getItemId()) {
-                    case R.id.menu_main_drawer_album: {
-                        ASSERT(false);
-                    } break;
-
-                    case R.id.menu_main_drawer_artist: {
-                        ASSERT(false);
-                    } break;
-
-                    case R.id.menu_main_drawer_library: {
-                        audioFileAdapter.audioList = playSpec.libraryList.contents;
-                        audioFileAdapter.notifyDataSetChanged();
-                    } break;
-                }
-
-                break;
-            }
-        }
-
-        ListView audioFileListView = (ListView) findViewById(R.id.main_list_view);
-        audioFileListView.setAdapter(audioFileAdapter);
-
+        initAppData();
 
         /*******************************************************************************************
          * DEBUG INITIALISATION
@@ -240,40 +172,93 @@ public class MainActivity extends AppCompatActivity {
             }
         }
 
-        handler = new Handler();
-        debugRenderer = new Debug.UiUpdateAndRender(this, handler, 10) {
+
+        /*******************************************************************************************
+         * UI INITIALISATION
+         ******************************************************************************************/
+        final Toolbar toolbar = (Toolbar) findViewById(R.id.main_toolbar);
+        setSupportActionBar(toolbar);
+        getSupportActionBar().setDefaultDisplayHomeAsUpEnabled(true);
+
+        uiSpec_ = new UiSpec();
+        uiSpec_.audioFileAdapter = new AudioFileAdapter(this, null);
+
+        ListView audioFileListView = (ListView) findViewById(R.id.main_list_view);
+        audioFileListView.setAdapter(uiSpec_.audioFileAdapter);
+
+        final DrawerLayout drawerLayout = (DrawerLayout)
+                findViewById(R.id.activity_main_drawer_layout);
+        uiSpec_.navigationView = (NavigationView) findViewById(R.id.activity_main_navigation_view);
+        uiSpec_.navigationView.setNavigationItemSelectedListener
+                (new NavigationView.OnNavigationItemSelectedListener() {
+                    @Override
+                    public boolean onNavigationItemSelected(@NonNull MenuItem item) {
+                        switch (item.getItemId()) {
+
+                            case R.id.menu_main_drawer_album: {
+                                toolbar.setTitle(getString(R.string.menu_main_drawer_album));
+                            } break;
+
+                            case R.id.menu_main_drawer_artist: {
+                                toolbar.setTitle(getString(R.string.menu_main_drawer_artist));
+                            } break;
+
+                            case R.id.menu_main_drawer_library: {
+                                playSpec_.activePlaylist = playSpec_.libraryList;
+                                uiSpec_.audioFileAdapter.audioList = playSpec_.libraryList.contents;
+                                uiSpec_.audioFileAdapter.notifyDataSetChanged();
+                            } break;
+
+                            default: {
+                            } break;
+                        }
+
+                        drawerLayout.closeDrawers();
+                        return true;
+                    }
+                });
+
+        Menu drawerMenu = uiSpec_.navigationView.getMenu();
+        for (int i = 0; i < drawerMenu.size(); i++) {
+            MenuItem item = drawerMenu.getItem(i);
+            if (item.isChecked()) {
+                switch (item.getItemId()) {
+                    case R.id.menu_main_drawer_album: {
+                        ASSERT(false);
+                    } break;
+
+                    case R.id.menu_main_drawer_artist: {
+                        ASSERT(false);
+                    } break;
+
+                    case R.id.menu_main_drawer_library: {
+                        uiSpec_.audioFileAdapter.audioList = playSpec_.libraryList.contents;
+                        uiSpec_.audioFileAdapter.notifyDataSetChanged();
+                    } break;
+                }
+
+                break;
+            }
+        }
+
+        uiSpec_.handler = new Handler();
+        uiSpec_.debugRenderer = new Debug.UiUpdateAndRender(this, uiSpec_.handler, 10) {
             @Override
             public void renderElements() {
                 pushVariable("Amber Version", AMBER_VERSION);
                 pushClass(audioService, true, false);
                 pushClass(this, true, false);
+                pushVariable("Service Bound", serviceBound);
 
-                Playlist activePlaylist = playSpec.activePlaylist;
+                Playlist activePlaylist = playSpec_.activePlaylist;
                 pushVariable("Active Playlist", activePlaylist.name);
 
                 pushText(Debug.GENERATE_COUNTER_STRING());
             }
         };
 
-        // NOTE(doyle): Only ask for permissions if version >= Android M (API 23)
-        int readPermissionCheck = ContextCompat.checkSelfPermission(this,
-                Manifest.permission.READ_EXTERNAL_STORAGE);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-
-            // TODO(doyle): If user continually denies permission, show permission rationale
-            if (readPermissionCheck == PackageManager.PERMISSION_DENIED) {
-                String[] permissions = {Manifest.permission.READ_EXTERNAL_STORAGE};
-                ActivityCompat.requestPermissions(this, permissions,
-                        AMBER_READ_EXTERNAL_STORAGE_REQUEST);
-            }
-        }
-
-        if (readPermissionCheck == PackageManager.PERMISSION_GRANTED) {
-            queryDeviceForAudioData();
-        }
-
-
-        playBarItems = new PlayBarItems();
+        uiSpec_.playBarItems = new PlayBarItems();
+        PlayBarItems playBarItems = uiSpec_.playBarItems;
         playBarItems.playPauseButton = (Button) findViewById(R.id.play_bar_play_button);
         playBarItems.skipNextButton = (Button) findViewById(R.id.play_bar_skip_next_button);
         playBarItems.skipPreviousButton = (Button) findViewById(R.id.play_bar_skip_previous_button);
@@ -375,28 +360,14 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        audioServiceResponse = new AudioService.Response() {
-            @Override
-            public void audioHasStartedPlayback() {
-                // NOTE: Fall through to another function for organisation
-                whenAudioHasStarted();
-            }
-        };
+        audioServiceResponse = new AudioServiceResponse(uiSpec_, playSpec_);
 
+        registerUpdateUiReceiver(updateUiReceiver);
     }
 
-    private void queryDeviceForAudioData() {
-        AudioDatabase dbHandle = AudioDatabase.getHandle(this);
-        GetAudioFromDevice task = new GetAudioFromDevice(this, playSpec, dbHandle,
-                audioFileAdapter, navigationView.getMenu());
-        task.execute();
-    }
-
-    /*
-     ***********************************************************************************************
+    /***********************************************************************************************
      * FRAGMENT LIFECYCLE BEHAVIOUR
-     ***********************************************************************************************
-     */
+     **********************************************************************************************/
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -433,8 +404,10 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        Debug.LOG_D(this, Debug.GENERATE_COUNTER_STRING());
+
         if (serviceBound) { unbindService(audioConnection); }
-        Log.d("DEBUG", Debug.GENERATE_COUNTER_STRING());
+        unregisterReceiver(updateUiReceiver);
     }
 
     @Override
@@ -477,16 +450,16 @@ public class MainActivity extends AppCompatActivity {
             } break;
 
             case R.id.action_debug_overlay: {
-                if (debugRenderer != null) debugRenderer.isRunning = !debugRenderer.isRunning;
+                if (uiSpec_.debugRenderer != null)
+                    uiSpec_.debugRenderer.isRunning = !uiSpec_.debugRenderer.isRunning;
             } break;
 
             case R.id.action_rescan_music: {
                 // TODO(doyle): For now just drop all the data in the db
                 AudioDatabase dbHandle = AudioDatabase.getHandle(this);
-                playSpec.allAudioFiles.clear();
-                audioFileAdapter.notifyDataSetChanged();
-                GetAudioFromDevice task = new GetAudioFromDevice
-                        (this, playSpec, dbHandle, audioFileAdapter, navigationView.getMenu());
+                playSpec_.allAudioFiles.clear();
+                uiSpec_.audioFileAdapter.notifyDataSetChanged();
+                GetAudioFromDevice task = new GetAudioFromDevice(this, playSpec_, dbHandle);
                 task.execute();
             } break;
 
@@ -517,8 +490,10 @@ public class MainActivity extends AppCompatActivity {
                             ". Ignoring additional arguments");
                 }
 
-                if (grantResults[0] == PackageManager.PERMISSION_GRANTED) queryDeviceForAudioData();
-                else Debug.LOG_I(this, "Read external storage permission request denied");
+                if (grantResults[0] == PackageManager.PERMISSION_GRANTED)
+                    queryDeviceForAudioData(playSpec_);
+                else
+                    Debug.LOG_I(this, "Read external storage permission request denied");
                 return;
             }
             default: {
@@ -540,28 +515,47 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
-    /*
-     ***********************************************************************************************
-     * ASYNC TASKS FOR QUERYING AUDIO
-     ***********************************************************************************************
-     */
+    /***********************************************************************************************
+     * DATA FUNCTIONS
+     **********************************************************************************************/
+    void initAppData() {
+        playSpec_ = new PlaySpec();
+
+        // NOTE(doyle): Only ask for permissions if version >= Android M (API 23)
+        int readPermissionCheck = ContextCompat.checkSelfPermission(this,
+                Manifest.permission.READ_EXTERNAL_STORAGE);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+
+            // TODO(doyle): If user continually denies permission, show permission rationale
+            if (readPermissionCheck == PackageManager.PERMISSION_DENIED) {
+                String[] permissions = {Manifest.permission.READ_EXTERNAL_STORAGE};
+                ActivityCompat.requestPermissions(this, permissions,
+                        AMBER_READ_EXTERNAL_STORAGE_REQUEST);
+            }
+        }
+
+        if (readPermissionCheck == PackageManager.PERMISSION_GRANTED) {
+            queryDeviceForAudioData(playSpec_);
+        }
+
+    }
+
+    private void queryDeviceForAudioData(PlaySpec playSpec) {
+        AudioDatabase dbHandle = AudioDatabase.getHandle(this);
+        GetAudioFromDevice task = new GetAudioFromDevice(this, playSpec, dbHandle);
+        task.execute();
+    }
 
     private static class GetAudioFromDevice extends AsyncTask<Void, Void, Void> {
         private WeakReference<Activity> weakContext;
         private WeakReference<PlaySpec> weakPlaySpec;
-        private WeakReference<AudioFileAdapter> weakAudioFileAdapter;
-        private WeakReference<Menu> weakSideMenu;
-
         private AudioDatabase dbHandle;
 
-        GetAudioFromDevice(Activity context, PlaySpec playSpec, AudioDatabase dbHandle,
-                           AudioFileAdapter audioFileAdapter, Menu sideMenu) {
+        GetAudioFromDevice(Activity context, PlaySpec playSpec, AudioDatabase dbHandle) {
             this.dbHandle = dbHandle;
 
             this.weakContext = new WeakReference<>(context);
-            this.weakAudioFileAdapter = new WeakReference<>(audioFileAdapter);
             this.weakPlaySpec = new WeakReference<>(playSpec);
-            this.weakSideMenu = new WeakReference<>(sideMenu);
 
         }
 
@@ -702,7 +696,8 @@ public class MainActivity extends AppCompatActivity {
 
             // After load, delete any invalid entries first- so that scanning new files has a
             // smaller list to compare to
-            for (AudioFile audioFile: playSpec.allAudioFiles) {
+            for (int i = 0; i < playSpec.allAudioFiles.size(); i++) {
+                AudioFile audioFile = playSpec.allAudioFiles.get(i);
                 File file = new File(audioFile.uri.getPath());
                 if (!file.exists()) {
                     dbHandle.deleteAudioFileFromDbWithKey(audioFile.dbKey);
@@ -710,7 +705,8 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
 
-            for (Playlist playlist: playSpec.playlistList) {
+            for (int i = 0; i < playSpec.playlistList.size(); i++) {
+                Playlist playlist = playSpec.playlistList.get(i);
                 File file = new File(playlist.uri.getPath());
                 if (!file.exists()) {
                     dbHandle.deletePlaylistFromDbWithKey(playlist.dbKey);
@@ -887,96 +883,31 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         protected void onCancelled() {
-            // TODO(doyle): We don't push the remaining batch here, journal? to resume on return
             super.onCancelled();
-        }
-
-        private void updateSideNavWithPlaylists(final PlaySpec playSpec) {
-            Menu sideMenu = weakSideMenu.get();
-            final List<Playlist> playlistList = playSpec.playlistList;
-            if (sideMenu != null && playlistList != null) {
-
-                sideMenu.removeGroup(MENU_PLAYLIST_GROUP_ID);
-                SubMenu playlistSubMenu = sideMenu.addSubMenu(MENU_PLAYLIST_GROUP_ID,
-                        Menu.NONE, Menu.NONE,
-                        "Playlist");
-                for (final Playlist playlist : playlistList) {
-
-                    int uniqueId;
-                    boolean matched;
-                    do {
-                        // TODO(doyle): Revise this size limit
-                        uniqueId = new Random().nextInt(1024);
-                        matched = false;
-                        for (int i = 0; i < playlistSubMenu.size(); i++) {
-                            MenuItem item = playlistSubMenu.getItem(i);
-                            if (item.getItemId() == uniqueId) {
-                                matched = true;
-                                break;
-                            }
-                        }
-                    } while (matched);
-
-                    MenuItem playlistMenuItem = playlistSubMenu.add
-                            (MENU_PLAYLIST_GROUP_ID, uniqueId, Menu.NONE, playlist.name);
-                    playlist.menuId = playlistMenuItem.getItemId();
-                    playlistMenuItem.
-                            setOnMenuItemClickListener(new MenuItem.OnMenuItemClickListener() {
-
-                        @Override
-                        public boolean onMenuItemClick(MenuItem item) {
-                            // TODO(doyle): Improve linear search maybe? Typical use case doesn't have many playlists
-                            for (int i = 0; i < playlistList.size(); i++) {
-                                Playlist checkPlaylist = playlistList.get(i);
-                                if (checkPlaylist.menuId == item.getItemId()) {
-                                    playSpec.activePlaylist = checkPlaylist;
-                                    updateDisplay();
-                                    break;
-                                }
-                            }
-                            return false;
-                        }
-
-                    });
-                }
-            } else {
-                Debug.LOG_W(this, "PlaySpec got GCed, menu not init with playlist. " +
-                        "Another rescan needed");
-            }
-        }
-
-        final int MENU_PLAYLIST_GROUP_ID = 1000;
-        private void updateDisplay() {
-            final PlaySpec playSpec = weakPlaySpec.get();
-            AudioFileAdapter audioFileAdapter = weakAudioFileAdapter.get();
-            if (audioFileAdapter != null && playSpec != null) {
-                audioFileAdapter.audioList = playSpec.activePlaylist.contents;
-                audioFileAdapter.notifyDataSetChanged();
-                updateSideNavWithPlaylists(playSpec);
-
-            } else {
-                Debug.LOG_W(this, "PlaySpec got GCed, " +
-                        "OSD may not be accurate");
-            }
-
         }
 
         @Override
         protected void onProgressUpdate(Void... args) {
             super.onProgressUpdate();
-            updateDisplay();
+            Context context = weakContext.get();
+            if (context != null) {
+                Intent broadcast = new Intent(MainActivity.BROADCAST_UPDATE_UI);
+                context.sendBroadcast(broadcast);
+            }
         }
 
         @Override
         protected void onPostExecute(Void aVoid) {
             super.onPostExecute(aVoid);
-            updateDisplay();
 
             Context context = weakContext.get();
             if (context == null) {
                 Debug.LOG_W(this, "Context got GC'ed, library init key not written. " +
                         "Another rescan needed");
             } else {
+                Intent broadcast = new Intent(MainActivity.BROADCAST_UPDATE_UI);
+                context.sendBroadcast(broadcast);
+
                 SharedPreferences sharedPref =
                         PreferenceManager.getDefaultSharedPreferences(context);
                 String libraryInitKey = context.getResources().
@@ -991,22 +922,109 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    /*
-     ***********************************************************************************************
-     * AUDIO METADATA MANIPULATION
-     ***********************************************************************************************
-     */
+    /***********************************************************************************************
+     * UI FUNCTIONS
+     **********************************************************************************************/
+    private BroadcastReceiver updateUiReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            Debug.LOG_D(this, "Ui update request received");
+            updateUi(uiSpec_, playSpec_);
+        }
+    };
 
+    private void registerUpdateUiReceiver(BroadcastReceiver receiver) {
+        IntentFilter intentFilter = new IntentFilter(MainActivity.BROADCAST_UPDATE_UI);
+        registerReceiver(receiver, intentFilter);
+    }
+
+    void updateUi(UiSpec uiSpec, PlaySpec playSpec) {
+        Debug.INCREMENT_COUNTER(this, null);
+
+        uiSpec.audioFileAdapter.audioList = playSpec.activePlaylist.contents;
+        uiSpec.audioFileAdapter.notifyDataSetChanged();
+
+        updateSideNavWithPlaylists(playSpec, uiSpec);
+    }
+
+    final int MENU_PLAYLIST_GROUP_ID = 1000;
+    private void updateSideNavWithPlaylists(final PlaySpec playSpec, UiSpec uiSpec) {
+        final List<Playlist> playlistList = playSpec.playlistList;
+        Menu sideMenu = uiSpec.navigationView.getMenu();
+
+        sideMenu.removeGroup(MENU_PLAYLIST_GROUP_ID);
+        SubMenu playlistSubMenu = sideMenu.addSubMenu(MENU_PLAYLIST_GROUP_ID,
+                Menu.NONE, Menu.NONE,
+                "Playlist");
+        for (final Playlist playlist : playlistList) {
+            int uniqueId;
+            boolean matched;
+            do {
+                // TODO(doyle): Revise this size limit
+                uniqueId = new Random().nextInt(1024);
+                matched = false;
+                for (int i = 0; i < playlistSubMenu.size(); i++) {
+                    MenuItem item = playlistSubMenu.getItem(i);
+                    if (item.getItemId() == uniqueId) {
+                        matched = true;
+                        break;
+                    }
+                }
+            } while (matched);
+
+            // TODO(doyle): Recycle old menu items
+            MenuItem playlistMenuItem = playlistSubMenu.add
+                    (MENU_PLAYLIST_GROUP_ID, uniqueId, Menu.NONE, playlist.name);
+            playlist.menuId = playlistMenuItem.getItemId();
+            playlistMenuItem.setOnMenuItemClickListener
+                    (new PlaylistMenuItemClick(uiSpec, playSpec, playlistList));
+        }
+    }
+
+    public class PlaylistMenuItemClick implements MenuItem.OnMenuItemClickListener {
+        private UiSpec uiSpec;
+        private PlaySpec playSpec;
+        private List<Playlist> playlistList;
+
+        PlaylistMenuItemClick(UiSpec uiSpec, PlaySpec playSpec, List<Playlist> playlistList) {
+            this.uiSpec = uiSpec;
+            this.playSpec = playSpec;
+            this.playlistList = playlistList;
+        }
+
+        @Override
+        public boolean onMenuItemClick(MenuItem item) {
+            // TODO(doyle): Improve linear search maybe? Typical use case doesn't have many playlists
+            for (int i = 0; i < playlistList.size(); i++) {
+                Playlist checkPlaylist = playlistList.get(i);
+                if (checkPlaylist.menuId == item.getItemId()) {
+                    playSpec.activePlaylist = checkPlaylist;
+                    updateUi(uiSpec, playSpec);
+                    break;
+                }
+            }
+
+            item.setChecked(true);
+            return false;
+        }
+    }
+
+    /***********************************************************************************************
+     * AUDIO METADATA MANIPULATION
+     **********************************************************************************************/
     public void audioFileClicked(View view) {
         AudioFileAdapter.AudioEntryInView entry = (AudioFileAdapter.AudioEntryInView) view.getTag();
         int index = entry.position;
-        enqueueToPlayer(index);
+
+        Playlist playlist = playSpec_.activePlaylist;
+        playlist.index = index;
+        enqueueToPlayer(playlist);
     }
 
     // NOTE(doyle): When we request a song to be played, the media player has to be prepared first!
     // Playback does not happen until it is complete! We know when playback is complete in the
     // callback
-    private void enqueueToPlayer(int index) {
+    private void enqueueToPlayer(Playlist playlist) {
         if (!serviceBound) {
             LOG_D(this, "Rebinding audio service");
             Intent playerIntent = new Intent(this, AudioService.class);
@@ -1014,12 +1032,11 @@ public class MainActivity extends AppCompatActivity {
             bindService(playerIntent, audioConnection, Context.BIND_AUTO_CREATE);
 
             // NOTE(doyle): Queue playlist whereby onServiceConnected will detect and begin playing
-            queuedPlaylistIndex = index;
+            playlistQueued = true;
         } else {
-            Playlist activePlaylist = playSpec.activePlaylist;
-            List<AudioFile> playlistFiles = activePlaylist.contents;
+            List<AudioFile> playlistFiles = playlist.contents;
 
-            audioService.preparePlaylist(playlistFiles, index);
+            audioService.preparePlaylist(playlistFiles, playlist.index);
             audioService.playMedia();
             // TODO(doyle): Broadcast receiver seems useless here? Whats the point.
             // isn't it better to just directly access the function? The only way we can send
@@ -1033,30 +1050,43 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    public void whenAudioHasStarted() {
-        playBarItems.playPauseButton.setBackgroundResource(R.drawable.ic_pause);
+    public class AudioServiceResponse implements AudioService.Response {
+        UiSpec uiSpec;
+        PlaySpec playSpec;
 
-        int max = audioService.getTrackDuration();
-        playBarItems.seekBar.setMax(max);
-        int position = audioService.getCurrTrackPosition();
-        playBarItems.seekBar.setProgress(position);
+        AudioServiceResponse(UiSpec uiSpec, PlaySpec playSpec) {
+            this.uiSpec = uiSpec;
+            this.playSpec = playSpec;
+        }
 
-        String artist = audioService.activeAudio.artist;
-        String title = audioService.activeAudio.title;
-        playBarItems.currentSongTextView.setText(artist + " - " + title);
+        @Override
+        public void audioHasStartedPlayback() {
+            final PlayBarItems playBarItems = uiSpec.playBarItems;
 
-        runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                if (serviceBound) {
-                    if (audioService.playState == AudioService.PlayState.PLAYING) {
-                        int position = audioService.getCurrTrackPosition();
-                        playBarItems.seekBar.setProgress(position);
+            playBarItems.playPauseButton.setBackgroundResource(R.drawable.ic_pause);
+
+            int max = audioService.getTrackDuration();
+            playBarItems.seekBar.setMax(max);
+            int position = audioService.getCurrTrackPosition();
+            playBarItems.seekBar.setProgress(position);
+
+            String artist = audioService.activeAudio.artist;
+            String title = audioService.activeAudio.title;
+            playBarItems.currentSongTextView.setText(artist + " - " + title);
+
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    if (serviceBound) {
+                        if (audioService.playState == AudioService.PlayState.PLAYING) {
+                            int position = audioService.getCurrTrackPosition();
+                            playBarItems.seekBar.setProgress(position);
+                        }
+                        uiSpec.handler.postDelayed(this, 1000);
                     }
-                    handler.postDelayed(this, 1000);
                 }
-            }
-        });
-    }
+            });
+        }
 
+    }
 }
