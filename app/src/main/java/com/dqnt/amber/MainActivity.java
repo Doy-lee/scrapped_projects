@@ -36,7 +36,6 @@ import android.view.MenuItem;
 import android.view.SubMenu;
 import android.view.View;
 import android.widget.Button;
-import android.widget.ListView;
 import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -60,7 +59,7 @@ import static com.dqnt.amber.Debug.ASSERT;
 import static com.dqnt.amber.Debug.CAREFUL_ASSERT;
 import static com.dqnt.amber.Debug.LOG_D;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements PlaylistViewFragment.Listener {
     public static final String BROADCAST_UPDATE_UI = "com.dqnt.amber.BroadcastUpdateUi";
     private static final int AMBER_READ_EXTERNAL_STORAGE_REQUEST = 1;
     private static final int AMBER_VERSION = 1;
@@ -82,6 +81,7 @@ public class MainActivity extends AppCompatActivity {
 
             libraryList = new Playlist("Library");
             libraryList.contents = allAudioFiles;
+            libraryList.index = -1;
 
             playingPlaylist = libraryList;
         }
@@ -106,16 +106,11 @@ public class MainActivity extends AppCompatActivity {
     private class UiSpec {
         private Toolbar toolbar;
 
-        private AudioFileAdapter audioFileAdapter;
-        private ListView audioListView;
-
         private PlayBarItems playBarItems;
         private Handler handler;
 
         NavigationView navigationView;
         Debug.UiUpdateAndRender debugRenderer;
-
-        Playlist displayingPlaylist;
 
         int primaryColor;
         int accentColor;
@@ -129,6 +124,8 @@ public class MainActivity extends AppCompatActivity {
     private boolean serviceBound;
     private AudioService audioService;
     private AudioService.Response audioServiceResponse;
+
+    private PlaylistViewFragment playlistFragment;
 
     /*
      ***********************************************************************************************
@@ -226,11 +223,12 @@ public class MainActivity extends AppCompatActivity {
         uiSpec_.primaryTextColor
                 = ContextCompat.getColor(this, R.color.primary_text_on_light_background);
 
-        uiSpec_.displayingPlaylist = playSpec_.playingPlaylist;
+        /* Load playlist fragment */
+        playlistFragment =
+                PlaylistViewFragment.newInstance(playSpec_.playingPlaylist);
+        getSupportFragmentManager().beginTransaction()
+                .replace(R.id.main_content_fragment, playlistFragment).commit();
 
-        uiSpec_.audioListView = (ListView) findViewById(R.id.main_list_view);
-        uiSpec_.audioFileAdapter = new AudioFileAdapter(this, uiSpec_.audioListView,
-                uiSpec_.displayingPlaylist, uiSpec_.accentColor);
         uiSpec_.toolbar.setTitle("Library");
 
         final DrawerLayout drawerLayout = (DrawerLayout)
@@ -252,7 +250,8 @@ public class MainActivity extends AppCompatActivity {
 
                             case R.id.menu_main_drawer_library: {
                                 uiSpec_.toolbar.setTitle(getString(R.string.menu_main_drawer_library));
-                                uiSpec_.displayingPlaylist = playSpec_.libraryList;
+                                playlistFragment.uiSpec_.displayingPlaylist
+                                        = playSpec_.libraryList;
                                 updateUiData(uiSpec_, playSpec_);
                             } break;
 
@@ -279,7 +278,7 @@ public class MainActivity extends AppCompatActivity {
                 pushVariable("Active Playlist Size", playingPlaylist.contents.size());
                 pushVariable("Active Index", playingPlaylist.index);
                 pushText("=======================================================================");
-                Playlist displayingPlaylist = uiSpec_.displayingPlaylist;
+                Playlist displayingPlaylist = playlistFragment.uiSpec_.displayingPlaylist;
                 pushVariable("Displaying Playlist", displayingPlaylist.name);
                 pushVariable("Displaying Playlist Size", displayingPlaylist.contents.size());
                 pushVariable("Displaying Index", displayingPlaylist.index);
@@ -313,7 +312,6 @@ public class MainActivity extends AppCompatActivity {
         };
 
         playBarItems.shuffleButton = (Button) findViewById(R.id.play_bar_shuffle_button);
-
         playBarItems.repeatButton = (Button) findViewById(R.id.play_bar_repeat_button);
         playBarItems.repeatIcon = ContextCompat.getDrawable(this, R.drawable.ic_repeat);
 
@@ -346,8 +344,8 @@ public class MainActivity extends AppCompatActivity {
                                     (AudioService.PlaybackSkipDirection.NEXT);
 
                     playSpec_.playingPlaylist.index = newIndex;
-                    if (uiSpec_.displayingPlaylist == playSpec_.playingPlaylist) {
-                        uiSpec_.audioFileAdapter.listView.invalidateViews();
+                    if (playlistFragment.uiSpec_.displayingPlaylist == playSpec_.playingPlaylist) {
+                        playlistFragment.uiSpec_.audioFileAdapter.notifyDataSetChanged();
                     }
                 }
             }
@@ -361,8 +359,8 @@ public class MainActivity extends AppCompatActivity {
                             audioService.skipToNextOrPrevious
                                     (AudioService.PlaybackSkipDirection.PREVIOUS);
                     playSpec_.playingPlaylist.index = newIndex;
-                    if (uiSpec_.displayingPlaylist == playSpec_.playingPlaylist) {
-                        uiSpec_.audioFileAdapter.listView.invalidateViews();
+                    if (playlistFragment.uiSpec_.displayingPlaylist == playSpec_.playingPlaylist) {
+                        playlistFragment.uiSpec_.audioFileAdapter.notifyDataSetChanged();
                     }
                 }
             }
@@ -549,7 +547,8 @@ public class MainActivity extends AppCompatActivity {
                 // TODO(doyle): For now just drop all the data in the db
                 AudioDatabase dbHandle = AudioDatabase.getHandle(this);
                 playSpec_.allAudioFiles.clear();
-                uiSpec_.audioFileAdapter.notifyDataSetChanged();
+
+                playlistFragment.uiSpec_.audioFileAdapter.notifyDataSetChanged();
                 GetAudioFromDevice task = new GetAudioFromDevice(this, playSpec_, dbHandle);
                 task.execute();
             } break;
@@ -1036,23 +1035,16 @@ public class MainActivity extends AppCompatActivity {
 
     void updateUiData(UiSpec uiSpec, PlaySpec playSpec) {
         Debug.INCREMENT_COUNTER(this);
-
-        AudioFileAdapter adapter = uiSpec.audioFileAdapter;
-        /* Update the playlist currently displayed */
-        if (adapter.playlist != uiSpec.displayingPlaylist) {
-            uiSpec.audioFileAdapter.playlist = uiSpec.displayingPlaylist;
-        }
-        uiSpec.audioFileAdapter.notifyDataSetChanged();
-
         updateSideNavWithPlaylists(playSpec, uiSpec);
+
+        playlistFragment.updateUiData();
     }
 
     void updatePlayBarUi(final UiSpec uiSpec) {
         Debug.INCREMENT_COUNTER(this);
 
         final PlayBarItems playBarItems = uiSpec.playBarItems;
-        if (serviceBound) {
-
+        if (serviceBound && audioService.activeAudio != null) {
             int backgroundRes = -1;
             switch(audioService.playState) {
                 case PLAYING:
@@ -1142,9 +1134,10 @@ public class MainActivity extends AppCompatActivity {
                 if (checkPlaylist.menuId == item.getItemId()) {
                     uiSpec.toolbar.setTitle(checkPlaylist.name);
 
-                    uiSpec.displayingPlaylist = checkPlaylist;
-                    if (uiSpec.displayingPlaylist != playSpec.playingPlaylist) {
-                        uiSpec.displayingPlaylist.index = -1;
+                    playlistFragment.uiSpec_.displayingPlaylist = checkPlaylist;
+                    if (playlistFragment.uiSpec_.displayingPlaylist
+                            != playSpec.playingPlaylist) {
+                        playlistFragment.uiSpec_.displayingPlaylist.index = -1;
                     }
                     updateUiData(uiSpec, playSpec);
                     break;
@@ -1159,30 +1152,17 @@ public class MainActivity extends AppCompatActivity {
     /***********************************************************************************************
      * AUDIO METADATA MANIPULATION
      **********************************************************************************************/
-    public void audioFileClicked(View view) {
-        AudioFileAdapter.AudioEntryInView entry = (AudioFileAdapter.AudioEntryInView) view.getTag();
-        int index = entry.position;
-
-        /* Update playlist view after song click */
-        Playlist newPlaylist = uiSpec_.displayingPlaylist;
-        AudioFileAdapter adapter = uiSpec_.audioFileAdapter;
-        if (playSpec_.playingPlaylist != newPlaylist) {
-            playSpec_.playingPlaylist.index = -1;
-            playSpec_.playingPlaylist = newPlaylist;
-            adapter.playlist = newPlaylist;
-        }
-
-        if (newPlaylist.index != index) {
-            newPlaylist.index = index;
-            adapter.listView.invalidateViews();
-        }
-
-        enqueueToPlayer(uiSpec_.displayingPlaylist.contents, index);
-    }
-
     // NOTE(doyle): When we request a song to be played, the media player has to be prepared first!
     // Playback does not happen until it is complete! We know when playback is complete in the
     // callback
+    public void audioFileClicked (Playlist newPlaylist) {
+        if (playSpec_.playingPlaylist != newPlaylist) {
+            playSpec_.playingPlaylist.index = -1;
+            playSpec_.playingPlaylist = newPlaylist;
+        }
+        enqueueToPlayer(newPlaylist.contents, newPlaylist.index);
+    }
+
     private void enqueueToPlayer(List<AudioFile> playlistFiles, int index) {
         if (!serviceBound) {
             LOG_D(this, "Rebinding audio service");

@@ -609,7 +609,8 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
     }
 
     int getCurrTrackPosition() {
-        int result = 0;
+        int result;
+
         if (player != null) {
             result = player.getCurrentPosition();
         } else {
@@ -624,7 +625,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
     int getTrackDuration() {
         int result = 0;
 
-        if (Debug.CAREFUL_ASSERT(activeAudio != null, this, "Active audio is null")) {
+        if (activeAudio != null) {
             result = activeAudio.duration;
         }
 
