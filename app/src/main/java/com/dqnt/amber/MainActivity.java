@@ -92,10 +92,15 @@ public class MainActivity extends AppCompatActivity {
         Button playPauseButton;
         Button skipPreviousButton;
         Button shuffleButton;
+
         Button repeatButton;
+        Drawable repeatIcon;
+
         TextView currentSongTextView;
 
         SeekBar seekBar;
+        Runnable seekBarUpdater;
+        boolean seekBarIsRunning;
     }
 
     private class UiSpec {
@@ -116,8 +121,8 @@ public class MainActivity extends AppCompatActivity {
     private PlaySpec playSpec_;
     private UiSpec uiSpec_;
 
-    private boolean playlistQueued = false;
-    private boolean serviceBound = false;
+    private boolean playlistQueued;
+    private boolean serviceBound;
     private AudioService audioService;
     private AudioService.Response audioServiceResponse;
 
@@ -143,9 +148,33 @@ public class MainActivity extends AppCompatActivity {
             }
 
             if (playlistQueued) {
-                enqueueToPlayer(playSpec_.activePlaylist);
+                Playlist activePlaylist = playSpec_.activePlaylist;
+                enqueueToPlayer(activePlaylist.contents, activePlaylist.index);
                 playlistQueued = false;
             }
+
+            SharedPreferences sharedPref =
+                    PreferenceManager.getDefaultSharedPreferences(audioService);
+
+            boolean onRepeat =
+                    sharedPref.getBoolean(getString(R.string.internal_pref_repeat_mode), false);
+            if (onRepeat) {
+                audioService.repeat = true;
+
+                int activeColor = uiSpec_.accentColor;
+                uiSpec_.playBarItems.repeatButton.getBackground()
+                        .setColorFilter(activeColor, PorterDuff.Mode.SRC_IN);
+            }
+
+            boolean onShuffle =
+                    sharedPref.getBoolean(getString(R.string.internal_pref_shuffle_mode), false);
+            if (onShuffle) {
+                audioService.shuffle = true;
+                int activeColor = uiSpec_.accentColor;
+                uiSpec_.playBarItems.shuffleButton.getBackground()
+                        .setColorFilter(activeColor, PorterDuff.Mode.SRC_IN);
+            }
+
         }
 
         @Override
@@ -262,6 +291,7 @@ public class MainActivity extends AppCompatActivity {
 
                 Playlist activePlaylist = playSpec_.activePlaylist;
                 pushVariable("Active Playlist", activePlaylist.name);
+                pushVariable("Active Index", activePlaylist.index);
 
                 pushText(Debug.GENERATE_COUNTER_STRING());
             }
@@ -277,9 +307,25 @@ public class MainActivity extends AppCompatActivity {
         playBarItems.playPauseButton = (Button) findViewById(R.id.play_bar_play_button);
         playBarItems.skipNextButton = (Button) findViewById(R.id.play_bar_skip_next_button);
         playBarItems.skipPreviousButton = (Button) findViewById(R.id.play_bar_skip_previous_button);
+
         playBarItems.seekBar = (SeekBar) findViewById(R.id.play_bar_seek_bar);
+        playBarItems.seekBarUpdater = new Runnable() {
+            @Override
+            public void run() {
+                if (audioService.playState == AudioService.PlayState.PLAYING) {
+                    int position = audioService.getCurrTrackPosition();
+                    uiSpec_.playBarItems.seekBar.setProgress(position);
+                }
+                uiSpec_.handler.postDelayed(this, 1000);
+                Debug.INCREMENT_COUNTER(this, "Seek bar updater");
+            }
+        };
+
         playBarItems.shuffleButton = (Button) findViewById(R.id.play_bar_shuffle_button);
+
         playBarItems.repeatButton = (Button) findViewById(R.id.play_bar_repeat_button);
+        playBarItems.repeatIcon = ContextCompat.getDrawable(this, R.drawable.ic_repeat);
+
         playBarItems.currentSongTextView = (TextView)
                 findViewById(R.id.play_bar_current_song_text_view);
 
@@ -287,10 +333,12 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onClick(View v) {
                 if (serviceBound) {
-                    if (audioService.playState == AudioService.PlayState.PLAYING) {
+                    AudioService.PlayState state = audioService.playState;
+                    if (state == AudioService.PlayState.PLAYING) {
                         v.setBackgroundResource(R.drawable.ic_play);
                         audioService.pauseMedia();
-                    } else if (audioService.playState == AudioService.PlayState.PAUSED){
+                    } else if (state == AudioService.PlayState.PAUSED
+                            || state == AudioService.PlayState.STOPPED) {
                         v.setBackgroundResource(R.drawable.ic_pause);
                         audioService.playMedia();
                     }
@@ -323,6 +371,7 @@ public class MainActivity extends AppCompatActivity {
                     audioService.repeat = !audioService.repeat;
                     Drawable background = ContextCompat.getDrawable
                             (v.getContext(), R.drawable.ic_repeat);
+
                     int color;
                     if (audioService.repeat) {
                         color = ContextCompat.getColor(v.getContext(), R.color.colorAccent);
@@ -332,6 +381,11 @@ public class MainActivity extends AppCompatActivity {
 
                     background.setColorFilter(color, PorterDuff.Mode.SRC_IN);
                     v.setBackground(background);
+
+                    SharedPreferences sharedPref =
+                            PreferenceManager.getDefaultSharedPreferences(v.getContext());
+                    sharedPref.edit().putBoolean(getString(R.string.internal_pref_repeat_mode),
+                            audioService.repeat).apply();
                 }
             }
         });
@@ -352,6 +406,11 @@ public class MainActivity extends AppCompatActivity {
 
                     background.setColorFilter(color, PorterDuff.Mode.SRC_IN);
                     v.setBackground(background);
+
+                    SharedPreferences sharedPref =
+                            PreferenceManager.getDefaultSharedPreferences(v.getContext());
+                    sharedPref.edit().putBoolean(getString(R.string.internal_pref_shuffle_mode),
+                            audioService.shuffle).apply();
                 }
             }
         });
@@ -399,21 +458,27 @@ public class MainActivity extends AppCompatActivity {
             startService(playerIntent);
             bindService(playerIntent, audioConnection, Context.BIND_AUTO_CREATE);
         }
+
+        updatePlayBarUi(uiSpec_);
+        Debug.TOAST(this, "Activity started", Toast.LENGTH_SHORT);
     }
 
     @Override
     public void onPause() {
         super.onPause();
+        Debug.TOAST(this, "Activity paused", Toast.LENGTH_SHORT);
     }
 
     @Override
     public void onResume() {
         super.onResume();
+        Debug.TOAST(this, "Activity resumed", Toast.LENGTH_SHORT);
     }
 
     @Override
     public void onStop() {
         super.onStop();
+        Debug.TOAST(this, "Activity stopped", Toast.LENGTH_SHORT);
     }
 
     @Override
@@ -423,6 +488,8 @@ public class MainActivity extends AppCompatActivity {
 
         if (serviceBound) { unbindService(audioConnection); }
         unregisterReceiver(updateUiReceiver);
+
+        Debug.TOAST(this, "Activity destroyed", Toast.LENGTH_SHORT);
     }
 
     @Override
@@ -540,6 +607,9 @@ public class MainActivity extends AppCompatActivity {
      **********************************************************************************************/
     void initAppData() {
         playSpec_ = new PlaySpec();
+
+        playlistQueued = false;
+        serviceBound = false;
 
         // NOTE(doyle): Only ask for permissions if version >= Android M (API 23)
         int readPermissionCheck = ContextCompat.checkSelfPermission(this,
@@ -949,7 +1019,7 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onReceive(Context context, Intent intent) {
             Debug.LOG_D(this, "Ui update request received");
-            updateUi(uiSpec_, playSpec_);
+            updateUiData(uiSpec_, playSpec_);
         }
     };
 
@@ -958,13 +1028,67 @@ public class MainActivity extends AppCompatActivity {
         registerReceiver(receiver, intentFilter);
     }
 
-    void updateUi(UiSpec uiSpec, PlaySpec playSpec) {
-        Debug.INCREMENT_COUNTER(this, null);
+    void updateUiData(UiSpec uiSpec, PlaySpec playSpec) {
+        Debug.INCREMENT_COUNTER(this);
 
-        uiSpec.audioFileAdapter.audioList = playSpec.activePlaylist.contents;
-        uiSpec.audioFileAdapter.notifyDataSetChanged();
+        AudioFileAdapter adapter = uiSpec.audioFileAdapter;
+        /* Update the playlist currently displayed */
+        if (adapter.audioList == playSpec.activePlaylist.contents) {
+            uiSpec.audioFileAdapter.audioList = playSpec.activePlaylist.contents;
+            uiSpec.audioFileAdapter.notifyDataSetChanged();
+        }
 
         updateSideNavWithPlaylists(playSpec, uiSpec);
+    }
+
+    void updateSongSelection(PlaySpec playSpec, AudioFileAdapter adapter, int newIndex) {
+        if (playSpec.activePlaylist.index != newIndex) {
+            playSpec.activePlaylist.index = newIndex;
+            adapter.activeIndex = newIndex;
+            adapter.listView.invalidateViews();
+        }
+    }
+
+    void updatePlayBarUi(final UiSpec uiSpec) {
+        Debug.INCREMENT_COUNTER(this);
+
+        final PlayBarItems playBarItems = uiSpec.playBarItems;
+        if (serviceBound) {
+
+            int backgroundRes = -1;
+            switch(audioService.playState) {
+                case PLAYING:
+                    backgroundRes = R.drawable.ic_pause;
+                    break;
+                case PAUSED:
+                case STOPPED:
+                    backgroundRes = R.drawable.ic_play;
+                    break;
+                default:
+                    Debug.CAREFUL_ASSERT(false, this, "Audio service state not handled: "
+                            + audioService.playState.toString());
+                    break;
+            }
+
+            int max = audioService.getTrackDuration();
+            int position = audioService.getCurrTrackPosition();
+
+            playBarItems.seekBar.setMax(max);
+            playBarItems.seekBar.setProgress(position);
+
+            String artist = audioService.activeAudio.artist;
+            String title = audioService.activeAudio.title;
+            playBarItems.currentSongTextView.setText(artist + " - " + title);
+            playBarItems.playPauseButton.setBackgroundResource(backgroundRes);
+
+            if (!playBarItems.seekBarIsRunning) {
+                runOnUiThread(playBarItems.seekBarUpdater);
+                playBarItems.seekBarIsRunning = true;
+            }
+        } else {
+            playBarItems.playPauseButton.setBackgroundResource(R.drawable.ic_play);
+        }
+
     }
 
     final int MENU_PLAYLIST_GROUP_ID = 1000;
@@ -1019,7 +1143,7 @@ public class MainActivity extends AppCompatActivity {
                 Playlist checkPlaylist = playlistList.get(i);
                 if (checkPlaylist.menuId == item.getItemId()) {
                     playSpec.activePlaylist = checkPlaylist;
-                    updateUi(uiSpec, playSpec);
+                    updateUiData(uiSpec, playSpec);
                     break;
                 }
             }
@@ -1036,17 +1160,18 @@ public class MainActivity extends AppCompatActivity {
         AudioFileAdapter.AudioEntryInView entry = (AudioFileAdapter.AudioEntryInView) view.getTag();
         int index = entry.position;
 
-        playSpec_.activePlaylist.index = index;
+        Playlist activePlaylist = playSpec_.activePlaylist;
+        activePlaylist.index = index;
         uiSpec_.audioFileAdapter.activeIndex = index;
         uiSpec_.audioFileAdapter.listView.invalidateViews();
 
-        enqueueToPlayer(playSpec_.activePlaylist);
+        enqueueToPlayer(activePlaylist.contents, activePlaylist.index);
     }
 
     // NOTE(doyle): When we request a song to be played, the media player has to be prepared first!
     // Playback does not happen until it is complete! We know when playback is complete in the
     // callback
-    private void enqueueToPlayer(Playlist playlist) {
+    private void enqueueToPlayer(List<AudioFile> playlistFiles, int index) {
         if (!serviceBound) {
             LOG_D(this, "Rebinding audio service");
             Intent playerIntent = new Intent(this, AudioService.class);
@@ -1056,9 +1181,7 @@ public class MainActivity extends AppCompatActivity {
             // NOTE(doyle): Queue playlist whereby onServiceConnected will detect and begin playing
             playlistQueued = true;
         } else {
-            List<AudioFile> playlistFiles = playlist.contents;
-
-            audioService.preparePlaylist(playlistFiles, playlist.index);
+            audioService.preparePlaylist(playlistFiles, index);
             audioService.playMedia();
             // TODO(doyle): Broadcast receiver seems useless here? Whats the point.
             // isn't it better to just directly access the function? The only way we can send
@@ -1082,33 +1205,9 @@ public class MainActivity extends AppCompatActivity {
         }
 
         @Override
-        public void audioHasStartedPlayback() {
-            final PlayBarItems playBarItems = uiSpec.playBarItems;
-
-            playBarItems.playPauseButton.setBackgroundResource(R.drawable.ic_pause);
-
-            int max = audioService.getTrackDuration();
-            int position = audioService.getCurrTrackPosition();
-
-            playBarItems.seekBar.setMax(max);
-            playBarItems.seekBar.setProgress(position);
-
-            String artist = audioService.activeAudio.artist;
-            String title = audioService.activeAudio.title;
-            playBarItems.currentSongTextView.setText(artist + " - " + title);
-
-            runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    if (serviceBound) {
-                        if (audioService.playState == AudioService.PlayState.PLAYING) {
-                            int position = audioService.getCurrTrackPosition();
-                            playBarItems.seekBar.setProgress(position);
-                        }
-                        uiSpec.handler.postDelayed(this, 1000);
-                    }
-                }
-            });
+        public void audioHasStartedPlayback(int songIndex) {
+            updatePlayBarUi(uiSpec);
+            updateSongSelection(playSpec, uiSpec.audioFileAdapter, songIndex);
         }
 
     }

@@ -262,6 +262,8 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
     }
 
     private void initMediaPlayer() {
+        Debug.CAREFUL_ASSERT(player == null, this, "Player being re-initialised when already init");
+
         /* Init media player */
         player = new MediaPlayer();
 
@@ -272,7 +274,6 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
         player.setOnInfoListener(this);
         player.setOnPreparedListener(this);
         player.setOnSeekCompleteListener(this);
-        player.reset();
         resumePosition = 0;
 
         // NOTE(doyle): Partial wake to allow playback on screen-off
@@ -330,14 +331,12 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
 
     // NOTE(doyle): Callback so we know when playback has actually started, because playback is not
     // immediate. Does not start until player is "prepared()"
-    public interface Response { void audioHasStartedPlayback(); }
+    public interface Response { void audioHasStartedPlayback(int songIndex); }
     Response listener;
 
     // NOTE(doyle): Triggers when track finished/skipped or new track is selected
     @Override
     public void onCompletion(MediaPlayer mp) {
-        // stopMedia();
-        // stopSelf();
         skipToNextOrPrevious(PlaybackSkipDirection.NEXT);
     }
 
@@ -386,7 +385,6 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
         startPlayback();
     }
 
-
     @Override
     public void onAudioFocusChange(int focusState) {
         if (player == null) return;
@@ -399,26 +397,31 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
                 // resume playback
                 player.setVolume(1.0f, 1.0f);
                 playMedia();
+                Debug.TOAST(this, "Audio focus gain, play media", Toast.LENGTH_SHORT);
                 break;
             }
             case AudioManager.AUDIOFOCUS_LOSS: {
                 mediaSessionCompat.setActive(false);
                 // Lost focus for an amount of time stop playback and release media player
+                resumePosition = getCurrTrackPosition();
                 stopMedia();
                 player.release();
                 player = null;
+                Debug.TOAST(this, "Audio focus lost, stop media & release player", Toast.LENGTH_SHORT);
                 break;
             }
             case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT: {
                 // Lost focus for a short time, but we have to stop playback. We don't release the
                 // media player because playback is likely to resume
                 pauseMedia();
+                Debug.TOAST(this, "Audio focus lost transient", Toast.LENGTH_SHORT);
                 break;
             }
 
             // Lost focus for a short time, but it's ok to keep playing at an attenuated level
             case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK: {
                 if (player.isPlaying()) player.setVolume(0.1f, 0.1f);
+                Debug.TOAST(this, "Audio focus lost transient can duck", Toast.LENGTH_SHORT);
                 break;
             }
         }
@@ -480,10 +483,10 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
 
     private void startPlayback() {
         registerBecomingNoisyReceiver();
+        player.seekTo(resumePosition);
         player.start();
-
         playState = PlayState.PLAYING;
-        listener.audioHasStartedPlayback();
+        listener.audioHasStartedPlayback(playlistIndex);
     }
 
     private void controlPlayback(PlayCommand command) {
@@ -496,9 +499,16 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
                 }
 
                 if (playState == PlayState.PAUSED && !queuedNewSong) {
-                    player.seekTo(resumePosition);
                     startPlayback();
                 } else {
+                    int newResumePosition = 0;
+
+                    // NOTE(doyle): If stopped, then player is null and we need to reinit,
+                    // but reinit will reset the resume position, so store it
+                    if (playState == PlayState.STOPPED) {
+                        newResumePosition = resumePosition;
+                    }
+
                     if (player == null) {
                         initMediaPlayer();
                         Debug.INCREMENT_COUNTER(this, "Player reinit from null");
@@ -507,19 +517,18 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
                     try {
                         player.reset();
                         player.setDataSource(getApplicationContext(), activeAudio.uri);
-                        player.prepareAsync();
                         buildNotification(PlayState.PLAYING);
                         queuedNewSong = false;
-                        resumePosition = 0;
-                        return;
+                        resumePosition = newResumePosition;
+                        player.prepareAsync();
                     } catch (IOException e) {
                         e.printStackTrace();
                         Debug.CAREFUL_ASSERT(false, this, "IOException, could not " +
                                 "set file as source: " + activeAudio.uri.getPath());
                         Debug.TOAST(this, "Stopping service, file load error", Toast.LENGTH_SHORT);
                         stopSelf();
-                        return;
                     }
+
                 }
             } break;
 
@@ -563,8 +572,8 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
         PREVIOUS,
     }
 
-    boolean skipToNextOrPrevious(PlaybackSkipDirection direction) {
-        if (!validatePlaylist(this.playlist, this.playlistIndex)) return false;
+    int skipToNextOrPrevious(PlaybackSkipDirection direction) {
+        if (!validatePlaylist(this.playlist, this.playlistIndex)) return 0;
 
         // NOTE(doyle): Repeat takes precedence over shuffle
         if (repeat) {
@@ -588,13 +597,17 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
         activeAudio = playlist.get(playlistIndex);
         playMedia();
 
-        return true;
+        return playlistIndex;
     }
 
     int getCurrTrackPosition() {
         int result = 0;
-        if (Debug.CAREFUL_ASSERT(player != null, this, "Player is null")) {
+        if (player != null) {
             result = player.getCurrentPosition();
+        } else {
+            // NOTE(doyle): In this case, the player may have been released, so we just resume from
+            // the last recorded resume position
+            result = resumePosition;
         }
 
         return result;
@@ -602,8 +615,9 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
 
     int getTrackDuration() {
         int result = 0;
-        if (Debug.CAREFUL_ASSERT(player != null, this, "Player is null")) {
-            result = player.getDuration();
+
+        if (Debug.CAREFUL_ASSERT(activeAudio != null, this, "Active audio is null")) {
+            result = activeAudio.duration;
         }
 
         return result;

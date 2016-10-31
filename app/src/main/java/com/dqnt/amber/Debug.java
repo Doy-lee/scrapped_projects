@@ -97,6 +97,10 @@ class Debug {
 
     private static FunctionCounterList functionCounter = null;
     private static FunctionCounterSorter functionCounterSorter = null;
+    static void INCREMENT_COUNTER(Object object) {
+        INCREMENT_COUNTER(object, null);
+    }
+
     static void INCREMENT_COUNTER(Object object, String tag) {
         if (DEBUG_MODE) {
             if (functionCounter == null) functionCounter = new FunctionCounterList();

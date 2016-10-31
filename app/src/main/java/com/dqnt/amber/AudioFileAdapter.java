@@ -16,8 +16,10 @@ import com.dqnt.amber.PlaybackData.AudioFile;
  * Created by Doyle on 25/09/2016.
  */
 class AudioFileAdapter extends BaseAdapter {
-    List<AudioFile> audioList;
     ListView listView;
+
+    PlaybackData.Playlist playlist;
+    List<AudioFile> audioList;
     int activeIndex;
 
     private LayoutInflater audioInflater;
