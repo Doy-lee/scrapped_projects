@@ -59,7 +59,7 @@ import static com.dqnt.amber.Debug.ASSERT;
 import static com.dqnt.amber.Debug.CAREFUL_ASSERT;
 import static com.dqnt.amber.Debug.LOG_D;
 
-public class MainActivity extends AppCompatActivity implements PlaylistViewFragment.Listener {
+public class MainActivity extends AppCompatActivity implements PlaylistFragment.Listener {
     public static final String BROADCAST_UPDATE_UI = "com.dqnt.amber.BroadcastUpdateUi";
     private static final int AMBER_READ_EXTERNAL_STORAGE_REQUEST = 1;
     private static final int AMBER_VERSION = 1;
@@ -125,8 +125,14 @@ public class MainActivity extends AppCompatActivity implements PlaylistViewFragm
     private AudioService audioService;
     private AudioService.Response audioServiceResponse;
 
-    private PlaylistViewFragment playlistFragment;
+    private enum FragmentType {
+        ARTIST,
+        PLAYLIST
+    }
 
+    private FragmentType activeFragment;
+    private PlaylistFragment playlistFragment = null;
+    private ArtistFragment artistFragment = null;
     /*
      ***********************************************************************************************
      * INITIALISATION CODE
@@ -184,6 +190,44 @@ public class MainActivity extends AppCompatActivity implements PlaylistViewFragm
         }
     };
 
+    private void setAndShowFragment(FragmentType type) {
+        switch (type) {
+            case ARTIST: {
+                if (artistFragment == null) {
+                    artistFragment = ArtistFragment.newInstance(playSpec_.allAudioFiles);
+                }
+
+                if (activeFragment != FragmentType.ARTIST) {
+                    getSupportFragmentManager().beginTransaction()
+                            .replace(R.id.main_content_fragment, artistFragment)
+                            // .addToBackStack(null)
+                            .commit();
+                }
+
+            } break;
+
+            case PLAYLIST: {
+                if (playlistFragment == null) {
+                    playlistFragment = PlaylistFragment.newInstance(playSpec_.playingPlaylist);
+                }
+
+                if (activeFragment != FragmentType.PLAYLIST) {
+                    getSupportFragmentManager().beginTransaction()
+                            .replace(R.id.main_content_fragment, playlistFragment)
+                            // .addToBackStack(null)
+                            .commit();
+                }
+            } break;
+
+            default: {
+                CAREFUL_ASSERT(false, this, "Fragment type not handled: " + type.toString());
+            } break;
+        }
+
+        activeFragment = type;
+    }
+
+
     private void amberCreate() {
         initAppData();
 
@@ -224,11 +268,7 @@ public class MainActivity extends AppCompatActivity implements PlaylistViewFragm
                 = ContextCompat.getColor(this, R.color.primary_text_on_light_background);
 
         /* Load playlist fragment */
-        playlistFragment =
-                PlaylistViewFragment.newInstance(playSpec_.playingPlaylist);
-        getSupportFragmentManager().beginTransaction()
-                .replace(R.id.main_content_fragment, playlistFragment).commit();
-
+        setAndShowFragment(FragmentType.PLAYLIST);
         uiSpec_.toolbar.setTitle("Library");
 
         final DrawerLayout drawerLayout = (DrawerLayout)
@@ -242,16 +282,19 @@ public class MainActivity extends AppCompatActivity implements PlaylistViewFragm
 
                             case R.id.menu_main_drawer_album: {
                                 uiSpec_.toolbar.setTitle(getString(R.string.menu_main_drawer_album));
+                                setAndShowFragment(FragmentType.PLAYLIST);
                             } break;
 
                             case R.id.menu_main_drawer_artist: {
                                 uiSpec_.toolbar.setTitle(getString(R.string.menu_main_drawer_artist));
+                                setAndShowFragment(FragmentType.ARTIST);
                             } break;
 
                             case R.id.menu_main_drawer_library: {
                                 uiSpec_.toolbar.setTitle(getString(R.string.menu_main_drawer_library));
-                                playlistFragment.uiSpec_.displayingPlaylist
-                                        = playSpec_.libraryList;
+
+                                setAndShowFragment(FragmentType.PLAYLIST);
+                                playlistFragment.uiSpec_.displayingPlaylist = playSpec_.libraryList;
                                 updateUiData(uiSpec_, playSpec_);
                             } break;
 
@@ -492,6 +535,15 @@ public class MainActivity extends AppCompatActivity implements PlaylistViewFragm
         unregisterReceiver(updateUiReceiver);
 
         Debug.TOAST(this, "Activity destroyed", Toast.LENGTH_SHORT);
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (getFragmentManager().getBackStackEntryCount() == 0) {
+            super.onBackPressed();
+        } else {
+            getFragmentManager().popBackStack();
+        }
     }
 
     @Override
@@ -1140,6 +1192,7 @@ public class MainActivity extends AppCompatActivity implements PlaylistViewFragm
                         playlistFragment.uiSpec_.displayingPlaylist.index = -1;
                     }
                     updateUiData(uiSpec, playSpec);
+                    setAndShowFragment(FragmentType.PLAYLIST);
                     break;
                 }
             }

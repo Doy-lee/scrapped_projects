@@ -4,6 +4,6 @@
     android:layout_height="match_parent"
     android:paddingLeft="@dimen/activity_horizontal_margin"
     android:paddingRight="@dimen/activity_horizontal_margin"
-    android:id="@+id/fragment_playlist_view"
+    android:id="@+id/fragment_artist_list_view"
     tools:context="com.dqnt.amber.PlaylistFragment">
 </ListView>

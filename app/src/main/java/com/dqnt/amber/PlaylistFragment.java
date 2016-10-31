@@ -18,7 +18,7 @@ import com.dqnt.amber.PlaybackData.Playlist;
 /**
  * A simple {@link Fragment} subclass.
  */
-public class PlaylistViewFragment extends Fragment {
+public class PlaylistFragment extends Fragment {
     static class PlaylistUiSpec {
         Playlist displayingPlaylist;
         AudioFileAdapter audioFileAdapter;
@@ -30,10 +30,10 @@ public class PlaylistViewFragment extends Fragment {
 
     public interface Listener { void audioFileClicked (Playlist newPlaylist); }
 
-    public PlaylistViewFragment() {}
+    public PlaylistFragment() {}
 
-    public static PlaylistViewFragment newInstance(Playlist activePlaylist) {
-        PlaylistViewFragment fragment = new PlaylistViewFragment();
+    public static PlaylistFragment newInstance(Playlist activePlaylist) {
+        PlaylistFragment fragment = new PlaylistFragment();
         fragment.uiSpec_ = new PlaylistUiSpec();
         fragment.uiSpec_.displayingPlaylist = activePlaylist;
 
@@ -71,8 +71,8 @@ public class PlaylistViewFragment extends Fragment {
     @Override
     public void onAttach(Context context) {
         super.onAttach(context);
-        if (context instanceof PlaylistViewFragment.Listener) {
-            listener = (PlaylistViewFragment.Listener) context;
+        if (context instanceof PlaylistFragment.Listener) {
+            listener = (PlaylistFragment.Listener) context;
         } else {
             throw new RuntimeException(context.toString()
                     + " must implement OnFragmentInteractionListener");
