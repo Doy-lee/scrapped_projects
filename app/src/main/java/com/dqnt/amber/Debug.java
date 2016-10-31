@@ -307,34 +307,44 @@ class Debug {
             }
         }
 
-        void pushClass(Object object, boolean ignoreStatic, boolean ignoreFinal) {
+        void pushClass(Object object, boolean ignoreStatic, boolean ignoreFinal, boolean ignoreClassRefs) {
             Activity activity = weakActivity.get();
-            if (activity != null && object != null) {
-                LinearLayout view = (LinearLayout) activity.findViewById(debugViewId);
-                if (view != null) {
-                    Field[] fields = object.getClass().getDeclaredFields();
-                    for (Field field: fields) {
-                        try {
-                            String variableName = field.getName() + ": ";
-                            if (java.lang.reflect.Modifier.isStatic(field.getModifiers())
-                                && ignoreStatic) {
 
-                            } else if (java.lang.reflect.Modifier.isFinal(field.getModifiers())
-                                       && ignoreFinal) {
+            if (activity == null || object == null) { return; }
 
-                            } else {
-                                Object objectValue = field.get(object);
-                                if (objectValue != null) {
-                                    String variableValue = field.get(object).toString();
-                                    createAndRenderDebugText(activity, view, variableName,
-                                                             variableValue);
-                                }
+            LinearLayout view = (LinearLayout) activity.findViewById(debugViewId);
+            if (view == null) { return; }
+
+            Field[] fields = object.getClass().getDeclaredFields();
+            for (Field field: fields) {
+                try {
+                    String variableName = field.getName() + ": ";
+
+                    if (java.lang.reflect.Modifier.isStatic(field.getModifiers())
+                            && ignoreStatic) {
+
+                    } else if (java.lang.reflect.Modifier.isFinal(field.getModifiers())
+                            && ignoreFinal) {
+                    } else {
+                        Object objectValue = field.get(object);
+                        if (objectValue != null) {
+                            String variableValue = field.get(object).toString();
+
+                            // TODO(doyle): Experimental, ignore class objects with no semantic
+                            // info i.e. object has pckname@efbca37 then assume it is a class ref
+                            // and don't print. This has NOT been thought out properly!
+                            if (ignoreClassRefs) {
+                                if (variableValue.matches(".*@\\w{7}")) continue;
                             }
-                        } catch (IllegalAccessException e) {
-                            // NOTE: Not important, just let it print what it can
-                            // e.printStackTrace();
+
+                            createAndRenderDebugText(activity, view, variableName,
+                                    variableValue);
                         }
                     }
+
+                } catch (IllegalAccessException e) {
+                    // NOTE: Not important, just let it print what it can
+                    // e.printStackTrace();
                 }
             }
         }

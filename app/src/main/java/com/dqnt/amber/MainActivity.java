@@ -104,6 +104,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private class UiSpec {
+        private Toolbar toolbar;
+
         private AudioFileAdapter audioFileAdapter;
         private ListView audioListView;
 
@@ -211,19 +213,21 @@ public class MainActivity extends AppCompatActivity {
         /*******************************************************************************************
          * UI INITIALISATION
          ******************************************************************************************/
-        final Toolbar toolbar = (Toolbar) findViewById(R.id.main_toolbar);
-        setSupportActionBar(toolbar);
+        uiSpec_ = new UiSpec();
+
+        uiSpec_.toolbar = (Toolbar) findViewById(R.id.main_toolbar);
+        setSupportActionBar(uiSpec_.toolbar);
         getSupportActionBar().setDefaultDisplayHomeAsUpEnabled(true);
 
-        uiSpec_ = new UiSpec();
         uiSpec_.primaryColor = ContextCompat.getColor(this, R.color.colorPrimary);
         uiSpec_.accentColor = ContextCompat.getColor(this, R.color.colorAccent);
         uiSpec_.primaryTextColor
                 = ContextCompat.getColor(this, R.color.primary_text_on_light_background);
 
         uiSpec_.audioListView = (ListView) findViewById(R.id.main_list_view);
-        uiSpec_.audioFileAdapter = new AudioFileAdapter(this, uiSpec_.audioListView, null,
-                uiSpec_.accentColor);
+        uiSpec_.audioFileAdapter = new AudioFileAdapter(this, uiSpec_.audioListView,
+                playSpec_.activePlaylist.contents, uiSpec_.accentColor);
+        uiSpec_.toolbar.setTitle("Library");
 
         final DrawerLayout drawerLayout = (DrawerLayout)
                 findViewById(R.id.activity_main_drawer_layout);
@@ -235,14 +239,16 @@ public class MainActivity extends AppCompatActivity {
                         switch (item.getItemId()) {
 
                             case R.id.menu_main_drawer_album: {
-                                toolbar.setTitle(getString(R.string.menu_main_drawer_album));
+                                uiSpec_.toolbar.setTitle(getString(R.string.menu_main_drawer_album));
                             } break;
 
                             case R.id.menu_main_drawer_artist: {
-                                toolbar.setTitle(getString(R.string.menu_main_drawer_artist));
+                                uiSpec_.toolbar.setTitle(getString(R.string.menu_main_drawer_artist));
                             } break;
 
                             case R.id.menu_main_drawer_library: {
+                                uiSpec_.toolbar.setTitle(getString(R.string.menu_main_drawer_library));
+
                                 playSpec_.activePlaylist = playSpec_.libraryList;
                                 uiSpec_.audioFileAdapter.audioList = playSpec_.libraryList.contents;
                                 uiSpec_.audioFileAdapter.notifyDataSetChanged();
@@ -257,40 +263,18 @@ public class MainActivity extends AppCompatActivity {
                     }
                 });
 
-        Menu drawerMenu = uiSpec_.navigationView.getMenu();
-        for (int i = 0; i < drawerMenu.size(); i++) {
-            MenuItem item = drawerMenu.getItem(i);
-            if (item.isChecked()) {
-                switch (item.getItemId()) {
-                    case R.id.menu_main_drawer_album: {
-                        ASSERT(false);
-                    } break;
-
-                    case R.id.menu_main_drawer_artist: {
-                        ASSERT(false);
-                    } break;
-
-                    case R.id.menu_main_drawer_library: {
-                        uiSpec_.audioFileAdapter.audioList = playSpec_.libraryList.contents;
-                        uiSpec_.audioFileAdapter.notifyDataSetChanged();
-                    } break;
-                }
-
-                break;
-            }
-        }
-
         uiSpec_.handler = new Handler();
         uiSpec_.debugRenderer = new Debug.UiUpdateAndRender(this, uiSpec_.handler, 10) {
             @Override
             public void renderElements() {
                 pushVariable("Amber Version", AMBER_VERSION);
-                pushClass(audioService, true, false);
-                pushClass(this, true, false);
+                pushClass(audioService, true, false, true);
+                pushClass(this, true, false, true);
                 pushVariable("Service Bound", serviceBound);
 
                 Playlist activePlaylist = playSpec_.activePlaylist;
                 pushVariable("Active Playlist", activePlaylist.name);
+                pushVariable("Active Playlist Size", activePlaylist.contents.size());
                 pushVariable("Active Index", activePlaylist.index);
 
                 pushText(Debug.GENERATE_COUNTER_STRING());
@@ -611,6 +595,7 @@ public class MainActivity extends AppCompatActivity {
         playlistQueued = false;
         serviceBound = false;
 
+        playSpec_.activePlaylist = playSpec_.libraryList;
         // NOTE(doyle): Only ask for permissions if version >= Android M (API 23)
         int readPermissionCheck = ContextCompat.checkSelfPermission(this,
                 Manifest.permission.READ_EXTERNAL_STORAGE);
@@ -627,7 +612,6 @@ public class MainActivity extends AppCompatActivity {
         if (readPermissionCheck == PackageManager.PERMISSION_GRANTED) {
             queryDeviceForAudioData(playSpec_);
         }
-
     }
 
     private void queryDeviceForAudioData(PlaySpec playSpec) {
@@ -1033,10 +1017,10 @@ public class MainActivity extends AppCompatActivity {
 
         AudioFileAdapter adapter = uiSpec.audioFileAdapter;
         /* Update the playlist currently displayed */
-        if (adapter.audioList == playSpec.activePlaylist.contents) {
+        if (adapter.audioList != playSpec.activePlaylist.contents) {
             uiSpec.audioFileAdapter.audioList = playSpec.activePlaylist.contents;
-            uiSpec.audioFileAdapter.notifyDataSetChanged();
         }
+        uiSpec.audioFileAdapter.notifyDataSetChanged();
 
         updateSideNavWithPlaylists(playSpec, uiSpec);
     }
@@ -1142,6 +1126,7 @@ public class MainActivity extends AppCompatActivity {
             for (int i = 0; i < playlistList.size(); i++) {
                 Playlist checkPlaylist = playlistList.get(i);
                 if (checkPlaylist.menuId == item.getItemId()) {
+                    uiSpec.toolbar.setTitle(checkPlaylist.name);
                     playSpec.activePlaylist = checkPlaylist;
                     updateUiData(uiSpec, playSpec);
                     break;

@@ -18,7 +18,6 @@ import com.dqnt.amber.PlaybackData.AudioFile;
 class AudioFileAdapter extends BaseAdapter {
     ListView listView;
 
-    PlaybackData.Playlist playlist;
     List<AudioFile> audioList;
     int activeIndex;
 
@@ -26,9 +25,9 @@ class AudioFileAdapter extends BaseAdapter {
     private int highlightColor;
 
     AudioFileAdapter(Context context, ListView listView, List<AudioFile> audioList, int highlightColor) {
-        this.audioList = audioList;
-
         audioInflater = LayoutInflater.from(context);
+
+        this.audioList = audioList;
         activeIndex = -1;
 
         this.highlightColor = highlightColor;
