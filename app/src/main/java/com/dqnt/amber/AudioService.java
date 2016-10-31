@@ -594,6 +594,14 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
         }
 
         queuedNewSong = true;
+
+        // TODO(doyle): In the event that we stop the player (i.e. audio focus loss) and then
+        // skip to next song, in playMedia, the playstate is at "STOPPED", which will preserve
+        // the resume position from before we stopped. Here we reset it to 0 so the new song will be
+        // correct. Another way would be having another function for resuming so that we can
+        // differentiate between the two. Consider it in the future.
+        resumePosition = 0;
+
         activeAudio = playlist.get(playlistIndex);
         playMedia();
 

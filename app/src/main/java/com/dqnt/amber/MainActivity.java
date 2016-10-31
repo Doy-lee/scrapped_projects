@@ -74,7 +74,7 @@ public class MainActivity extends AppCompatActivity {
         Playlist libraryList;
         List<Playlist> playlistList;
 
-        Playlist activePlaylist;
+        Playlist playingPlaylist;
 
         PlaySpec() {
             allAudioFiles = new ArrayList<>();
@@ -83,7 +83,7 @@ public class MainActivity extends AppCompatActivity {
             libraryList = new Playlist("Library");
             libraryList.contents = allAudioFiles;
 
-            activePlaylist = libraryList;
+            playingPlaylist = libraryList;
         }
     }
 
@@ -114,6 +114,8 @@ public class MainActivity extends AppCompatActivity {
 
         NavigationView navigationView;
         Debug.UiUpdateAndRender debugRenderer;
+
+        Playlist displayingPlaylist;
 
         int primaryColor;
         int accentColor;
@@ -150,7 +152,7 @@ public class MainActivity extends AppCompatActivity {
             }
 
             if (playlistQueued) {
-                Playlist activePlaylist = playSpec_.activePlaylist;
+                Playlist activePlaylist = playSpec_.playingPlaylist;
                 enqueueToPlayer(activePlaylist.contents, activePlaylist.index);
                 playlistQueued = false;
             }
@@ -224,9 +226,11 @@ public class MainActivity extends AppCompatActivity {
         uiSpec_.primaryTextColor
                 = ContextCompat.getColor(this, R.color.primary_text_on_light_background);
 
+        uiSpec_.displayingPlaylist = playSpec_.playingPlaylist;
+
         uiSpec_.audioListView = (ListView) findViewById(R.id.main_list_view);
         uiSpec_.audioFileAdapter = new AudioFileAdapter(this, uiSpec_.audioListView,
-                playSpec_.activePlaylist.contents, uiSpec_.accentColor);
+                uiSpec_.displayingPlaylist, uiSpec_.accentColor);
         uiSpec_.toolbar.setTitle("Library");
 
         final DrawerLayout drawerLayout = (DrawerLayout)
@@ -248,10 +252,8 @@ public class MainActivity extends AppCompatActivity {
 
                             case R.id.menu_main_drawer_library: {
                                 uiSpec_.toolbar.setTitle(getString(R.string.menu_main_drawer_library));
-
-                                playSpec_.activePlaylist = playSpec_.libraryList;
-                                uiSpec_.audioFileAdapter.audioList = playSpec_.libraryList.contents;
-                                uiSpec_.audioFileAdapter.notifyDataSetChanged();
+                                uiSpec_.displayingPlaylist = playSpec_.libraryList;
+                                updateUiData(uiSpec_, playSpec_);
                             } break;
 
                             default: {
@@ -271,12 +273,17 @@ public class MainActivity extends AppCompatActivity {
                 pushClass(audioService, true, false, true);
                 pushClass(this, true, false, true);
                 pushVariable("Service Bound", serviceBound);
-
-                Playlist activePlaylist = playSpec_.activePlaylist;
-                pushVariable("Active Playlist", activePlaylist.name);
-                pushVariable("Active Playlist Size", activePlaylist.contents.size());
-                pushVariable("Active Index", activePlaylist.index);
-
+                pushText("=======================================================================");
+                Playlist playingPlaylist = playSpec_.playingPlaylist;
+                pushVariable("Active Playlist", playingPlaylist.name);
+                pushVariable("Active Playlist Size", playingPlaylist.contents.size());
+                pushVariable("Active Index", playingPlaylist.index);
+                pushText("=======================================================================");
+                Playlist displayingPlaylist = uiSpec_.displayingPlaylist;
+                pushVariable("Displaying Playlist", displayingPlaylist.name);
+                pushVariable("Displaying Playlist Size", displayingPlaylist.contents.size());
+                pushVariable("Displaying Index", displayingPlaylist.index);
+                pushText("=======================================================================");
                 pushText(Debug.GENERATE_COUNTER_STRING());
             }
         };
@@ -334,7 +341,14 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onClick(View v) {
                 if (serviceBound) {
-                    audioService.skipToNextOrPrevious(AudioService.PlaybackSkipDirection.NEXT);
+                    int newIndex =
+                            audioService.skipToNextOrPrevious
+                                    (AudioService.PlaybackSkipDirection.NEXT);
+
+                    playSpec_.playingPlaylist.index = newIndex;
+                    if (uiSpec_.displayingPlaylist == playSpec_.playingPlaylist) {
+                        uiSpec_.audioFileAdapter.listView.invalidateViews();
+                    }
                 }
             }
         });
@@ -343,7 +357,13 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onClick(View v) {
                 if (serviceBound) {
-                    audioService.skipToNextOrPrevious(AudioService.PlaybackSkipDirection.PREVIOUS);
+                    int newIndex =
+                            audioService.skipToNextOrPrevious
+                                    (AudioService.PlaybackSkipDirection.PREVIOUS);
+                    playSpec_.playingPlaylist.index = newIndex;
+                    if (uiSpec_.displayingPlaylist == playSpec_.playingPlaylist) {
+                        uiSpec_.audioFileAdapter.listView.invalidateViews();
+                    }
                 }
             }
         });
@@ -595,7 +615,9 @@ public class MainActivity extends AppCompatActivity {
         playlistQueued = false;
         serviceBound = false;
 
-        playSpec_.activePlaylist = playSpec_.libraryList;
+        /* Set default playlist view to the library view */
+        playSpec_.playingPlaylist = playSpec_.libraryList;
+
         // NOTE(doyle): Only ask for permissions if version >= Android M (API 23)
         int readPermissionCheck = ContextCompat.checkSelfPermission(this,
                 Manifest.permission.READ_EXTERNAL_STORAGE);
@@ -1017,20 +1039,12 @@ public class MainActivity extends AppCompatActivity {
 
         AudioFileAdapter adapter = uiSpec.audioFileAdapter;
         /* Update the playlist currently displayed */
-        if (adapter.audioList != playSpec.activePlaylist.contents) {
-            uiSpec.audioFileAdapter.audioList = playSpec.activePlaylist.contents;
+        if (adapter.playlist != uiSpec.displayingPlaylist) {
+            uiSpec.audioFileAdapter.playlist = uiSpec.displayingPlaylist;
         }
         uiSpec.audioFileAdapter.notifyDataSetChanged();
 
         updateSideNavWithPlaylists(playSpec, uiSpec);
-    }
-
-    void updateSongSelection(PlaySpec playSpec, AudioFileAdapter adapter, int newIndex) {
-        if (playSpec.activePlaylist.index != newIndex) {
-            playSpec.activePlaylist.index = newIndex;
-            adapter.activeIndex = newIndex;
-            adapter.listView.invalidateViews();
-        }
     }
 
     void updatePlayBarUi(final UiSpec uiSpec) {
@@ -1127,7 +1141,11 @@ public class MainActivity extends AppCompatActivity {
                 Playlist checkPlaylist = playlistList.get(i);
                 if (checkPlaylist.menuId == item.getItemId()) {
                     uiSpec.toolbar.setTitle(checkPlaylist.name);
-                    playSpec.activePlaylist = checkPlaylist;
+
+                    uiSpec.displayingPlaylist = checkPlaylist;
+                    if (uiSpec.displayingPlaylist != playSpec.playingPlaylist) {
+                        uiSpec.displayingPlaylist.index = -1;
+                    }
                     updateUiData(uiSpec, playSpec);
                     break;
                 }
@@ -1145,12 +1163,21 @@ public class MainActivity extends AppCompatActivity {
         AudioFileAdapter.AudioEntryInView entry = (AudioFileAdapter.AudioEntryInView) view.getTag();
         int index = entry.position;
 
-        Playlist activePlaylist = playSpec_.activePlaylist;
-        activePlaylist.index = index;
-        uiSpec_.audioFileAdapter.activeIndex = index;
-        uiSpec_.audioFileAdapter.listView.invalidateViews();
+        /* Update playlist view after song click */
+        Playlist newPlaylist = uiSpec_.displayingPlaylist;
+        AudioFileAdapter adapter = uiSpec_.audioFileAdapter;
+        if (playSpec_.playingPlaylist != newPlaylist) {
+            playSpec_.playingPlaylist.index = -1;
+            playSpec_.playingPlaylist = newPlaylist;
+            adapter.playlist = newPlaylist;
+        }
 
-        enqueueToPlayer(activePlaylist.contents, activePlaylist.index);
+        if (newPlaylist.index != index) {
+            newPlaylist.index = index;
+            adapter.listView.invalidateViews();
+        }
+
+        enqueueToPlayer(uiSpec_.displayingPlaylist.contents, index);
     }
 
     // NOTE(doyle): When we request a song to be played, the media player has to be prepared first!
@@ -1192,7 +1219,6 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void audioHasStartedPlayback(int songIndex) {
             updatePlayBarUi(uiSpec);
-            updateSongSelection(playSpec, uiSpec.audioFileAdapter, songIndex);
         }
 
     }

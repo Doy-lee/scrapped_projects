@@ -18,17 +18,14 @@ import com.dqnt.amber.PlaybackData.AudioFile;
 class AudioFileAdapter extends BaseAdapter {
     ListView listView;
 
-    List<AudioFile> audioList;
-    int activeIndex;
-
+    PlaybackData.Playlist playlist;
     private LayoutInflater audioInflater;
     private int highlightColor;
 
-    AudioFileAdapter(Context context, ListView listView, List<AudioFile> audioList, int highlightColor) {
+    AudioFileAdapter(Context context, ListView listView, PlaybackData.Playlist playlist,
+                     int highlightColor) {
         audioInflater = LayoutInflater.from(context);
-
-        this.audioList = audioList;
-        activeIndex = -1;
+        this.playlist = playlist;
 
         this.highlightColor = highlightColor;
         this.listView = listView;
@@ -37,8 +34,8 @@ class AudioFileAdapter extends BaseAdapter {
 
     public int getCount() {
         int result = 0;
-        if (audioList != null) {
-            result = audioList.size();
+        if (playlist != null) {
+            result = playlist.contents.size();
         }
 
         return result;
@@ -46,8 +43,8 @@ class AudioFileAdapter extends BaseAdapter {
 
     @Override
     public Object getItem(int position) {
-        if (audioList != null) {
-            return audioList.get(position);
+        if (playlist != null) {
+            return playlist.contents.get(position);
         }
 
         return null;
@@ -55,8 +52,8 @@ class AudioFileAdapter extends BaseAdapter {
 
     @Override
     public long getItemId(int position) {
-        if (audioList != null) {
-            return audioList.get(position).dbKey;
+        if (playlist != null) {
+            return playlist.contents.get(position).dbKey;
         }
 
         return -1;
@@ -92,14 +89,14 @@ class AudioFileAdapter extends BaseAdapter {
             audioEntry = (AudioEntryInView) convertView.getTag();
         }
 
-        AudioFile audio = audioList.get(position);
+        AudioFile audio = playlist.contents.get(position);
         if (Debug.CAREFUL_ASSERT(audio != null, this, "Audio file is null")) {
             /* Set view data */
             audioEntry.artist.setText(audio.title);
             audioEntry.title.setText(audio.artist);
             audioEntry.position = position;
 
-            if (activeIndex == position) {
+            if (playlist.index == position) {
                 audioEntry.artist.setTextColor(highlightColor);
                 audioEntry.title.setTextColor(highlightColor);
             } else {
