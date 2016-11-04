@@ -490,6 +490,8 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
     }
 
     private void controlPlayback(PlayCommand command) {
+        if (!validatePlaylist(playlist, playlistIndex)) return;
+
         switch (command) {
             case PLAY: {
                 if (!requestAudioFocus()) {
@@ -549,7 +551,6 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
             } break;
 
             case STOP: {
-
                 if (player == null) {
                     Debug.CAREFUL_ASSERT(false, this, "Player is null");
                     return;
@@ -580,7 +581,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
         } else if (repeat) {
             // NOTE(doyle): Repeat takes precedence over shuffle if both are set
         } else if (shuffle) {
-            int newIndex = playlistIndex;
+            int newIndex = new Random().nextInt(playlist.size());
             while (newIndex == playlistIndex) {
                 newIndex = new Random().nextInt(playlist.size());
                 Debug.INCREMENT_COUNTER(this, "Shuffle random index failed count");

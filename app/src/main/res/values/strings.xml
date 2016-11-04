@@ -7,9 +7,14 @@
 
     <!-- Strings related to Settings -->
     <string name="pref_general_settings">General Settings</string>
+
     <string name="pref_music_path_key">pref_music_path_key</string>
     <string name="pref_music_path">Music Path</string>
     <string name="pref_music_path_summ">Location of music files to be used</string>
+
+    <string name="pref_validate_database_on_startup_key">pref_validate_database_on_startup_key</string>
+    <string name="pref_validate_database_on_startup">Validate Datase on Startup</string>
+    <string name="pref_validate_database_on_startup_summ">Auto check for dead/new entries on app startup</string>
 
     <string name="play_bar_current_song_text_view_placeholder">[Artist Name - Title]</string>
 

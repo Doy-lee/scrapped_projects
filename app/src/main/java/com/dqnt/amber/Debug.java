@@ -231,17 +231,17 @@ class Debug {
     abstract static class UiUpdateAndRender implements Runnable {
         private WeakReference<Activity> weakActivity;
         private WeakReference<Handler> weakHandler;
-        private float updateRateInMilliseconds;
+        float updateRateInMilliseconds;
         boolean isRunning;
 
-        UiUpdateAndRender(Activity activity, Handler handler, int updateRateInSeconds) {
+        UiUpdateAndRender(Activity activity, Handler handler, int framesPerSecond) {
             ASSERT(activity != null);
             ASSERT(handler != null);
-            ASSERT(updateRateInSeconds > 0);
+            ASSERT(framesPerSecond > 0);
 
             this.weakActivity = new WeakReference<Activity>(activity);
             this.weakHandler = new WeakReference<Handler>(handler);
-            updateRateInMilliseconds = 1000 / updateRateInSeconds;
+            updateRateInMilliseconds = 1000 / framesPerSecond;
 
             initViewForActivity(activity);
 
@@ -282,12 +282,17 @@ class Debug {
                         int tmp = (int) value;
                         debugValue = String.valueOf(tmp);
 
+                    } else if (value instanceof Float) {
+                        debugValue = String.valueOf(value);
+
                     } else if (value instanceof Boolean) {
                         boolean tmp = (boolean) value;
                         if (tmp) debugValue = "true";
                         else debugValue = "false";
+
                     } else if (value instanceof String) {
                         debugValue = (String) value;
+
                     } else {
                         CAREFUL_ASSERT(false, Debug.class, "Debug type not handled yet");
                     }

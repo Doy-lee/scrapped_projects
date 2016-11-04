@@ -334,25 +334,32 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                 });
 
         uiSpec_.handler = new Handler();
-        uiSpec_.debugRenderer = new Debug.UiUpdateAndRender(this, uiSpec_.handler, 10) {
+        uiSpec_.debugRenderer = new Debug.UiUpdateAndRender(this, uiSpec_.handler, 1) {
             @Override
             public void renderElements() {
+
                 pushVariable("Amber Version", AMBER_VERSION);
                 pushClass(audioService, true, false, true);
                 pushClass(this, true, false, true);
                 pushVariable("Service Bound", serviceBound);
+
                 pushText("=======================================================================");
                 Playlist playingPlaylist = playSpec_.playingPlaylist;
                 pushVariable("Active Playlist", playingPlaylist.name);
                 pushVariable("Active Playlist Size", playingPlaylist.contents.size());
                 pushVariable("Active Index", playingPlaylist.index);
+
                 pushText("=======================================================================");
                 Playlist displayingPlaylist = playlistFragment.playlistUiSpec.displayingPlaylist;
                 pushVariable("Displaying Playlist", displayingPlaylist.name);
                 pushVariable("Displaying Playlist Size", displayingPlaylist.contents.size());
                 pushVariable("Displaying Index", displayingPlaylist.index);
+
                 pushText("=======================================================================");
+                pushVariable("Debug FPS", (1000 / updateRateInMilliseconds));
                 pushText(Debug.GENERATE_COUNTER_STRING());
+
+                Debug.INCREMENT_COUNTER(this, "Debug Renderer");
             }
         };
 
@@ -393,11 +400,11 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                 if (serviceBound) {
                     AudioService.PlayState state = audioService.playState;
                     if (state == AudioService.PlayState.PLAYING) {
-                        v.setBackgroundResource(R.drawable.ic_play);
+                        // TODO(doyle): I don't like this. playMedia() will eventually call updatePlayBarUi on callback .. should we make pause media callback as well?
                         audioService.pauseMedia();
+                        updatePlayBarUi(uiSpec_);
                     } else if (state == AudioService.PlayState.PAUSED
                             || state == AudioService.PlayState.STOPPED) {
-                        v.setBackgroundResource(R.drawable.ic_pause);
                         audioService.playMedia();
                     }
                 }
@@ -506,7 +513,6 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
         });
 
         audioServiceResponse = new AudioServiceResponse(uiSpec_, playSpec_);
-
         registerUpdateUiReceiver(updateUiReceiver);
     }
 
@@ -642,7 +648,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                 playSpec_.allAudioFiles.clear();
 
                 playlistFragment.playlistUiSpec.audioFileAdapter.notifyDataSetChanged();
-                GetAudioFromDevice task = new GetAudioFromDevice(this, playSpec_, dbHandle);
+                GetAudioFromDevice task = new GetAudioFromDevice(this, playSpec_, dbHandle, true);
                 task.execute();
             } break;
 
@@ -731,7 +737,14 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
 
     private void queryDeviceForAudioData(PlaySpec playSpec) {
         AudioDatabase dbHandle = AudioDatabase.getHandle(this);
-        GetAudioFromDevice task = new GetAudioFromDevice(this, playSpec, dbHandle);
+
+        SharedPreferences sharedPref = PreferenceManager.getDefaultSharedPreferences(this);
+        boolean validateDatabase
+                = sharedPref.getBoolean(getString(R.string.pref_validate_database_on_startup_key),
+                false);
+
+        GetAudioFromDevice task = new GetAudioFromDevice(this, playSpec, dbHandle,
+                validateDatabase);
         task.execute();
     }
 
@@ -739,13 +752,16 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
         private WeakReference<Activity> weakContext;
         private WeakReference<PlaySpec> weakPlaySpec;
         private AudioDatabase dbHandle;
+        private boolean validateDatabase;
 
-        GetAudioFromDevice(Activity context, PlaySpec playSpec, AudioDatabase dbHandle) {
+        GetAudioFromDevice(Activity context, PlaySpec playSpec, AudioDatabase dbHandle,
+                           boolean validateDatabase) {
             this.dbHandle = dbHandle;
 
             this.weakContext = new WeakReference<>(context);
             this.weakPlaySpec = new WeakReference<>(playSpec);
 
+            this.validateDatabase = validateDatabase;
         }
 
         private AudioFile updateAndCheckAgainstDbList(Context context,
@@ -871,7 +887,6 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                     });
                 }
             }
-
             publishProgress();
         }
 
@@ -882,12 +897,6 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
              * READ AUDIO FROM MEDIA STORE
              ******************************
              */
-            Activity context = weakContext.get();
-            if (context == null) {
-                Debug.LOG_W(this, "Context got GC'ed. MediaStore not scanned");
-                return null;
-            }
-
             PlaySpec playSpec = weakPlaySpec.get();
             if (playSpec == null) {
                 Debug.LOG_W(this, "playSpec got GC'ed early, scan ending early");
@@ -897,6 +906,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
             // NOTE(doyle): Load whatever is in the DB first and let the user interact with that,
             // then recheck information is valid afterwards
             quickLoadFromDb(playSpec);
+            if (!validateDatabase) return null;
 
             // After load, delete any invalid entries first- so that scanning new files has a
             // smaller list to compare to
@@ -916,6 +926,12 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                     dbHandle.deletePlaylistFromDbWithKey(playlist.dbKey);
                     playSpec.playlistList.remove(playlist);
                 }
+            }
+
+            Activity context = weakContext.get();
+            if (context == null) {
+                Debug.LOG_W(this, "Context got GC'ed. MediaStore not scanned");
+                return null;
             }
 
             /* Start scanning from device */
@@ -1156,34 +1172,48 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
         if (serviceBound && audioService.activeAudio != null) {
             int backgroundRes = -1;
             switch(audioService.playState) {
-                case PLAYING:
+                case PLAYING: {
+                    if (!playBarItems.seekBarIsRunning) {
+                        backgroundRes = R.drawable.ic_pause;
+                        runOnUiThread(playBarItems.seekBarUpdater);
+                        playBarItems.seekBarIsRunning = true;
+                    }
+
+                    int max = audioService.getTrackDuration();
+                    int position = audioService.getCurrTrackPosition();
+
+                    playBarItems.seekBar.setMax(max);
+                    playBarItems.seekBar.setProgress(position);
+
+                    String artist = audioService.activeAudio.artist;
+                    String title = audioService.activeAudio.title;
+                    playBarItems.currentSongTextView.setText(artist + " - " + title);
+
                     backgroundRes = R.drawable.ic_pause;
-                    break;
+                } break;
+
                 case PAUSED:
-                case STOPPED:
+                case STOPPED: {
+                    if (playBarItems.seekBarIsRunning) {
+                        uiSpec.handler.removeCallbacks(playBarItems.seekBarUpdater);
+                        playBarItems.seekBarIsRunning = false;
+                    }
+
                     backgroundRes = R.drawable.ic_play;
-                    break;
-                default:
-                    Debug.CAREFUL_ASSERT(false, this, "Audio service state not handled: "
+                } break;
+
+                default: {
+                    Debug.CAREFUL_ASSERT(false, this, "Audio service state not handled, " +
+                            "playPauseButton forcible set to play icon: "
                             + audioService.playState.toString());
-                    break;
+
+                    // NOTE(doyle): On careful assert fall-through set icon to something sensible
+                    backgroundRes = R.drawable.ic_play;
+                } break;
             }
 
-            int max = audioService.getTrackDuration();
-            int position = audioService.getCurrTrackPosition();
-
-            playBarItems.seekBar.setMax(max);
-            playBarItems.seekBar.setProgress(position);
-
-            String artist = audioService.activeAudio.artist;
-            String title = audioService.activeAudio.title;
-            playBarItems.currentSongTextView.setText(artist + " - " + title);
             playBarItems.playPauseButton.setBackgroundResource(backgroundRes);
 
-            if (!playBarItems.seekBarIsRunning) {
-                runOnUiThread(playBarItems.seekBarUpdater);
-                playBarItems.seekBarIsRunning = true;
-            }
         } else {
             playBarItems.playPauseButton.setBackgroundResource(R.drawable.ic_play);
         }
