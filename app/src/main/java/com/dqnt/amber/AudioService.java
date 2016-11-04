@@ -575,8 +575,10 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
     int skipToNextOrPrevious(PlaybackSkipDirection direction) {
         if (!validatePlaylist(this.playlist, this.playlistIndex)) return 0;
 
-        // NOTE(doyle): Repeat takes precedence over shuffle
-        if (repeat) {
+        if (playlist.size() == 1) {
+            playlistIndex = 0;
+        } else if (repeat) {
+            // NOTE(doyle): Repeat takes precedence over shuffle if both are set
         } else if (shuffle) {
             int newIndex = playlistIndex;
             while (newIndex == playlistIndex) {
@@ -594,7 +596,6 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
         }
 
         queuedNewSong = true;
-
         // TODO(doyle): In the event that we stop the player (i.e. audio focus loss) and then
         // skip to next song, in playMedia, the playstate is at "STOPPED", which will preserve
         // the resume position from before we stopped. Here we reset it to 0 so the new song will be

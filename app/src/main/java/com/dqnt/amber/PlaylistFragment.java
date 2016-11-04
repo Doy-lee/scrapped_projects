@@ -24,18 +24,16 @@ public class PlaylistFragment extends Fragment {
         AudioFileAdapter audioFileAdapter;
         private ListView audioListView;
     }
-    PlaylistUiSpec uiSpec_;
+    PlaylistUiSpec playlistUiSpec;
 
-    Listener listener;
-
-    public interface Listener { void audioFileClicked (Playlist newPlaylist); }
+    AudioFileClickListener listener;
 
     public PlaylistFragment() {}
 
     public static PlaylistFragment newInstance(Playlist activePlaylist) {
         PlaylistFragment fragment = new PlaylistFragment();
-        fragment.uiSpec_ = new PlaylistUiSpec();
-        fragment.uiSpec_.displayingPlaylist = activePlaylist;
+        fragment.playlistUiSpec = new PlaylistUiSpec();
+        fragment.playlistUiSpec.displayingPlaylist = activePlaylist;
 
         // Bundle args = new Bundle();
         // args.putString(ARG_PARAM1, param1);
@@ -59,11 +57,11 @@ public class PlaylistFragment extends Fragment {
         // TODO(doyle): Send in args from main
         int accentColor = ContextCompat.getColor(getContext(), R.color.colorAccent);
 
-        uiSpec_.audioListView =
+        playlistUiSpec.audioListView =
                 (ListView) rootView.findViewById(R.id.fragment_playlist_view);
-        uiSpec_.audioFileAdapter = new AudioFileAdapter(getContext(),
-                uiSpec_.audioListView, uiSpec_.displayingPlaylist, accentColor);
-        uiSpec_.audioListView.setOnItemClickListener(new AudioFileClickListener());
+        playlistUiSpec.audioFileAdapter = new AudioFileAdapter(getContext(),
+                playlistUiSpec.audioListView, playlistUiSpec.displayingPlaylist, accentColor);
+        playlistUiSpec.audioListView.setOnItemClickListener(new AudioFileInAdapterClickListener());
 
         return rootView;
     }
@@ -71,8 +69,8 @@ public class PlaylistFragment extends Fragment {
     @Override
     public void onAttach(Context context) {
         super.onAttach(context);
-        if (context instanceof PlaylistFragment.Listener) {
-            listener = (PlaylistFragment.Listener) context;
+        if (context instanceof AudioFileClickListener) {
+            listener = (AudioFileClickListener) context;
         } else {
             throw new RuntimeException(context.toString()
                     + " must implement OnFragmentInteractionListener");
@@ -92,15 +90,15 @@ public class PlaylistFragment extends Fragment {
     void updateUiData() {
         Debug.INCREMENT_COUNTER(this);
 
-        AudioFileAdapter adapter = uiSpec_.audioFileAdapter;
+        AudioFileAdapter adapter = playlistUiSpec.audioFileAdapter;
         /* Update the playlist currently displayed */
-        if (adapter.playlist != uiSpec_.displayingPlaylist) {
-            uiSpec_.audioFileAdapter.playlist = uiSpec_.displayingPlaylist;
+        if (adapter.playlist != playlistUiSpec.displayingPlaylist) {
+            playlistUiSpec.audioFileAdapter.playlist = playlistUiSpec.displayingPlaylist;
         }
-        uiSpec_.audioFileAdapter.notifyDataSetChanged();
+        playlistUiSpec.audioFileAdapter.notifyDataSetChanged();
     }
 
-    private class AudioFileClickListener implements AdapterView.OnItemClickListener {
+    private class AudioFileInAdapterClickListener implements AdapterView.OnItemClickListener {
         @Override
         public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
 
@@ -109,8 +107,8 @@ public class PlaylistFragment extends Fragment {
             int index = entry.position;
 
             /* Update playlist view after song click */
-            Playlist newPlaylist = uiSpec_.displayingPlaylist;
-            AudioFileAdapter adapter = uiSpec_.audioFileAdapter;
+            Playlist newPlaylist = playlistUiSpec.displayingPlaylist;
+            AudioFileAdapter adapter = playlistUiSpec.audioFileAdapter;
             adapter.playlist = newPlaylist;
 
             if (newPlaylist.index != index) {
@@ -118,7 +116,7 @@ public class PlaylistFragment extends Fragment {
                 adapter.listView.invalidateViews();
             }
 
-            listener.audioFileClicked(uiSpec_.displayingPlaylist);
+            listener.audioFileClicked(playlistUiSpec.displayingPlaylist);
         }
     }
 

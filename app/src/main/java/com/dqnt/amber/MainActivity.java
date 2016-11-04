@@ -59,10 +59,15 @@ import static com.dqnt.amber.Debug.ASSERT;
 import static com.dqnt.amber.Debug.CAREFUL_ASSERT;
 import static com.dqnt.amber.Debug.LOG_D;
 
-public class MainActivity extends AppCompatActivity implements PlaylistFragment.Listener {
+interface AudioFileClickListener {
+    void audioFileClicked (Playlist newPlaylist);
+}
+
+public class MainActivity extends AppCompatActivity implements AudioFileClickListener {
     public static final String BROADCAST_UPDATE_UI = "com.dqnt.amber.BroadcastUpdateUi";
     private static final int AMBER_READ_EXTERNAL_STORAGE_REQUEST = 1;
     private static final int AMBER_VERSION = 1;
+
 
     private class PlaySpec {
         List<AudioFile> allAudioFiles;
@@ -125,14 +130,18 @@ public class MainActivity extends AppCompatActivity implements PlaylistFragment.
     private AudioService audioService;
     private AudioService.Response audioServiceResponse;
 
-    private enum FragmentType {
+    enum FragmentType {
         ARTIST,
-        PLAYLIST
+        ARTIST_FILES,
+        ALBUM,
+        ALBUM_FILES,
+        PLAYLIST,
+        INVALID,
     }
 
     private FragmentType activeFragment;
     private PlaylistFragment playlistFragment = null;
-    private ArtistFragment artistFragment = null;
+    private MetadataFragment metadataFragment = null;
     /*
      ***********************************************************************************************
      * INITIALISATION CODE
@@ -191,19 +200,35 @@ public class MainActivity extends AppCompatActivity implements PlaylistFragment.
     };
 
     private void setAndShowFragment(FragmentType type) {
+
+        String fragmentToolbarTitle = "";
         switch (type) {
+            case ALBUM:
             case ARTIST: {
-                if (artistFragment == null) {
-                    artistFragment = ArtistFragment.newInstance(playSpec_.allAudioFiles);
+                boolean justInitialised = false;
+                if (metadataFragment == null) {
+                    metadataFragment = MetadataFragment.newInstance(this, playSpec_.allAudioFiles,
+                            type);
+                    justInitialised = true;
                 }
 
-                if (activeFragment != FragmentType.ARTIST) {
+                if (activeFragment != type) {
                     getSupportFragmentManager().beginTransaction()
-                            .replace(R.id.main_content_fragment, artistFragment)
+                            .replace(R.id.main_content_fragment, metadataFragment)
                             // .addToBackStack(null)
                             .commit();
+
+                    // NOTE(doyle): If just init, the fragment was just created to which the
+                    // list metadata view will be initialised onCreateView, so we won't need to
+                    // manually switch views
+                    if (!justInitialised) metadataFragment.switchMetadataView(type, null);
                 }
 
+                if (type == FragmentType.ALBUM) {
+                    fragmentToolbarTitle = "Album";
+                } else {
+                    fragmentToolbarTitle = "Artist";
+                }
             } break;
 
             case PLAYLIST: {
@@ -211,12 +236,14 @@ public class MainActivity extends AppCompatActivity implements PlaylistFragment.
                     playlistFragment = PlaylistFragment.newInstance(playSpec_.playingPlaylist);
                 }
 
-                if (activeFragment != FragmentType.PLAYLIST) {
+                if (activeFragment != type) {
                     getSupportFragmentManager().beginTransaction()
                             .replace(R.id.main_content_fragment, playlistFragment)
                             // .addToBackStack(null)
                             .commit();
                 }
+
+                fragmentToolbarTitle = playlistFragment.playlistUiSpec.displayingPlaylist.name;
             } break;
 
             default: {
@@ -224,6 +251,7 @@ public class MainActivity extends AppCompatActivity implements PlaylistFragment.
             } break;
         }
 
+        uiSpec_.toolbar.setTitle(fragmentToolbarTitle);
         activeFragment = type;
     }
 
@@ -281,12 +309,10 @@ public class MainActivity extends AppCompatActivity implements PlaylistFragment.
                         switch (item.getItemId()) {
 
                             case R.id.menu_main_drawer_album: {
-                                uiSpec_.toolbar.setTitle(getString(R.string.menu_main_drawer_album));
-                                setAndShowFragment(FragmentType.PLAYLIST);
+                                setAndShowFragment(FragmentType.ALBUM);
                             } break;
 
                             case R.id.menu_main_drawer_artist: {
-                                uiSpec_.toolbar.setTitle(getString(R.string.menu_main_drawer_artist));
                                 setAndShowFragment(FragmentType.ARTIST);
                             } break;
 
@@ -294,7 +320,7 @@ public class MainActivity extends AppCompatActivity implements PlaylistFragment.
                                 uiSpec_.toolbar.setTitle(getString(R.string.menu_main_drawer_library));
 
                                 setAndShowFragment(FragmentType.PLAYLIST);
-                                playlistFragment.uiSpec_.displayingPlaylist = playSpec_.libraryList;
+                                playlistFragment.playlistUiSpec.displayingPlaylist = playSpec_.libraryList;
                                 updateUiData(uiSpec_, playSpec_);
                             } break;
 
@@ -321,7 +347,7 @@ public class MainActivity extends AppCompatActivity implements PlaylistFragment.
                 pushVariable("Active Playlist Size", playingPlaylist.contents.size());
                 pushVariable("Active Index", playingPlaylist.index);
                 pushText("=======================================================================");
-                Playlist displayingPlaylist = playlistFragment.uiSpec_.displayingPlaylist;
+                Playlist displayingPlaylist = playlistFragment.playlistUiSpec.displayingPlaylist;
                 pushVariable("Displaying Playlist", displayingPlaylist.name);
                 pushVariable("Displaying Playlist Size", displayingPlaylist.contents.size());
                 pushVariable("Displaying Index", displayingPlaylist.index);
@@ -387,8 +413,8 @@ public class MainActivity extends AppCompatActivity implements PlaylistFragment.
                                     (AudioService.PlaybackSkipDirection.NEXT);
 
                     playSpec_.playingPlaylist.index = newIndex;
-                    if (playlistFragment.uiSpec_.displayingPlaylist == playSpec_.playingPlaylist) {
-                        playlistFragment.uiSpec_.audioFileAdapter.notifyDataSetChanged();
+                    if (playlistFragment.playlistUiSpec.displayingPlaylist == playSpec_.playingPlaylist) {
+                        playlistFragment.playlistUiSpec.audioFileAdapter.notifyDataSetChanged();
                     }
                 }
             }
@@ -402,8 +428,8 @@ public class MainActivity extends AppCompatActivity implements PlaylistFragment.
                             audioService.skipToNextOrPrevious
                                     (AudioService.PlaybackSkipDirection.PREVIOUS);
                     playSpec_.playingPlaylist.index = newIndex;
-                    if (playlistFragment.uiSpec_.displayingPlaylist == playSpec_.playingPlaylist) {
-                        playlistFragment.uiSpec_.audioFileAdapter.notifyDataSetChanged();
+                    if (playlistFragment.playlistUiSpec.displayingPlaylist == playSpec_.playingPlaylist) {
+                        playlistFragment.playlistUiSpec.audioFileAdapter.notifyDataSetChanged();
                     }
                 }
             }
@@ -540,7 +566,22 @@ public class MainActivity extends AppCompatActivity implements PlaylistFragment.
     @Override
     public void onBackPressed() {
         if (getFragmentManager().getBackStackEntryCount() == 0) {
-            super.onBackPressed();
+
+            // TODO(doyle): Add notion of home screen and return to home view
+            if (activeFragment != FragmentType.PLAYLIST) {
+                setAndShowFragment(FragmentType.PLAYLIST);
+
+                Menu sideMenu = uiSpec_.navigationView.getMenu();
+                for (int i = 0; i < sideMenu.size(); i++) {
+                    MenuItem item = sideMenu.getItem(i);
+                    if (item.getTitle().equals("Library")) {
+                        item.setChecked(true);
+                    }
+                }
+
+            } else {
+                super.onBackPressed();
+            }
         } else {
             getFragmentManager().popBackStack();
         }
@@ -600,7 +641,7 @@ public class MainActivity extends AppCompatActivity implements PlaylistFragment.
                 AudioDatabase dbHandle = AudioDatabase.getHandle(this);
                 playSpec_.allAudioFiles.clear();
 
-                playlistFragment.uiSpec_.audioFileAdapter.notifyDataSetChanged();
+                playlistFragment.playlistUiSpec.audioFileAdapter.notifyDataSetChanged();
                 GetAudioFromDevice task = new GetAudioFromDevice(this, playSpec_, dbHandle);
                 task.execute();
             } break;
@@ -668,6 +709,7 @@ public class MainActivity extends AppCompatActivity implements PlaylistFragment.
 
         /* Set default playlist view to the library view */
         playSpec_.playingPlaylist = playSpec_.libraryList;
+        activeFragment = FragmentType.INVALID;
 
         // NOTE(doyle): Only ask for permissions if version >= Android M (API 23)
         int readPermissionCheck = ContextCompat.checkSelfPermission(this,
@@ -1186,10 +1228,10 @@ public class MainActivity extends AppCompatActivity implements PlaylistFragment.
                 if (checkPlaylist.menuId == item.getItemId()) {
                     uiSpec.toolbar.setTitle(checkPlaylist.name);
 
-                    playlistFragment.uiSpec_.displayingPlaylist = checkPlaylist;
-                    if (playlistFragment.uiSpec_.displayingPlaylist
+                    playlistFragment.playlistUiSpec.displayingPlaylist = checkPlaylist;
+                    if (playlistFragment.playlistUiSpec.displayingPlaylist
                             != playSpec.playingPlaylist) {
-                        playlistFragment.uiSpec_.displayingPlaylist.index = -1;
+                        playlistFragment.playlistUiSpec.displayingPlaylist.index = -1;
                     }
                     updateUiData(uiSpec, playSpec);
                     setAndShowFragment(FragmentType.PLAYLIST);
