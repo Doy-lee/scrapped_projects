@@ -840,6 +840,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
         }
 
         private void quickLoadFromDb(PlaySpec playSpec) {
+            // TODO(doyle): Use the sort param in query from db
             List<AudioFile> fileListFromDb = dbHandle.getAllAudioFiles();
             List<Playlist> playlistListFromDb = dbHandle.getAllPlaylists();
 
@@ -847,6 +848,13 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                 if (fileListFromDb.size() > 0) {
                     playSpec.allAudioFiles.clear();
                     playSpec.allAudioFiles.addAll(fileListFromDb);
+
+                    Collections.sort(playSpec.allAudioFiles, new Comparator<AudioFile>() {
+                        @Override
+                        public int compare(AudioFile a, AudioFile b) {
+                            return a.title.compareTo(b.title);
+                        }
+                    });
                 }
             }
 
@@ -854,6 +862,13 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                 if (playlistListFromDb.size() > 0) {
                     playSpec.playlistList.clear();
                     playSpec.playlistList.addAll(playlistListFromDb);
+
+                    Collections.sort(playSpec.playlistList, new Comparator<Playlist>() {
+                        @Override
+                        public int compare(Playlist a, Playlist b) {
+                            return a.name.compareTo(b.name);
+                        }
+                    });
                 }
             }
 
