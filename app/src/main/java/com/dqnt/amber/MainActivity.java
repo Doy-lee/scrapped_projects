@@ -344,6 +344,15 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                 pushVariable("Service Bound", serviceBound);
 
                 pushText("=======================================================================");
+                if (serviceBound) {
+                    AudioFile activeAudio = audioService.activeAudio;
+                    if (activeAudio == null)
+                        pushText("Audio Title: NULL");
+                    else
+                        pushVariable("Audio Title", activeAudio.title);
+                }
+
+                pushText("=======================================================================");
                 Playlist playingPlaylist = playSpec_.playingPlaylist;
                 pushVariable("Active Playlist", playingPlaylist.name);
                 pushVariable("Active Playlist Size", playingPlaylist.contents.size());
@@ -496,9 +505,9 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
         playBarItems.seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                if (serviceBound && fromUser) {
+                if (serviceBound && fromUser && audioService.activeAudio != null) {
                     audioService.seekTo(progress);
-                    audioService.resumePosition = progress;
+                    audioService.resumePosInMsec = progress;
                 }
             }
 

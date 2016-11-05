@@ -76,7 +76,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
     AudioFile activeAudio;
 
     private MediaPlayer player;
-    int resumePosition;
+    int resumePosInMsec;
 
     // NOTE(doyle): The system calls this method when the service is first created, to perform
     // one-time setup procedures (before it calls either onStartCommand() or onBind()). If the
@@ -84,6 +84,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
     public void onCreate() {
         super.onCreate();
 
+        activeAudio = null;
         // NOTE(doyle): Manage incoming phone calls during playback
         registerCallStateListener();
         // TODO(doyle): Revise broadcast audio
@@ -262,7 +263,10 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
     }
 
     private void initMediaPlayer() {
-        Debug.CAREFUL_ASSERT(player == null, this, "Player being re-initialised when already init");
+        if (player != null) {
+            Debug.LOG_E(this, "Player being re-init when already initialised");
+            return;
+        }
 
         /* Init media player */
         player = new MediaPlayer();
@@ -274,7 +278,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
         player.setOnInfoListener(this);
         player.setOnPreparedListener(this);
         player.setOnSeekCompleteListener(this);
-        resumePosition = 0;
+        resumePosInMsec = 0;
 
         // NOTE(doyle): Partial wake to allow playback on screen-off
         player.setWakeMode(getApplicationContext(), PowerManager.PARTIAL_WAKE_LOCK);
@@ -311,10 +315,12 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
     }
 
     private boolean requestAudioFocus() {
-        audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        if (audioManager == null) {
+            audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        }
+
         int result = audioManager.requestAudioFocus(this, AudioManager.STREAM_MUSIC,
                 AudioManager.AUDIOFOCUS_GAIN);
-
 
         return (result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED);
     }
@@ -395,19 +401,22 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
                 /* Indicate media session ready to receive media commands */
                 mediaSessionCompat.setActive(true);
                 // resume playback
-                player.setVolume(1.0f, 1.0f);
+                player.setVolume(1.0f, 1.f);
                 playMedia();
                 Debug.TOAST(this, "Audio focus gain, play media", Toast.LENGTH_SHORT);
+
+                Debug.INCREMENT_COUNTER(this, "Focus gained");
                 break;
             }
             case AudioManager.AUDIOFOCUS_LOSS: {
                 mediaSessionCompat.setActive(false);
                 // Lost focus for an amount of time stop playback and release media player
-                resumePosition = getCurrTrackPosition();
+                resumePosInMsec = getCurrTrackPosition();
                 stopMedia();
                 player.release();
                 player = null;
                 Debug.TOAST(this, "Audio focus lost, stop media & release player", Toast.LENGTH_SHORT);
+                Debug.INCREMENT_COUNTER(this, "Focus lost");
                 break;
             }
             case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT: {
@@ -415,6 +424,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
                 // media player because playback is likely to resume
                 pauseMedia();
                 Debug.TOAST(this, "Audio focus lost transient", Toast.LENGTH_SHORT);
+                Debug.INCREMENT_COUNTER(this, "Focus lost transient");
                 break;
             }
 
@@ -422,6 +432,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
             case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK: {
                 if (player.isPlaying()) player.setVolume(0.1f, 0.1f);
                 Debug.TOAST(this, "Audio focus lost transient can duck", Toast.LENGTH_SHORT);
+                Debug.INCREMENT_COUNTER(this, "Focus lost transient can duck");
                 break;
             }
         }
@@ -483,7 +494,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
 
     private void startPlayback() {
         registerBecomingNoisyReceiver();
-        player.seekTo(resumePosition);
+        player.seekTo(resumePosInMsec);
         player.start();
         playState = PlayState.PLAYING;
         listener.audioHasStartedPlayback(playlistIndex);
@@ -508,7 +519,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
                     // NOTE(doyle): If stopped, then player is null and we need to reinit,
                     // but reinit will reset the resume position, so store it
                     if (playState == PlayState.STOPPED) {
-                        newResumePosition = resumePosition;
+                        newResumePosition = resumePosInMsec;
                     }
 
                     if (player == null) {
@@ -521,7 +532,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
                         player.setDataSource(getApplicationContext(), activeAudio.uri);
                         buildNotification(PlayState.PLAYING);
                         queuedNewSong = false;
-                        resumePosition = newResumePosition;
+                        resumePosInMsec = newResumePosition;
                         player.prepareAsync();
                     } catch (IOException e) {
                         e.printStackTrace();
@@ -544,7 +555,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
                 if (player.isPlaying()) {
                     player.pause();
                     playState = PlayState.PAUSED;
-                    resumePosition = player.getCurrentPosition();
+                    resumePosInMsec = player.getCurrentPosition();
                     unregisterReceiver(becomingNoisyReceiver);
                     return;
                 }
@@ -565,8 +576,6 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
             } break;
         }
     }
-
-
 
     enum PlaybackSkipDirection {
         NEXT,
@@ -602,7 +611,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
         // the resume position from before we stopped. Here we reset it to 0 so the new song will be
         // correct. Another way would be having another function for resuming so that we can
         // differentiate between the two. Consider it in the future.
-        resumePosition = 0;
+        resumePosInMsec = 0;
 
         activeAudio = playlist.get(playlistIndex);
         playMedia();
@@ -618,7 +627,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
         } else {
             // NOTE(doyle): In this case, the player may have been released, so we just resume from
             // the last recorded resume position
-            result = resumePosition;
+            result = resumePosInMsec;
         }
 
         return result;
@@ -635,8 +644,10 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
     }
 
     void seekTo(int msec) {
-        if (Debug.CAREFUL_ASSERT(player != null, this, "Player is null")) {
+        if (player != null && playState == PlayState.PLAYING) {
             player.seekTo(msec);
+        } else {
+            resumePosInMsec = msec;
         }
     }
 
