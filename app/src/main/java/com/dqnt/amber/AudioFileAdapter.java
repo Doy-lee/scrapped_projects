@@ -42,7 +42,7 @@ class AudioFileAdapter extends BaseAdapter {
     }
 
     @Override
-    public Object getItem(int position) {
+    public AudioFile getItem(int position) {
         if (playlist != null) {
             return playlist.contents.get(position);
         }

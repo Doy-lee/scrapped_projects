@@ -71,6 +71,8 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
     boolean shuffle;
     boolean repeat;
 
+    boolean wasPlayingBeforeAudioDuck;
+
     private List<AudioFile> playlist;
     private int playlistIndex;
     AudioFile activeAudio;
@@ -304,7 +306,6 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
 
         // TODO(doyle):  Think about focus only requested during playback
         removeAudioFocus();
-
         removeNotification();
 
         // TODO(doyle): Revise broadcast audio
@@ -399,12 +400,15 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
         switch (focusState) {
             case AudioManager.AUDIOFOCUS_GAIN: {
                 /* Indicate media session ready to receive media commands */
-                mediaSessionCompat.setActive(true);
-                // resume playback
-                player.setVolume(1.0f, 1.f);
-                playMedia();
-                Debug.TOAST(this, "Audio focus gain, play media", Toast.LENGTH_SHORT);
 
+                if (wasPlayingBeforeAudioDuck) {
+                    mediaSessionCompat.setActive(true);
+                    // resume playback
+                    player.setVolume(1.0f, 1.f);
+                    wasPlayingBeforeAudioDuck = false;
+                }
+
+                Debug.TOAST(this, "Audio focus gain, play media", Toast.LENGTH_SHORT);
                 Debug.INCREMENT_COUNTER(this, "Focus gained");
                 break;
             }
@@ -430,7 +434,11 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
 
             // Lost focus for a short time, but it's ok to keep playing at an attenuated level
             case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK: {
-                if (player.isPlaying()) player.setVolume(0.1f, 0.1f);
+                if (playState == PlayState.PLAYING) {
+                    player.setVolume(0.1f, 0.1f);
+                    wasPlayingBeforeAudioDuck = true;
+                }
+
                 Debug.TOAST(this, "Audio focus lost transient can duck", Toast.LENGTH_SHORT);
                 Debug.INCREMENT_COUNTER(this, "Focus lost transient can duck");
                 break;

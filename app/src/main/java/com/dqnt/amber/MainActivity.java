@@ -69,7 +69,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
     private static final int AMBER_VERSION = 1;
 
 
-    private class PlaySpec {
+    class PlaySpec {
         List<AudioFile> allAudioFiles;
 
         // NOTE(doyle): Permanent list that has all the files the app has scanned, separate from the
@@ -90,7 +90,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
         }
     }
 
-    private class PlayBarItems {
+    class PlayBarItems {
         Button skipNextButton;
         Button playPauseButton;
         Button skipPreviousButton;
@@ -106,11 +106,11 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
         boolean seekBarIsRunning;
     }
 
-    private class UiSpec {
-        private Toolbar toolbar;
+    class UiSpec {
+        Toolbar toolbar;
 
-        private PlayBarItems playBarItems;
-        private Handler handler;
+        PlayBarItems playBarItems;
+        Handler handler;
 
         NavigationView navigationView;
         Debug.UiUpdateAndRender debugRenderer;
@@ -120,8 +120,8 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
         int primaryTextColor;
     }
 
-    private PlaySpec playSpec_;
-    private UiSpec uiSpec_;
+    PlaySpec playSpec_;
+    UiSpec uiSpec_;
 
     private boolean playlistQueued;
     private boolean serviceBound;
@@ -138,8 +138,8 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
     }
 
     private FragmentType activeFragment;
-    private PlaylistFragment playlistFragment = null;
-    private MetadataFragment metadataFragment = null;
+    PlaylistFragment playlistFragment = null;
+    MetadataFragment metadataFragment = null;
     /*
      ***********************************************************************************************
      * INITIALISATION CODE
@@ -458,14 +458,13 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                     Drawable background = ContextCompat.getDrawable
                             (v.getContext(), R.drawable.ic_repeat);
 
-                    int color;
                     if (audioService.repeat) {
-                        color = ContextCompat.getColor(v.getContext(), R.color.colorAccent);
+                        int color = ContextCompat.getColor(v.getContext(), R.color.colorAccent);
+                        background.setColorFilter(color, PorterDuff.Mode.SRC_IN);
                     } else {
-                        color = ContextCompat.getColor(v.getContext(), R.color.black_87_percent);
+                        background.setColorFilter(null);
                     }
 
-                    background.setColorFilter(color, PorterDuff.Mode.SRC_IN);
                     v.setBackground(background);
 
                     SharedPreferences sharedPref =
@@ -483,14 +482,13 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                     audioService.shuffle = !audioService.shuffle;
                     Drawable background = ContextCompat.getDrawable
                             (v.getContext(), R.drawable.ic_shuffle);
-                    int color;
                     if (audioService.shuffle) {
-                        color = ContextCompat.getColor(v.getContext(), R.color.colorAccent);
+                        int color = ContextCompat.getColor(v.getContext(), R.color.colorAccent);
+                        background.setColorFilter(color, PorterDuff.Mode.SRC_IN);
                     } else {
-                        color = ContextCompat.getColor(v.getContext(), R.color.black_87_percent);
+                        background.setColorFilter(null);
                     }
 
-                    background.setColorFilter(color, PorterDuff.Mode.SRC_IN);
                     v.setBackground(background);
 
                     SharedPreferences sharedPref =
