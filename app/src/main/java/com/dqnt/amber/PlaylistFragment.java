@@ -6,6 +6,7 @@ import android.os.Bundle;
 import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
 import android.support.v4.content.ContextCompat;
+import android.support.v7.widget.Toolbar;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -90,8 +91,15 @@ public class PlaylistFragment extends Fragment {
     void updateUiData() {
         Debug.INCREMENT_COUNTER(this);
 
-        AudioFileAdapter adapter = playlistUiSpec.audioFileAdapter;
+        if (playlistUiSpec.displayingPlaylist == null) {
+            return;
+        }
+
         /* Update the playlist currently displayed */
+        AudioFileAdapter adapter = playlistUiSpec.audioFileAdapter;
+        // NOTE(doyle): Update called before view is created, which is fine.
+        if (adapter == null) return;
+
         if (adapter.playlist != playlistUiSpec.displayingPlaylist) {
             playlistUiSpec.audioFileAdapter.playlist = playlistUiSpec.displayingPlaylist;
         }

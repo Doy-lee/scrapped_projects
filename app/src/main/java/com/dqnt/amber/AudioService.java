@@ -474,12 +474,9 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
     boolean queuedNewSong = false;
     void preparePlaylist(List<AudioFile> playlist, int index) {
         /* Queue playlist and song */
-        if (validatePlaylist(playlist, index)) {
-            this.playlist = playlist;
-            this.playlistIndex = index;
-            activeAudio = playlist.get(playlistIndex);
-            queuedNewSong = true;
-        }
+        this.playlist = playlist;
+        this.playlistIndex = index;
+        queuedNewSong = true;
     }
 
     void playMedia() { controlPlayback(PlayCommand.PLAY); }
@@ -502,6 +499,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
 
     private void controlPlayback(PlayCommand command) {
         if (!validatePlaylist(playlist, playlistIndex)) return;
+        activeAudio = playlist.get(playlistIndex);
 
         switch (command) {
             case PLAY: {
@@ -583,7 +581,10 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
     }
 
     int skipToNextOrPrevious(PlaybackSkipDirection direction) {
-        if (!validatePlaylist(this.playlist, this.playlistIndex)) return 0;
+        // NOTE(doyle): We allow playlist index to be any value, because we can normalise it
+        // if the playlist is valid. In particular -1 index means a new playlist that doesn't have
+        // a particular song selection yet
+        if (!(playlist != null && playlist.size() > 0)) return -1;
 
         if (playlist.size() == 1) {
             playlistIndex = 0;
@@ -598,10 +599,15 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
 
             playlistIndex = newIndex;
         } else {
-            if (direction == PlaybackSkipDirection.NEXT) {
-                if (++playlistIndex >= playlist.size()) playlistIndex = 0;
+
+            if (playlistIndex == -1) {
+                playlistIndex = 0;
             } else {
-                if (--playlistIndex < 0) playlistIndex = playlist.size() - 1;
+                if (direction == PlaybackSkipDirection.NEXT) {
+                    if (++playlistIndex >= playlist.size()) playlistIndex = 0;
+                } else {
+                    if (--playlistIndex < 0) playlistIndex = playlist.size() - 1;
+                }
             }
         }
 
@@ -612,10 +618,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
         // correct. Another way would be having another function for resuming so that we can
         // differentiate between the two. Consider it in the future.
         resumePosInMsec = 0;
-
-        activeAudio = playlist.get(playlistIndex);
         playMedia();
-
         return playlistIndex;
     }
 
