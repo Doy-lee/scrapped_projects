@@ -148,7 +148,6 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
     }
 
     private FragmentType activeFragment;
-    PlaylistFragment playlistFragment;
     MetadataFragment metadataFragment;
     /*
      ***********************************************************************************************
@@ -209,57 +208,33 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
 
     private void setAndShowFragment(FragmentType type) {
         String fragmentToolbarTitle = "";
-        switch (type) {
-            case ALBUM:
-            case ARTIST: {
-                boolean justInitialised = false;
-                if (metadataFragment == null) {
-                    metadataFragment = MetadataFragment.newInstance(this, playSpec_.allAudioFiles,
-                            type);
-                    justInitialised = true;
-                }
+        boolean justInitialised = false;
+        if (metadataFragment == null) {
+            metadataFragment = MetadataFragment.newInstance(this, playSpec_.allAudioFiles, type,
+                    playSpec_.playingPlaylist);
+            justInitialised = true;
+        }
 
-                if (activeFragment != type) {
-                    getSupportFragmentManager().beginTransaction()
-                            .replace(R.id.main_content_fragment, metadataFragment)
-                            // .addToBackStack(null)
-                            .commit();
+        if (activeFragment != type) {
+            getSupportFragmentManager().beginTransaction()
+                    .replace(R.id.main_content_fragment, metadataFragment)
+                    // .addToBackStack(null)
+                    .commit();
 
-                    // NOTE(doyle): If just init, the fragment was just created to which the
-                    // list metadata view will be initialised onCreateView, so we won't need to
-                    // manually switch views
-                    if (!justInitialised) metadataFragment.switchMetadataView(type, null);
-                }
+            // NOTE(doyle): If just init, the fragment was just created to which the
+            // list metadata view will be initialised onCreateView, so we won't need to
+            // manually switch views
+            if (!justInitialised) metadataFragment.switchMetadataView(type, null);
+        }
 
-                if (type == FragmentType.ALBUM) {
-                    fragmentToolbarTitle = "Album";
-                } else {
-                    fragmentToolbarTitle = "Artist";
-                }
-            } break;
-
-            case PLAYLIST: {
-                if (playlistFragment == null) {
-                    playlistFragment = PlaylistFragment.newInstance(playSpec_.playingPlaylist);
-                }
-
-                if (activeFragment != type) {
-                    getSupportFragmentManager().beginTransaction()
-                            .replace(R.id.main_content_fragment, playlistFragment)
-                            // .addToBackStack(null)
-                            .commit();
-                }
-
-                if (playlistFragment.playlistUiSpec.displayingPlaylist == null) {
-                    fragmentToolbarTitle = "Playlist";
-                } else {
-                    fragmentToolbarTitle = playlistFragment.playlistUiSpec.displayingPlaylist.name;
-                }
-            } break;
-
-            default: {
-                CAREFUL_ASSERT(false, this, "Fragment type not handled: " + type.toString());
-            } break;
+        if (type == FragmentType.ALBUM) {
+            fragmentToolbarTitle = "Album";
+        } else if (type == FragmentType.ARTIST) {
+            fragmentToolbarTitle = "Artist";
+        } else if (type == FragmentType.PLAYLIST) {
+            fragmentToolbarTitle = "Playlist";
+        } else {
+            CAREFUL_ASSERT(false, this, "Unhandled fragment type: " + type.toString());
         }
 
         uiSpec_.toolbar.setTitle(fragmentToolbarTitle);
@@ -337,10 +312,9 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                             } break;
 
                             case R.id.menu_main_drawer_library: {
-                                playlistFragment.updateDisplayingPlaylist
+                                metadataFragment.updateDisplayingPlaylist
                                         (playSpec_.playingPlaylist, playSpec_.libraryList);
                                 setAndShowFragment(FragmentType.PLAYLIST);
-                                updateUiData(uiSpec_, playSpec_);
                             } break;
 
                             default: {
@@ -372,8 +346,8 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
 
                 // TODO(doyle): Revise. Is messy but works
                 Playlist playingPlaylist = playSpec_.playingPlaylist;
-                if (playlistFragment != null) {
-                    Playlist displayingPlaylist = playlistFragment.playlistUiSpec.displayingPlaylist;
+                if (metadataFragment != null) {
+                    Playlist displayingPlaylist = metadataFragment.playlistUiSpec.displayingPlaylist;
                     if (displayingPlaylist != null) {
 
                         if (playingPlaylist != null) {
@@ -493,8 +467,8 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                                     (AudioService.PlaybackSkipDirection.NEXT);
 
                     playSpec_.playingPlaylist.index = newIndex;
-                    if (playlistFragment.playlistUiSpec.displayingPlaylist == playSpec_.playingPlaylist) {
-                        playlistFragment.playlistUiSpec.audioFileAdapter.notifyDataSetChanged();
+                    if (metadataFragment.playlistUiSpec.displayingPlaylist == playSpec_.playingPlaylist) {
+                        metadataFragment.playlistUiSpec.adapter.notifyDataSetChanged();
                     }
                 }
             }
@@ -509,8 +483,8 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                                     (AudioService.PlaybackSkipDirection.PREVIOUS);
 
                     playSpec_.playingPlaylist.index = newIndex;
-                    if (playlistFragment.playlistUiSpec.displayingPlaylist == playSpec_.playingPlaylist) {
-                        playlistFragment.playlistUiSpec.audioFileAdapter.notifyDataSetChanged();
+                    if (metadataFragment.playlistUiSpec.displayingPlaylist == playSpec_.playingPlaylist) {
+                        metadataFragment.playlistUiSpec.adapter.notifyDataSetChanged();
                     }
                 }
             }
@@ -577,7 +551,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
 
                 if (playBarItems.searchMode) {
                     uiSpec_.returnFromSearchPlaylist =
-                            playlistFragment.playlistUiSpec.displayingPlaylist;
+                            metadataFragment.playlistUiSpec.displayingPlaylist;
 
                     searchEditText.setVisibility(View.VISIBLE);
                     currentSongTextView.setVisibility(View.GONE);
@@ -592,7 +566,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                     currentSongTextView.setVisibility(View.VISIBLE);
 
                     background.setColorFilter(null);
-                    playlistFragment.updateDisplayingPlaylist(playSpec_.playingPlaylist,
+                    metadataFragment.updateDisplayingPlaylist(playSpec_.playingPlaylist,
                             uiSpec_.returnFromSearchPlaylist);
                     setAndShowFragment(FragmentType.PLAYLIST);
 
@@ -642,7 +616,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                     }
                 }
 
-                playlistFragment.updateDisplayingPlaylist(playSpec_.playingPlaylist,
+                metadataFragment.updateDisplayingPlaylist(playSpec_.playingPlaylist,
                          uiSpec_.searchResultPlaylist);
                 setAndShowFragment(FragmentType.PLAYLIST);
             }
@@ -826,7 +800,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                 AudioDatabase dbHandle = AudioDatabase.getHandle(this);
                 playSpec_.allAudioFiles.clear();
 
-                playlistFragment.playlistUiSpec.audioFileAdapter.notifyDataSetChanged();
+                metadataFragment.playlistUiSpec.adapter.notifyDataSetChanged();
                 GetAudioFromDevice task = new GetAudioFromDevice(this, playSpec_, dbHandle, true);
                 task.execute();
             } break;
@@ -1353,8 +1327,8 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
         Debug.INCREMENT_COUNTER(this);
         updateSideNavWithPlaylists(playSpec, uiSpec);
 
-        if (playlistFragment != null) {
-            playlistFragment.updateUiData();
+        if (metadataFragment != null) {
+            metadataFragment.updateUiData();
         }
     }
 
@@ -1463,7 +1437,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
             for (int i = 0; i < playlistList.size(); i++) {
                 Playlist newPlaylist = playlistList.get(i);
                 if (newPlaylist.menuId == item.getItemId()) {
-                    playlistFragment.updateDisplayingPlaylist(playSpec.playingPlaylist,
+                    metadataFragment.updateDisplayingPlaylist(playSpec.playingPlaylist,
                             newPlaylist);
                     setAndShowFragment(FragmentType.PLAYLIST);
                     break;

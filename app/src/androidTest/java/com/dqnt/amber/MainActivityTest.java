@@ -11,7 +11,6 @@ import android.support.test.filters.LargeTest;
 import android.support.test.rule.ActivityTestRule;
 import android.support.test.runner.AndroidJUnit4;
 import android.support.v4.app.NotificationCompat;
-import android.view.View;
 import android.widget.Button;
 
 import org.junit.After;
@@ -21,16 +20,12 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import com.dqnt.amber.PlaybackData.AudioFile;
-import com.dqnt.amber.AudioFileAdapter.AudioEntryInView;
-
-import java.util.concurrent.atomic.AtomicReference;
 
 import static android.content.Context.NOTIFICATION_SERVICE;
 import static android.support.test.espresso.Espresso.onView;
 import static android.support.test.espresso.action.ViewActions.click;
 import static android.support.test.espresso.matcher.ViewMatchers.withId;
 import static com.dqnt.amber.TestUtil.ONE_SECOND;
-import static com.dqnt.amber.TestUtil.waitUntil;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 
@@ -82,7 +77,7 @@ public class MainActivityTest {
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     @Test
     public void playBarElements() throws InterruptedException {
-        AudioFileAdapter adapter = activity.playlistFragment.playlistUiSpec.audioFileAdapter;
+        AudioFileAdapter adapter = activity.metadataFragment.playlistUiSpec.adapter;
         PlaybackData.Playlist playlist = playSpec.playingPlaylist;
 
         PlaybackData.AudioFile firstFile = playlist.contents.get(0);
@@ -258,6 +253,8 @@ public class MainActivityTest {
 
     private void checkAudioFileEntryExistsAndHighlighted(AudioFileAdapter adapter,
                                                          AudioFile checkFile) {
+        assertEquals(0, 1);
+        /*
         int numItems = adapter.getCount();
         boolean matchedEntryWithHighlight = false;
         for (int i = 0; i < numItems; i++) {
@@ -270,6 +267,7 @@ public class MainActivityTest {
             }
         }
         assertEquals(matchedEntryWithHighlight, true);
+        */
     }
 
     /*
