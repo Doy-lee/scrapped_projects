@@ -26,7 +26,6 @@ import android.preference.PreferenceManager;
 import android.provider.MediaStore;
 import android.support.annotation.NonNull;
 import android.support.design.widget.NavigationView;
-import android.support.design.widget.TextInputEditText;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v4.widget.DrawerLayout;
@@ -81,7 +80,9 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
         final Playlist libraryList;
 
         List<Playlist> playlistList;
+
         Playlist playingPlaylist;
+
         PlaySpec() {
             allAudioFiles = new ArrayList<>();
             playlistList = new ArrayList<>();
@@ -97,6 +98,10 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
         NavigationView navigationView;
 
         PlayBarItems playBarItems;
+
+        Playlist searchResultPlaylist;
+        Playlist returnFromSearchPlaylist;
+
         Handler handler;
 
         int primaryColor;
@@ -350,6 +355,14 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                 pushVariable("Service Bound", serviceBound);
 
                 pushText("=======================================================================");
+                Playlist returnFromSearchPlaylist = uiSpec_.returnFromSearchPlaylist;
+                if (returnFromSearchPlaylist != null) {
+                    pushVariable("Return Search Playlist", returnFromSearchPlaylist.name);
+                    pushVariable("Return Search Playlist Size", returnFromSearchPlaylist.contents.size());
+                    pushVariable("Return Search Index", returnFromSearchPlaylist.index);
+                }
+
+                pushText("=======================================================================");
                 Playlist playingPlaylist = playSpec_.playingPlaylist;
                 if (playingPlaylist != null) {
                     pushVariable("Active Playlist", playingPlaylist.name);
@@ -365,7 +378,6 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                         pushVariable("Displaying Playlist Size", displayingPlaylist.contents.size());
                         pushVariable("Displaying Index", displayingPlaylist.index);
                     }
-
                 }
                 pushText("=======================================================================");
                 pushVariable("Debug FPS", (1000 / updateRateInMilliseconds));
@@ -534,8 +546,13 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                         (v.getContext(), R.drawable.ic_magnify);
 
                 if (playBarItems.searchMode) {
+                    uiSpec_.returnFromSearchPlaylist =
+                            playlistFragment.playlistUiSpec.displayingPlaylist;
+
                     searchEditText.setVisibility(View.VISIBLE);
                     currentSongTextView.setVisibility(View.GONE);
+
+                    searchEditText.setText("");
                     searchEditText.requestFocus();
 
                     int color = ContextCompat.getColor(v.getContext(), R.color.colorAccent);
@@ -545,6 +562,8 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                     currentSongTextView.setVisibility(View.VISIBLE);
 
                     background.setColorFilter(null);
+                    playlistFragment.updateDisplayingPlaylist(playSpec_.playingPlaylist,
+                            uiSpec_.returnFromSearchPlaylist);
                 }
 
                 v.setBackground(background);
@@ -553,18 +572,49 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
 
         playBarItems.searchEditText.addTextChangedListener(new TextWatcher() {
             @Override
-            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
 
+            boolean splitStringAndCheckIfPrefixed(String checkString, String checkPrefix) {
+                String fileTitleLowercased = checkString.toLowerCase();
+                String checkPrefixLowercased = checkPrefix.toLowerCase();
+
+                String[] parts = fileTitleLowercased.split(" ");
+
+                for (int i = 0; i < parts.length; i++) {
+                    if (parts[i].startsWith(checkPrefixLowercased)) {
+                        return true;
+                    }
+                }
+
+                return false;
             }
 
             @Override
             public void onTextChanged(CharSequence s, int start, int before, int count) {
+                String sequenceToString = s.toString();
 
+                if (uiSpec_.searchResultPlaylist == null) {
+                    uiSpec_.searchResultPlaylist = new Playlist("Search Result");
+                } else {
+                    uiSpec_.searchResultPlaylist.contents.clear();
+                    uiSpec_.searchResultPlaylist.index = -1;
+                }
+
+                for (AudioFile file: uiSpec_.returnFromSearchPlaylist.contents) {
+                    if (splitStringAndCheckIfPrefixed(file.title, sequenceToString) ||
+                            splitStringAndCheckIfPrefixed(file.artist, sequenceToString) ||
+                            splitStringAndCheckIfPrefixed(file.album, sequenceToString) ||
+                            splitStringAndCheckIfPrefixed(file.year, sequenceToString)) {
+                        uiSpec_.searchResultPlaylist.contents.add(file);
+                    }
+                }
+
+                playlistFragment.updateDisplayingPlaylist(playSpec_.playingPlaylist,
+                         uiSpec_.searchResultPlaylist);
             }
 
             @Override
-            public void afterTextChanged(Editable s) {
-            }
+            public void afterTextChanged(Editable s) {}
         });
 
         playBarItems.searchEditText.setOnKeyListener(new View.OnKeyListener() {
@@ -572,9 +622,15 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
             public boolean onKey(View v, int keyCode, KeyEvent event) {
                 boolean result = false;
 
-                if (event.getAction() == KeyEvent.ACTION_UP) {
-                    char key = (char) event.getKeyCode();
-                    Debug.TOAST(v.getContext(), "recorded key " + key, Toast.LENGTH_SHORT);
+                if (event.getAction() == KeyEvent.ACTION_UP && keyCode == KeyEvent.KEYCODE_BACK) {
+                    v.clearFocus();
+                    playBarItems.searchButton.performClick();
+
+                    if (Debug.CAREFUL_ASSERT(uiSpec_.returnFromSearchPlaylist != null, this,
+                            "Exit search, return playlist is not defined")) {
+                        playlistFragment.updateDisplayingPlaylist(playSpec_.playingPlaylist,
+                                uiSpec_.returnFromSearchPlaylist);
+                    }
                     result = true;
                 }
 
@@ -1358,12 +1414,10 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
     }
 
     public class PlaylistMenuItemClick implements MenuItem.OnMenuItemClickListener {
-        private UiSpec uiSpec;
         private PlaySpec playSpec;
         private List<Playlist> playlistList;
 
         PlaylistMenuItemClick(UiSpec uiSpec, PlaySpec playSpec, List<Playlist> playlistList) {
-            this.uiSpec = uiSpec;
             this.playSpec = playSpec;
             this.playlistList = playlistList;
         }
@@ -1372,18 +1426,11 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
         public boolean onMenuItemClick(MenuItem item) {
             // TODO(doyle): Improve linear search maybe? Typical use case doesn't have many playlists
             for (int i = 0; i < playlistList.size(); i++) {
-                Playlist checkPlaylist = playlistList.get(i);
-                if (checkPlaylist.menuId == item.getItemId()) {
-                    uiSpec.toolbar.setTitle(checkPlaylist.name);
-
+                Playlist newPlaylist = playlistList.get(i);
+                if (newPlaylist.menuId == item.getItemId()) {
                     setAndShowFragment(FragmentType.PLAYLIST);
-                    playlistFragment.playlistUiSpec.displayingPlaylist = checkPlaylist;
-                    if (playlistFragment.playlistUiSpec.displayingPlaylist
-                            != playSpec.playingPlaylist) {
-                        playlistFragment.playlistUiSpec.displayingPlaylist.index = -1;
-                    }
-
-                    updateUiData(uiSpec, playSpec);
+                    playlistFragment.updateDisplayingPlaylist(playSpec.playingPlaylist,
+                            newPlaylist);
                     break;
                 }
             }

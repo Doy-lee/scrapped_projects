@@ -88,6 +88,18 @@ public class PlaylistFragment extends Fragment {
         Debug.TOAST(getContext(), "Playlist view fragment + listener detached", Toast.LENGTH_SHORT);
     }
 
+    // NOTE(doyle): Need current playing playlist, because if it is'nt the current playing playlist,
+    // we don't want to highlight an entry, that may be left active since it last played
+    void updateDisplayingPlaylist(Playlist playingPlaylist, Playlist newPlaylist) {
+        playlistUiSpec.displayingPlaylist = newPlaylist;
+
+        if (playlistUiSpec.displayingPlaylist != playingPlaylist) {
+            playlistUiSpec.displayingPlaylist.index = -1;
+        }
+
+        updateUiData();
+    }
+
     void updateUiData() {
         Debug.INCREMENT_COUNTER(this);
 

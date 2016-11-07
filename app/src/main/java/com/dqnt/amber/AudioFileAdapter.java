@@ -60,7 +60,7 @@ class AudioFileAdapter extends BaseAdapter {
     // NOTE(doyle): Cache the inflated layout elements in a audio entry into the tag of a list item
     class AudioEntryInView {
         int position;
-        TextView artist;
+        TextView artistAndAlbum;
         TextView title;
     }
 
@@ -76,13 +76,13 @@ class AudioFileAdapter extends BaseAdapter {
             convertView = audioInflater.inflate(R.layout.file_audio, parent, false);
 
             audioEntry = new AudioEntryInView();
-            audioEntry.artist = (TextView) convertView.findViewById(R.id.audio_artist);
+            audioEntry.artistAndAlbum = (TextView) convertView.findViewById(R.id.audio_artist);
             audioEntry.title = (TextView) convertView.findViewById(R.id.audio_title);
 
             convertView.setTag(audioEntry);
 
             if (artistInactiveColor == -1) {
-                artistInactiveColor = audioEntry.artist.getCurrentTextColor();
+                artistInactiveColor = audioEntry.artistAndAlbum.getCurrentTextColor();
                 titleInactiveColor = audioEntry.title.getCurrentTextColor();
             }
         } else {
@@ -92,15 +92,17 @@ class AudioFileAdapter extends BaseAdapter {
         AudioFile audio = playlist.contents.get(position);
         if (Debug.CAREFUL_ASSERT(audio != null, this, "Audio file is null")) {
             /* Set view data */
-            audioEntry.artist.setText(audio.artist);
+
+            String artistAndAlbumString = audio.artist + " | " + audio.album;
+            audioEntry.artistAndAlbum.setText(artistAndAlbumString);
             audioEntry.title.setText(audio.title);
             audioEntry.position = position;
 
             if (playlist.index == position) {
-                audioEntry.artist.setTextColor(highlightColor);
+                audioEntry.artistAndAlbum.setTextColor(highlightColor);
                 audioEntry.title.setTextColor(highlightColor);
             } else {
-                audioEntry.artist.setTextColor(artistInactiveColor);
+                audioEntry.artistAndAlbum.setTextColor(artistInactiveColor);
                 audioEntry.title.setTextColor(titleInactiveColor);
             }
         }
