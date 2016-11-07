@@ -208,7 +208,6 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
     };
 
     private void setAndShowFragment(FragmentType type) {
-
         String fragmentToolbarTitle = "";
         switch (type) {
             case ALBUM:
@@ -303,7 +302,8 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
         getSupportActionBar().setDefaultDisplayHomeAsUpEnabled(true);
 
         uiSpec_.primaryColor = ContextCompat.getColor(this, R.color.colorPrimary);
-        uiSpec_.accentColor = ContextCompat.getColor(this, R.color.colorAccent);
+        uiSpec_.accentColor = ContextCompat.getColor(this, R
+                .color.colorAccent);
         uiSpec_.primaryTextColor
                 = ContextCompat.getColor(this, R.color.primary_text_on_light_background);
 
@@ -317,6 +317,15 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                 (new NavigationView.OnNavigationItemSelectedListener() {
                     @Override
                     public boolean onNavigationItemSelected(@NonNull MenuItem item) {
+
+                        // NOTE(doyle): Disable search first, since this will return the playlist
+                        // view to the original view first, then apply the new view
+                        if (uiSpec_.playBarItems.searchMode) {
+                            uiSpec_.playBarItems.searchButton.performClick();
+                            Debug.CAREFUL_ASSERT(!uiSpec_.playBarItems.searchMode, this, "Search " +
+                                    "mode did not toggle on menu item click");
+                        }
+
                         switch (item.getItemId()) {
 
                             case R.id.menu_main_drawer_album: {
@@ -328,10 +337,9 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                             } break;
 
                             case R.id.menu_main_drawer_library: {
-                                uiSpec_.toolbar.setTitle(getString(R.string.menu_main_drawer_library));
-
+                                playlistFragment.updateDisplayingPlaylist
+                                        (playSpec_.playingPlaylist, playSpec_.libraryList);
                                 setAndShowFragment(FragmentType.PLAYLIST);
-                                playlistFragment.playlistUiSpec.displayingPlaylist = playSpec_.libraryList;
                                 updateUiData(uiSpec_, playSpec_);
                             } break;
 
@@ -354,31 +362,53 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                 pushClass(this, true, false, true);
                 pushVariable("Service Bound", serviceBound);
 
-                pushText("=======================================================================");
                 Playlist returnFromSearchPlaylist = uiSpec_.returnFromSearchPlaylist;
                 if (returnFromSearchPlaylist != null) {
+                    pushText("=======================================================================");
                     pushVariable("Return Search Playlist", returnFromSearchPlaylist.name);
                     pushVariable("Return Search Playlist Size", returnFromSearchPlaylist.contents.size());
                     pushVariable("Return Search Index", returnFromSearchPlaylist.index);
                 }
 
-                pushText("=======================================================================");
+                // TODO(doyle): Revise. Is messy but works
                 Playlist playingPlaylist = playSpec_.playingPlaylist;
-                if (playingPlaylist != null) {
-                    pushVariable("Active Playlist", playingPlaylist.name);
-                    pushVariable("Active Playlist Size", playingPlaylist.contents.size());
-                    pushVariable("Active Index", playingPlaylist.index);
-                }
-
-                pushText("=======================================================================");
                 if (playlistFragment != null) {
                     Playlist displayingPlaylist = playlistFragment.playlistUiSpec.displayingPlaylist;
                     if (displayingPlaylist != null) {
-                        pushVariable("Displaying Playlist", displayingPlaylist.name);
-                        pushVariable("Displaying Playlist Size", displayingPlaylist.contents.size());
-                        pushVariable("Displaying Index", displayingPlaylist.index);
+
+                        if (playingPlaylist != null) {
+                            if (playingPlaylist == displayingPlaylist) {
+                                pushText("=======================================================================");
+                                pushText("Active + Displaying");
+                                pushVariable("Playlist", playingPlaylist.name);
+                                pushVariable("Playlist Size", playingPlaylist.contents.size());
+                                pushVariable("Index", playingPlaylist.index);
+
+                            } else {
+                                pushText("=======================================================================");
+                                pushVariable("Active Playlist", playingPlaylist.name);
+                                pushVariable("Active Playlist Size", playingPlaylist.contents.size());
+                                pushVariable("Active Index", playingPlaylist.index);
+
+                                pushText("=======================================================================");
+                                pushVariable("Displaying Playlist", displayingPlaylist.name);
+                                pushVariable("Displaying Playlist Size", displayingPlaylist.contents.size());
+                                pushVariable("Displaying Index", displayingPlaylist.index);
+                            }
+                        } else {
+                            pushText("=======================================================================");
+                            pushVariable("Displaying Playlist", displayingPlaylist.name);
+                            pushVariable("Displaying Playlist Size", displayingPlaylist.contents.size());
+                            pushVariable("Displaying Index", displayingPlaylist.index);
+                        }
+                    } else {
+                        pushText("=======================================================================");
+                        pushVariable("Active Playlist", playingPlaylist.name);
+                        pushVariable("Active Playlist Size", playingPlaylist.contents.size());
+                        pushVariable("Active Index", playingPlaylist.index);
                     }
                 }
+
                 pushText("=======================================================================");
                 pushVariable("Debug FPS", (1000 / updateRateInMilliseconds));
                 pushText(Debug.GENERATE_COUNTER_STRING());
@@ -564,6 +594,9 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                     background.setColorFilter(null);
                     playlistFragment.updateDisplayingPlaylist(playSpec_.playingPlaylist,
                             uiSpec_.returnFromSearchPlaylist);
+                    setAndShowFragment(FragmentType.PLAYLIST);
+
+                    uiSpec_.returnFromSearchPlaylist = null;
                 }
 
                 v.setBackground(background);
@@ -611,6 +644,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
 
                 playlistFragment.updateDisplayingPlaylist(playSpec_.playingPlaylist,
                          uiSpec_.searchResultPlaylist);
+                setAndShowFragment(FragmentType.PLAYLIST);
             }
 
             @Override
@@ -624,13 +658,12 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
 
                 if (event.getAction() == KeyEvent.ACTION_UP && keyCode == KeyEvent.KEYCODE_BACK) {
                     v.clearFocus();
-                    playBarItems.searchButton.performClick();
 
                     if (Debug.CAREFUL_ASSERT(uiSpec_.returnFromSearchPlaylist != null, this,
                             "Exit search, return playlist is not defined")) {
-                        playlistFragment.updateDisplayingPlaylist(playSpec_.playingPlaylist,
-                                uiSpec_.returnFromSearchPlaylist);
+                        playBarItems.searchButton.performClick();
                     }
+
                     result = true;
                 }
 
@@ -1414,11 +1447,13 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
     }
 
     public class PlaylistMenuItemClick implements MenuItem.OnMenuItemClickListener {
+        private UiSpec uiSpec;
         private PlaySpec playSpec;
         private List<Playlist> playlistList;
 
         PlaylistMenuItemClick(UiSpec uiSpec, PlaySpec playSpec, List<Playlist> playlistList) {
             this.playSpec = playSpec;
+            this.uiSpec = uiSpec;
             this.playlistList = playlistList;
         }
 
@@ -1428,9 +1463,9 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
             for (int i = 0; i < playlistList.size(); i++) {
                 Playlist newPlaylist = playlistList.get(i);
                 if (newPlaylist.menuId == item.getItemId()) {
-                    setAndShowFragment(FragmentType.PLAYLIST);
                     playlistFragment.updateDisplayingPlaylist(playSpec.playingPlaylist,
                             newPlaylist);
+                    setAndShowFragment(FragmentType.PLAYLIST);
                     break;
                 }
             }
