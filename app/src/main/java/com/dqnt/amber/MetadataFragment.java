@@ -5,6 +5,7 @@ import android.content.Context;
 import android.os.Bundle;
 import android.support.v4.app.Fragment;
 import android.support.v4.content.ContextCompat;
+import android.support.v7.widget.Toolbar;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -23,43 +24,45 @@ import java.util.TreeSet;
 
 import com.dqnt.amber.PlaybackData.AudioFile;
 import com.dqnt.amber.PlaybackData.Playlist;
+import com.dqnt.amber.MainActivity.FragmentType;
 
 public class MetadataFragment extends Fragment {
     private List<AudioFile> allAudioFiles;
     private ListView listView;
-    private StringAdapter metadataAdapter;
-    MainActivity.FragmentType type;
+    FragmentType type;
+    AudioFileClickListener listener;
+    private Toolbar toolbar;
+
+    private MetadataAdapter metadataAdapter;
+    private Stack<FragmentType> metadataViewStack;
 
     static class PlaylistUiSpec {
         Playlist displayingPlaylist;
-        AudioFileAdapter adapter;
+        PlaylistAdapter adapter_;
+
+        PlaylistUiSpec(Context context, Playlist displayingPlaylist) {
+            this.displayingPlaylist = displayingPlaylist;
+
+            int accentColor = ContextCompat.getColor(context, R.color.colorAccent);
+            adapter_ = new PlaylistAdapter(context, displayingPlaylist, accentColor);
+        }
     }
     PlaylistUiSpec playlistUiSpec;
-
-    private Stack<MainActivity.FragmentType> metadataViewStack;
-    AudioFileClickListener listener;
 
     public MetadataFragment() {}
 
     public static MetadataFragment newInstance(Context context, List<AudioFile> allAudioFiles,
-                                               MainActivity.FragmentType type,
-                                               Playlist activePlaylist) {
+                                               FragmentType type, Playlist activePlaylist,
+                                               Toolbar toolbar) {
         MetadataFragment fragment = new MetadataFragment();
         fragment.allAudioFiles = allAudioFiles;
         fragment.type = type;
-        fragment.metadataAdapter = new StringAdapter(new ArrayList<String>(), context);
+        fragment.toolbar = toolbar;
+
+        fragment.metadataAdapter = new MetadataAdapter(new ArrayList<String>(), context);
         fragment.metadataViewStack = new Stack<>();
 
-        fragment.playlistUiSpec = new PlaylistUiSpec();
-        fragment.playlistUiSpec.displayingPlaylist = activePlaylist;
-
-        /*
-            Bundle args = new Bundle();
-            args.putString(ARG_PARAM1, param1);
-            args.putString(ARG_PARAM2, param2);
-            fragment.setArguments(args);
-        */
-
+        fragment.playlistUiSpec = new PlaylistUiSpec(context, activePlaylist);
         return fragment;
     }
 
@@ -68,36 +71,26 @@ public class MetadataFragment extends Fragment {
                              Bundle savedInstanceState) {
         View rootView = inflater.inflate(R.layout.fragment_metadata_view, container, false);
 
-        { // Setup Metadata view
-            listView = (ListView) rootView.findViewById(R.id.fragment_metadata_list_view);
-            listView.setAdapter(metadataAdapter);
-            switchMetadataView(type, null);
+        listView = (ListView) rootView.findViewById(R.id.fragment_metadata_list_view);
+        updateMetadataView(type);
 
-            rootView.setFocusable(true);
-            rootView.requestFocus();
-            rootView.setOnKeyListener(new View.OnKeyListener() {
-                @Override
-                public boolean onKey(View v, int keyCode, KeyEvent event) {
-                    boolean result = false;
-                    if (event.getAction() == KeyEvent.ACTION_UP && keyCode == KeyEvent.KEYCODE_BACK) {
-                        if (!metadataViewStack.isEmpty()) {
-                            MainActivity.FragmentType type = metadataViewStack.pop();
-                            switchMetadataView(type, null);
-                            result = true;
-                        }
+        rootView.setFocusable(true);
+        rootView.requestFocus();
+        rootView.setOnKeyListener(new View.OnKeyListener() {
+            @Override
+            public boolean onKey(View v, int keyCode, KeyEvent event) {
+                boolean result = false;
+                if (event.getAction() == KeyEvent.ACTION_UP && keyCode == KeyEvent.KEYCODE_BACK) {
+                    if (!metadataViewStack.isEmpty()) {
+                        FragmentType type = metadataViewStack.pop();
+                        updateMetadataView(type);
+                        result = true;
                     }
+                }
 
                     return result;
                 }
             });
-        }
-
-        { // Setup Playlist Spec
-            // TODO(doyle): Send in args from main
-            int accentColor = ContextCompat.getColor(getContext(), R.color.colorAccent);
-            playlistUiSpec.adapter = new AudioFileAdapter(getContext(),
-                    listView, playlistUiSpec.displayingPlaylist, accentColor);
-        }
 
         return rootView;
     }
@@ -132,119 +125,69 @@ public class MetadataFragment extends Fragment {
             playlistUiSpec.displayingPlaylist.index = -1;
         }
 
-        updateUiData();
+        updateMetadataView(FragmentType.PLAYLIST);
     }
 
-    void updateUiData() {
-        Debug.INCREMENT_COUNTER(this);
-
-        if (playlistUiSpec.displayingPlaylist == null) {
-            return;
-        }
-
-        /* Update the playlist currently displayed */
-        AudioFileAdapter adapter = playlistUiSpec.adapter;
-        // NOTE(doyle): Update called before view is created, which is fine.
-        if (adapter == null) return;
-
-        if (adapter.playlist != playlistUiSpec.displayingPlaylist) {
-            playlistUiSpec.adapter.playlist = playlistUiSpec.displayingPlaylist;
-        }
-        playlistUiSpec.adapter.notifyDataSetChanged();
+    void updateMetadataView(FragmentType newType) {
+        updateMetadataView_(newType, null);
     }
 
-    void switchMetadataView(MainActivity.FragmentType newType, String filterBy) {
+
+    private void updateMetadataView_(FragmentType newType, String filterBy) {
         // NOTE(doyle): All metadata views are top level unless it's a file view, which means we
         // need to start tracking the view stack, i.e. artist files should return to artist; artist
         // view itself should return to nothing
-        if (newType == MainActivity.FragmentType.ARTIST_FILES ||
-                newType == MainActivity.FragmentType.ALBUM_FILES) {
+        if (newType == FragmentType.ARTIST_FILES ||
+                newType == FragmentType.ALBUM_FILES) {
             // NOTE(doyle): Push old type
             metadataViewStack.push(type);
-
         } else {
             metadataViewStack.clear();
         }
 
-        this.type = newType;
-        listView.setOnItemClickListener(null);
-
         // TODO: Cache the lists instead of rebuilding each time
         SortedSet<String> dataForFragment = new TreeSet<>();
-        switch(type) {
+        switch(newType) {
+            case ALBUM:
             case ARTIST: {
-                for (AudioFile file: allAudioFiles) {
-                    dataForFragment.add(file.artist);
+
+                final FragmentType detailedType;
+                if (newType == FragmentType.ALBUM) {
+                    for (AudioFile file: allAudioFiles) dataForFragment.add(file.album);
+                    detailedType = FragmentType.ALBUM_FILES;
+                    toolbar.setTitle("Album");
+                } else {
+                    for (AudioFile file: allAudioFiles) dataForFragment.add(file.artist);
+                    detailedType = FragmentType.ARTIST_FILES;
+                    toolbar.setTitle("Artist");
                 }
 
                 listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
                     @Override
-                    public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+                    public void onItemClick(AdapterView<?> parent, View view, int position,
+                                            long id) {
+
                         TextView textView = (TextView) view.getTag();
-                        switchMetadataView(MainActivity.FragmentType.ARTIST_FILES,
-                                textView.getText().toString());
+                        updateMetadataView_(detailedType, textView.getText().toString());
                     }
                 });
             } break;
 
+            case ALBUM_FILES:
             case ARTIST_FILES: {
                 if (Debug.CAREFUL_ASSERT(filterBy != null, this,
-                        "Cannot call artist file view without a filter")) {
+                        "Cannot call metadata file view without a filter")) {
 
-                    for (AudioFile file: allAudioFiles) {
-
-                        if (filterBy.equals(file.artist)) {
-                            dataForFragment.add(file.title);
-                        }
-                    }
-
-                    listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
-                        @Override
-                        public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-                            PlaybackData.Playlist playlist =
-                                    new PlaybackData.Playlist("Now playing");
-
-                            // TODO(doyle): Store file data into metadataAdapter, instead of search list
-                            // again to find the file to play
-                            TextView textView = (TextView) view.getTag();
-                            String audioTitleToPlay = textView.getText().toString();
-                            for (AudioFile file: allAudioFiles) {
-                                if (file.title.equals(audioTitleToPlay)) {
-                                    playlist.contents.add(file);
-                                    break;
-                                }
-                            }
-
-                            listener.audioFileClicked(playlist);
-                        }
-                    });
-                }
-            } break;
-
-            case ALBUM: {
-                for (AudioFile file: allAudioFiles) {
-                    dataForFragment.add(file.album);
-                }
-
-                listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
-                    @Override
-                    public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-                        TextView textView = (TextView) view.getTag();
-                        switchMetadataView(MainActivity.FragmentType.ALBUM_FILES,
-                                textView.getText().toString());
-                    }
-                });
-            } break;
-
-            // TODO(doyle): Reorganise file views after metadata drill-down since very similar code
-            case ALBUM_FILES: {
-                if (Debug.CAREFUL_ASSERT(filterBy != null, this,
-                        "Cannot call artist file view without a filter")) {
-
-                    for (AudioFile file: allAudioFiles) {
-                        if (filterBy.equals(file.album)) {
-                            dataForFragment.add(file.title);
-                        }
+                    if (newType == FragmentType.ARTIST_FILES) {
+                        toolbar.setTitle("Artist: " + filterBy);
+                        for (AudioFile file: allAudioFiles)
+                            if (filterBy.equals(file.artist))
+                                dataForFragment.add(file.title);
+                    } else {
+                        toolbar.setTitle("Album: " + filterBy);
+                        for (AudioFile file: allAudioFiles)
+                            if (filterBy.equals(file.album))
+                                dataForFragment.add(file.title);
                     }
 
                     listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
@@ -271,22 +214,41 @@ public class MetadataFragment extends Fragment {
             } break;
 
             case PLAYLIST: {
+                toolbar.setTitle("Playlist: " + playlistUiSpec.displayingPlaylist.name);
+
+                { // Update Playlist UI
+                    Debug.INCREMENT_COUNTER(this, "updatePlaylistUi");
+
+                    PlaylistUiSpec uiSpec = this.playlistUiSpec;
+                    PlaylistAdapter adapter = uiSpec.adapter_;
+                    if (uiSpec.displayingPlaylist == null || adapter == null) {
+                        // NOTE(doyle): Update called before view is created, which is fine.
+                        Debug.CAREFUL_ASSERT(false, this, "Displaying playlist or adapter is null");
+                        return;
+                    }
+
+                    if (adapter.playlist != uiSpec.displayingPlaylist) {
+                        adapter.playlist = uiSpec.displayingPlaylist;
+                        adapter.notifyDataSetChanged();
+                    }
+                }
+
                 listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
                     @Override
                     public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
 
-                        AudioFileAdapter.AudioEntryInView entry =
-                                (AudioFileAdapter.AudioEntryInView) view.getTag();
+                        PlaylistAdapter.AudioEntryInView entry =
+                                (PlaylistAdapter.AudioEntryInView) view.getTag();
                         int index = entry.position;
 
                         /* Update playlist view after song click */
                         Playlist newPlaylist = playlistUiSpec.displayingPlaylist;
-                        AudioFileAdapter adapter = playlistUiSpec.adapter;
+                        PlaylistAdapter adapter = playlistUiSpec.adapter_;
                         adapter.playlist = newPlaylist;
 
                         if (newPlaylist.index != index) {
                             newPlaylist.index = index;
-                            adapter.listView.invalidateViews();
+                            listView.invalidateViews();
                         }
 
                         listener.audioFileClicked(playlistUiSpec.displayingPlaylist);
@@ -300,23 +262,23 @@ public class MetadataFragment extends Fragment {
             } break;
         }
 
-        if (newType == MainActivity.FragmentType.PLAYLIST) {
-            listView.setAdapter(playlistUiSpec.adapter);
-        } else {
-            listView.setAdapter(metadataAdapter);
+        this.type = newType;
+        if (newType != FragmentType.PLAYLIST) {
             List<String> dataList = new ArrayList<>();
             dataList.addAll(dataForFragment);
+            listView.setAdapter(metadataAdapter);
             metadataAdapter.stringList = dataList;
-
             metadataAdapter.notifyDataSetChanged();
+        } else {
+            listView.setAdapter(playlistUiSpec.adapter_);
         }
     }
 
-    private static class StringAdapter extends BaseAdapter {
+    private static class MetadataAdapter extends BaseAdapter {
         List<String> stringList;
         private LayoutInflater inflater;
 
-        StringAdapter(List<String> stringList, Context context) {
+        MetadataAdapter(List<String> stringList, Context context) {
             this.stringList = stringList;
             inflater = LayoutInflater.from(context);
         }

@@ -4,30 +4,28 @@ import android.content.Context;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Adapter;
 import android.widget.BaseAdapter;
 import android.widget.ListView;
 import android.widget.TextView;
 
 import com.dqnt.amber.PlaybackData.AudioFile;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Created by Doyle on 25/09/2016.
  */
-class AudioFileAdapter extends BaseAdapter {
-    ListView listView;
-
+class PlaylistAdapter extends BaseAdapter {
     PlaybackData.Playlist playlist;
-    private LayoutInflater audioInflater;
+    private LayoutInflater inflater;
     private int highlightColor;
 
-    AudioFileAdapter(Context context, ListView listView, PlaybackData.Playlist playlist,
-                     int highlightColor) {
-        audioInflater = LayoutInflater.from(context);
+    PlaylistAdapter(Context context, PlaybackData.Playlist playlist, int highlightColor) {
+        this.inflater = LayoutInflater.from(context);
         this.playlist = playlist;
-
         this.highlightColor = highlightColor;
-        this.listView = listView;
-        listView.setAdapter(this);
     }
 
     public int getCount() {
@@ -40,7 +38,7 @@ class AudioFileAdapter extends BaseAdapter {
     }
 
     @Override
-    public AudioFile getItem(int position) {
+    public Object getItem(int position) {
         if (playlist != null) {
             return playlist.contents.get(position);
         }
@@ -50,11 +48,12 @@ class AudioFileAdapter extends BaseAdapter {
 
     @Override
     public long getItemId(int position) {
+        long result = -1;
         if (playlist != null) {
-            return playlist.contents.get(position).dbKey;
+            result = playlist.contents.get(position).dbKey;
         }
 
-        return -1;
+        return result;
     }
 
     // NOTE(doyle): Cache the inflated layout elements in a audio entry into the tag of a list item
@@ -69,11 +68,10 @@ class AudioFileAdapter extends BaseAdapter {
     @Override
     public View getView(int position, View convertView, ViewGroup parent) {
         AudioEntryInView audioEntry;
-
         // NOTE(doyle): convertView is a recycled entry going offscreen to be
         // reused for another element
         if (convertView == null) {
-            convertView = audioInflater.inflate(R.layout.file_audio, parent, false);
+            convertView = inflater.inflate(R.layout.file_audio, parent, false);
 
             audioEntry = new AudioEntryInView();
             audioEntry.artistAndAlbum = (TextView) convertView.findViewById(R.id.audio_artist);
@@ -91,7 +89,7 @@ class AudioFileAdapter extends BaseAdapter {
 
         AudioFile audio = playlist.contents.get(position);
         if (Debug.CAREFUL_ASSERT(audio != null, this, "Audio file is null")) {
-            /* Set view data */
+                /* Set view data */
 
             String artistAndAlbumString = audio.artist + " | " + audio.album;
             audioEntry.artistAndAlbum.setText(artistAndAlbumString);

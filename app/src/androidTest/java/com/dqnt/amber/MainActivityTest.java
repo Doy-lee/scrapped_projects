@@ -77,7 +77,7 @@ public class MainActivityTest {
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     @Test
     public void playBarElements() throws InterruptedException {
-        AudioFileAdapter adapter = activity.metadataFragment.playlistUiSpec.adapter;
+        PlaylistAdapter adapter = activity.metadataFragment.playlistUiSpec.adapter;
         PlaybackData.Playlist playlist = playSpec.playingPlaylist;
 
         PlaybackData.AudioFile firstFile = playlist.contents.get(0);
@@ -251,7 +251,7 @@ public class MainActivityTest {
         assertEquals(button.getBackground().getColorFilter(), checkFilter);
     }
 
-    private void checkAudioFileEntryExistsAndHighlighted(AudioFileAdapter adapter,
+    private void checkAudioFileEntryExistsAndHighlighted(PlaylistAdapter adapter,
                                                          AudioFile checkFile) {
         assertEquals(0, 1);
         /*

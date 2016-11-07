@@ -146,9 +146,8 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
         PLAYLIST,
         INVALID,
     }
-
-    private FragmentType activeFragment;
     MetadataFragment metadataFragment;
+
     /*
      ***********************************************************************************************
      * INITIALISATION CODE
@@ -172,7 +171,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
 
             if (playlistQueued) {
                 Playlist activePlaylist = playSpec_.playingPlaylist;
-                enqueueToPlayer(activePlaylist.contents, activePlaylist.index, true);
+                enqueueToPlayer(activePlaylist, true);
                 playlistQueued = false;
             }
 
@@ -207,48 +206,25 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
     };
 
     private void setAndShowFragment(FragmentType type) {
-        String fragmentToolbarTitle = "";
-        boolean justInitialised = false;
         if (metadataFragment == null) {
             metadataFragment = MetadataFragment.newInstance(this, playSpec_.allAudioFiles, type,
-                    playSpec_.playingPlaylist);
-            justInitialised = true;
-        }
+                    playSpec_.playingPlaylist, uiSpec_.toolbar);
 
-        if (activeFragment != type) {
             getSupportFragmentManager().beginTransaction()
                     .replace(R.id.main_content_fragment, metadataFragment)
                     // .addToBackStack(null)
                     .commit();
-
+        } else {
             // NOTE(doyle): If just init, the fragment was just created to which the
             // list metadata view will be initialised onCreateView, so we won't need to
             // manually switch views
-            if (!justInitialised) metadataFragment.switchMetadataView(type, null);
+            metadataFragment.updateMetadataView(type);
         }
-
-        if (type == FragmentType.ALBUM) {
-            fragmentToolbarTitle = "Album";
-        } else if (type == FragmentType.ARTIST) {
-            fragmentToolbarTitle = "Artist";
-        } else if (type == FragmentType.PLAYLIST) {
-            fragmentToolbarTitle = "Playlist";
-        } else {
-            CAREFUL_ASSERT(false, this, "Unhandled fragment type: " + type.toString());
-        }
-
-        uiSpec_.toolbar.setTitle(fragmentToolbarTitle);
-        activeFragment = type;
     }
 
 
     private void amberCreate() {
-        initAppData();
-
-        /*******************************************************************************************
-         * DEBUG INITIALISATION
-         ******************************************************************************************/
-        {
+        { // Intialise debug state
             SharedPreferences sharedPref = PreferenceManager.
                     getDefaultSharedPreferences(getApplicationContext());
 
@@ -266,12 +242,13 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
             }
         }
 
+        initAppData();
+        registerUpdateUiReceiver(updateUiReceiver);
 
-        /*******************************************************************************************
-         * UI INITIALISATION
-         ******************************************************************************************/
+        // Initialise UI
         uiSpec_ = new UiSpec();
 
+        audioServiceResponse = new AudioServiceResponse(uiSpec_, playSpec_);
         uiSpec_.toolbar = (Toolbar) findViewById(R.id.main_toolbar);
         setSupportActionBar(uiSpec_.toolbar);
         getSupportActionBar().setDefaultDisplayHomeAsUpEnabled(true);
@@ -281,9 +258,6 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                 .color.colorAccent);
         uiSpec_.primaryTextColor
                 = ContextCompat.getColor(this, R.color.primary_text_on_light_background);
-
-        /* Load playlist fragment */
-        // setAndShowFragment(FragmentType.PLAYLIST);
 
         final DrawerLayout drawerLayout = (DrawerLayout)
                 findViewById(R.id.activity_main_drawer_layout);
@@ -468,7 +442,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
 
                     playSpec_.playingPlaylist.index = newIndex;
                     if (metadataFragment.playlistUiSpec.displayingPlaylist == playSpec_.playingPlaylist) {
-                        metadataFragment.playlistUiSpec.adapter.notifyDataSetChanged();
+                        metadataFragment.playlistUiSpec.adapter_.notifyDataSetChanged();
                     }
                 }
             }
@@ -484,7 +458,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
 
                     playSpec_.playingPlaylist.index = newIndex;
                     if (metadataFragment.playlistUiSpec.displayingPlaylist == playSpec_.playingPlaylist) {
-                        metadataFragment.playlistUiSpec.adapter.notifyDataSetChanged();
+                        metadataFragment.playlistUiSpec.adapter_.notifyDataSetChanged();
                     }
                 }
             }
@@ -586,9 +560,8 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                 String checkPrefixLowercased = checkPrefix.toLowerCase();
 
                 String[] parts = fileTitleLowercased.split(" ");
-
-                for (int i = 0; i < parts.length; i++) {
-                    if (parts[i].startsWith(checkPrefixLowercased)) {
+                for (String part : parts) {
+                    if (part.startsWith(checkPrefixLowercased)) {
                         return true;
                     }
                 }
@@ -645,7 +618,6 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
             }
         });
 
-
         playBarItems.seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
@@ -664,9 +636,6 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
 
             }
         });
-
-        audioServiceResponse = new AudioServiceResponse(uiSpec_, playSpec_);
-        registerUpdateUiReceiver(updateUiReceiver);
     }
 
     /***********************************************************************************************
@@ -727,7 +696,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
         if (getFragmentManager().getBackStackEntryCount() == 0) {
 
             // TODO(doyle): Add notion of home screen and return to home view
-            if (activeFragment != FragmentType.PLAYLIST) {
+            if (metadataFragment.type != FragmentType.PLAYLIST) {
                 setAndShowFragment(FragmentType.PLAYLIST);
 
                 Menu sideMenu = uiSpec_.navigationView.getMenu();
@@ -800,7 +769,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                 AudioDatabase dbHandle = AudioDatabase.getHandle(this);
                 playSpec_.allAudioFiles.clear();
 
-                metadataFragment.playlistUiSpec.adapter.notifyDataSetChanged();
+                metadataFragment.playlistUiSpec.adapter_.notifyDataSetChanged();
                 GetAudioFromDevice task = new GetAudioFromDevice(this, playSpec_, dbHandle, true);
                 task.execute();
             } break;
@@ -864,8 +833,6 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
         playSpec_ = new PlaySpec();
         serviceBound = false;
         playlistQueued = false;
-
-        activeFragment = FragmentType.INVALID;
 
         // NOTE(doyle): Only ask for permissions if version >= Android M (API 23)
         int readPermissionCheck = ContextCompat.checkSelfPermission(this,
@@ -1037,8 +1004,6 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                     });
                 }
             }
-
-            publishProgress();
         }
 
         @Override
@@ -1057,7 +1022,11 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
             // NOTE(doyle): Load whatever is in the DB first and let the user interact with that,
             // then recheck information is valid afterwards
             quickLoadFromDb(playSpec);
-            if (!validateDatabase) return null;
+            if (!validateDatabase) {
+                return null;
+            } else {
+                publishProgress();
+            }
 
             // After load, delete any invalid entries first- so that scanning new files has a
             // smaller list to compare to
@@ -1263,15 +1232,14 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
             MainActivity activity = weakActivity.get();
             PlaySpec playSpec = weakPlaySpec.get();
             if (activity != null) {
-                Intent broadcast = new Intent(MainActivity.BROADCAST_UPDATE_UI);
-                activity.sendBroadcast(broadcast);
-
                 // TODO(doyle): Duplicated on exit. Since if we also validate against db, then allow playlist to be updated during update
                 // instead of waiting until entire db load is validated (which may take awhile)
                 playSpec.playingPlaylist = playSpec.libraryList;
-                activity.enqueueToPlayer(playSpec.playingPlaylist.contents,
-                        playSpec.playingPlaylist.index, false);
                 activity.setAndShowFragment(FragmentType.PLAYLIST);
+                activity.enqueueToPlayer(playSpec.playingPlaylist, false);
+
+                Intent broadcast = new Intent(MainActivity.BROADCAST_UPDATE_UI);
+                activity.sendBroadcast(broadcast);
             }
         }
 
@@ -1281,12 +1249,13 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
 
             MainActivity activity = weakActivity.get();
             PlaySpec playSpec = weakPlaySpec.get();
-            if (activity == null) {
-                Debug.LOG_W(this, "Context got GC'ed, library init key not written. " +
+            if (activity == null || playSpec == null) {
+                Debug.LOG_W(this, "Acitivty or playSpec got GC'ed, library init key not written. " +
                         "Another rescan needed");
             } else {
-                Intent broadcast = new Intent(MainActivity.BROADCAST_UPDATE_UI);
-                activity.sendBroadcast(broadcast);
+                playSpec.playingPlaylist = playSpec.libraryList;
+                activity.setAndShowFragment(FragmentType.PLAYLIST);
+                activity.enqueueToPlayer(playSpec.playingPlaylist, false);
 
                 SharedPreferences sharedPref =
                         PreferenceManager.getDefaultSharedPreferences(activity);
@@ -1299,10 +1268,8 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                             Toast.LENGTH_SHORT).show();
                 }
 
-                playSpec.playingPlaylist = playSpec.libraryList;
-                activity.enqueueToPlayer(playSpec.playingPlaylist.contents,
-                        playSpec.playingPlaylist.index, false);
-                activity.setAndShowFragment(FragmentType.PLAYLIST);
+                Intent broadcast = new Intent(MainActivity.BROADCAST_UPDATE_UI);
+                activity.sendBroadcast(broadcast);
             }
         }
     }
@@ -1328,16 +1295,21 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
         updateSideNavWithPlaylists(playSpec, uiSpec);
 
         if (metadataFragment != null) {
-            metadataFragment.updateUiData();
+            metadataFragment.updateMetadataView(FragmentType.PLAYLIST);
         }
     }
 
     void updatePlayBarUi(final UiSpec uiSpec) {
         Debug.INCREMENT_COUNTER(this);
 
+        if (uiSpec == null) {
+            CAREFUL_ASSERT(false, this, "uiSpec is null");
+            return;
+        }
+
         final PlayBarItems playBarItems = uiSpec.playBarItems;
         if (serviceBound && audioService.activeAudio != null) {
-            int backgroundRes = -1;
+            int backgroundRes;
             switch(audioService.playState) {
                 case PLAYING: {
                     if (!playBarItems.seekBarIsRunning) {
@@ -1377,9 +1349,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                     backgroundRes = R.drawable.ic_play;
                 } break;
             }
-
             playBarItems.playPauseButton.setBackgroundResource(backgroundRes);
-
         } else {
             playBarItems.playPauseButton.setBackgroundResource(R.drawable.ic_play);
         }
@@ -1460,10 +1430,10 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
             playSpec_.playingPlaylist.index = -1;
             playSpec_.playingPlaylist = newPlaylist;
         }
-        enqueueToPlayer(newPlaylist.contents, newPlaylist.index, true);
+        enqueueToPlayer(newPlaylist, true);
     }
 
-    void enqueueToPlayer(List<AudioFile> playlistFiles, int index, boolean playImmediately) {
+    void enqueueToPlayer(Playlist playlist, boolean playImmediately) {
         if (!serviceBound) {
             LOG_D(this, "Rebinding audio service");
             Intent playerIntent = new Intent(this, AudioService.class);
@@ -1473,19 +1443,8 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
             // NOTE(doyle): Queue playlist whereby onServiceConnected will detect and begin playing
             playlistQueued = true;
         } else {
-            audioService.preparePlaylist(playlistFiles, index);
-            if (playImmediately) {
-                audioService.playMedia();
-            }
-            // TODO(doyle): Broadcast receiver seems useless here? Whats the point.
-            // isn't it better to just directly access the function? The only way we can send
-            // broadcasts is through the app itself, so it's not like we can rely on it to "wake-up"
-            // our app if it's asleep
-            /*
-            // NOTE(doyle): Service is active, send media with broadcast receiver
-            Intent broadcastIntent = new Intent(BROADCAST_PLAY_NEW_AUDIO);
-            sendBroadcast(broadcastIntent);
-            */
+            audioService.preparePlaylist(playlist.contents, playlist.index);
+            if (playImmediately) audioService.playMedia();
         }
     }
 
@@ -1494,6 +1453,8 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
         PlaySpec playSpec;
 
         AudioServiceResponse(UiSpec uiSpec, PlaySpec playSpec) {
+            Debug.CAREFUL_ASSERT(uiSpec != null && playSpec != null, this, "Arguments are null");
+
             this.uiSpec = uiSpec;
             this.playSpec = playSpec;
         }
@@ -1502,6 +1463,5 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
         public void audioHasStartedPlayback(int songIndex) {
             updatePlayBarUi(uiSpec);
         }
-
     }
 }
