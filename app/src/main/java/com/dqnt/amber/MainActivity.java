@@ -26,16 +26,21 @@ import android.preference.PreferenceManager;
 import android.provider.MediaStore;
 import android.support.annotation.NonNull;
 import android.support.design.widget.NavigationView;
+import android.support.design.widget.TextInputEditText;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v4.widget.DrawerLayout;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
+import android.text.Editable;
+import android.text.TextWatcher;
+import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.SubMenu;
 import android.view.View;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -68,18 +73,15 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
     private static final int AMBER_READ_EXTERNAL_STORAGE_REQUEST = 1;
     private static final int AMBER_VERSION = 1;
 
-
     class PlaySpec {
-        List<AudioFile> allAudioFiles;
-
+        final List<AudioFile> allAudioFiles;
         // NOTE(doyle): Permanent list that has all the files the app has scanned, separate from the
         // list index because we clear the playlist list on load from DB, so save having to recreate
         // a library list every time we init from DB.
-        Playlist libraryList;
+        final Playlist libraryList;
+
         List<Playlist> playlistList;
-
         Playlist playingPlaylist;
-
         PlaySpec() {
             allAudioFiles = new ArrayList<>();
             playlistList = new ArrayList<>();
@@ -90,14 +92,29 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
         }
     }
 
-    class PlayBarItems {
+    class UiSpec {
+        Toolbar toolbar;
+        NavigationView navigationView;
+
+        PlayBarItems playBarItems;
+        Handler handler;
+
+        int primaryColor;
+        int accentColor;
+        int primaryTextColor;
+
+        Debug.UiUpdateAndRender debugRenderer;
+    }
+
+    private class PlayBarItems {
         Button skipNextButton;
         Button playPauseButton;
         Button skipPreviousButton;
         Button shuffleButton;
-
         Button repeatButton;
-        Drawable repeatIcon;
+        Button searchButton;
+        EditText searchEditText;
+        boolean searchMode;
 
         TextView currentSongTextView;
 
@@ -106,27 +123,15 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
         boolean seekBarIsRunning;
     }
 
-    class UiSpec {
-        Toolbar toolbar;
-
-        PlayBarItems playBarItems;
-        Handler handler;
-
-        NavigationView navigationView;
-        Debug.UiUpdateAndRender debugRenderer;
-
-        int primaryColor;
-        int accentColor;
-        int primaryTextColor;
-    }
 
     PlaySpec playSpec_;
     UiSpec uiSpec_;
 
     private boolean playlistQueued;
     private boolean serviceBound;
-    AudioService audioService;
     private AudioService.Response audioServiceResponse;
+
+    AudioService audioService;
 
     enum FragmentType {
         ARTIST,
@@ -138,8 +143,8 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
     }
 
     private FragmentType activeFragment;
-    PlaylistFragment playlistFragment = null;
-    MetadataFragment metadataFragment = null;
+    PlaylistFragment playlistFragment;
+    MetadataFragment metadataFragment;
     /*
      ***********************************************************************************************
      * INITIALISATION CODE
@@ -376,7 +381,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
         uiSpec_.debugRenderer.isRunning = showDebug;
 
         uiSpec_.playBarItems = new PlayBarItems();
-        PlayBarItems playBarItems = uiSpec_.playBarItems;
+        final PlayBarItems playBarItems = uiSpec_.playBarItems;
         playBarItems.playPauseButton = (Button) findViewById(R.id.play_bar_play_button);
         playBarItems.skipNextButton = (Button) findViewById(R.id.play_bar_skip_next_button);
         playBarItems.skipPreviousButton = (Button) findViewById(R.id.play_bar_skip_previous_button);
@@ -396,10 +401,29 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
 
         playBarItems.shuffleButton = (Button) findViewById(R.id.play_bar_shuffle_button);
         playBarItems.repeatButton = (Button) findViewById(R.id.play_bar_repeat_button);
-        playBarItems.repeatIcon = ContextCompat.getDrawable(this, R.drawable.ic_repeat);
-
+        playBarItems.searchButton = (Button) findViewById(R.id.play_bar_search_button);
+        playBarItems.searchEditText = (EditText)
+                findViewById(R.id.play_bar_search_edit_text);
         playBarItems.currentSongTextView = (TextView)
                 findViewById(R.id.play_bar_current_song_text_view);
+
+        if (playBarItems.searchMode) {
+            if (playBarItems.searchEditText.getVisibility() != View.VISIBLE) {
+                playBarItems.searchEditText.setVisibility(View.VISIBLE);
+            }
+
+            if (playBarItems.currentSongTextView.getVisibility() == View.VISIBLE) {
+                playBarItems.currentSongTextView.setVisibility(View.GONE);
+            }
+        } else {
+            if (playBarItems.searchEditText.getVisibility() == View.VISIBLE) {
+                playBarItems.searchEditText.setVisibility(View.GONE);
+            }
+
+            if (playBarItems.currentSongTextView.getVisibility() != View.VISIBLE) {
+                playBarItems.currentSongTextView.setVisibility(View.VISIBLE);
+            }
+        }
 
         playBarItems.playPauseButton.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -450,6 +474,30 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
             }
         });
 
+        playBarItems.shuffleButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (serviceBound) {
+                    audioService.shuffle = !audioService.shuffle;
+                    Drawable background = ContextCompat.getDrawable
+                            (v.getContext(), R.drawable.ic_shuffle);
+                    if (audioService.shuffle) {
+                        int color = ContextCompat.getColor(v.getContext(), R.color.colorAccent);
+                        background.setColorFilter(color, PorterDuff.Mode.SRC_IN);
+                    } else {
+                        background.setColorFilter(null);
+                    }
+
+                    v.setBackground(background);
+
+                    SharedPreferences sharedPref =
+                            PreferenceManager.getDefaultSharedPreferences(v.getContext());
+                    sharedPref.edit().putBoolean(getString(R.string.internal_pref_shuffle_mode),
+                            audioService.shuffle).apply();
+                }
+            }
+        });
+
         playBarItems.repeatButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -475,29 +523,65 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
             }
         });
 
-        playBarItems.shuffleButton.setOnClickListener(new View.OnClickListener() {
+        playBarItems.searchButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                if (serviceBound) {
-                    audioService.shuffle = !audioService.shuffle;
-                    Drawable background = ContextCompat.getDrawable
-                            (v.getContext(), R.drawable.ic_shuffle);
-                    if (audioService.shuffle) {
-                        int color = ContextCompat.getColor(v.getContext(), R.color.colorAccent);
-                        background.setColorFilter(color, PorterDuff.Mode.SRC_IN);
-                    } else {
-                        background.setColorFilter(null);
-                    }
+                playBarItems.searchMode = !playBarItems.searchMode;
+                EditText searchEditText = playBarItems.searchEditText;
+                TextView currentSongTextView = playBarItems.currentSongTextView;
 
-                    v.setBackground(background);
+                Drawable background = ContextCompat.getDrawable
+                        (v.getContext(), R.drawable.ic_magnify);
 
-                    SharedPreferences sharedPref =
-                            PreferenceManager.getDefaultSharedPreferences(v.getContext());
-                    sharedPref.edit().putBoolean(getString(R.string.internal_pref_shuffle_mode),
-                            audioService.shuffle).apply();
+                if (playBarItems.searchMode) {
+                    searchEditText.setVisibility(View.VISIBLE);
+                    currentSongTextView.setVisibility(View.GONE);
+                    searchEditText.requestFocus();
+
+                    int color = ContextCompat.getColor(v.getContext(), R.color.colorAccent);
+                    background.setColorFilter(color, PorterDuff.Mode.SRC_IN);
+                } else {
+                    searchEditText.setVisibility(View.GONE);
+                    currentSongTextView.setVisibility(View.VISIBLE);
+
+                    background.setColorFilter(null);
                 }
+
+                v.setBackground(background);
             }
         });
+
+        playBarItems.searchEditText.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+            }
+        });
+
+        playBarItems.searchEditText.setOnKeyListener(new View.OnKeyListener() {
+            @Override
+            public boolean onKey(View v, int keyCode, KeyEvent event) {
+                boolean result = false;
+
+                if (event.getAction() == KeyEvent.ACTION_UP) {
+                    char key = (char) event.getKeyCode();
+                    Debug.TOAST(v.getContext(), "recorded key " + key, Toast.LENGTH_SHORT);
+                    result = true;
+                }
+
+                return result;
+            }
+        });
+
 
         playBarItems.seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override

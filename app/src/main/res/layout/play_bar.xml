@@ -12,17 +12,40 @@
         android:layout_width="match_parent"
         android:layout_height="@dimen/amber_play_bar_current_song_height">
 
-        <TextView
-            android:layout_height="match_parent"
+        <Button
+            android:layout_width="@dimen/material_icon"
+            android:layout_height="@dimen/material_icon"
+            android:background="@drawable/ic_magnify"
+            android:id="@+id/play_bar_search_button"
+            android:layout_gravity="center_vertical" />
+
+        <LinearLayout
             android:layout_width="match_parent"
+            android:layout_height="match_parent"
             android:paddingTop="@dimen/amber_play_bar_current_song_text_view_top_padding"
             android:paddingLeft="@dimen/amber_icon_padding"
             android:paddingRight="@dimen/amber_icon_padding"
-            android:hint="@string/play_bar_current_song_text_view_placeholder"
-            android:id="@+id/play_bar_current_song_text_view"
-            android:textSize="@dimen/material_hint_and_input_text"
-            android:gravity="center_vertical">
-        </TextView>
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_height="match_parent"
+                android:layout_width="match_parent"
+                android:hint="@string/play_bar_current_song_text_view_placeholder"
+                android:id="@+id/play_bar_current_song_text_view"
+                android:visibility="visible"
+                android:textSize="@dimen/material_hint_and_input_text"
+                android:gravity="center_vertical">
+            </TextView>
+
+            <EditText
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:visibility="gone"
+                android:id="@+id/play_bar_search_edit_text"
+                android:textSize="@dimen/material_hint_and_input_text"
+                android:inputType="text" />
+        </LinearLayout>
+
     </LinearLayout>
 
     <LinearLayout

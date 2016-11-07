@@ -9,7 +9,6 @@
         android:layout_width="fill_parent"
         android:layout_height="@dimen/material_component_lists_single_line_height"
         android:textSize="20sp"
-        android:textStyle="bold"
         android:text="Generic Text" />
 
 </LinearLayout>

@@ -8,8 +8,6 @@ import android.widget.BaseAdapter;
 import android.widget.ListView;
 import android.widget.TextView;
 
-import java.util.List;
-
 import com.dqnt.amber.PlaybackData.AudioFile;
 
 /**
@@ -66,7 +64,8 @@ class AudioFileAdapter extends BaseAdapter {
         TextView title;
     }
 
-    int inactiveColor = -1;
+    int artistInactiveColor = -1;
+    int titleInactiveColor = -1;
     @Override
     public View getView(int position, View convertView, ViewGroup parent) {
         AudioEntryInView audioEntry;
@@ -82,8 +81,9 @@ class AudioFileAdapter extends BaseAdapter {
 
             convertView.setTag(audioEntry);
 
-            if (inactiveColor == -1) {
-                inactiveColor = audioEntry.artist.getCurrentTextColor();
+            if (artistInactiveColor == -1) {
+                artistInactiveColor = audioEntry.artist.getCurrentTextColor();
+                titleInactiveColor = audioEntry.title.getCurrentTextColor();
             }
         } else {
             audioEntry = (AudioEntryInView) convertView.getTag();
@@ -92,16 +92,16 @@ class AudioFileAdapter extends BaseAdapter {
         AudioFile audio = playlist.contents.get(position);
         if (Debug.CAREFUL_ASSERT(audio != null, this, "Audio file is null")) {
             /* Set view data */
-            audioEntry.artist.setText(audio.title);
-            audioEntry.title.setText(audio.artist);
+            audioEntry.artist.setText(audio.artist);
+            audioEntry.title.setText(audio.title);
             audioEntry.position = position;
 
             if (playlist.index == position) {
                 audioEntry.artist.setTextColor(highlightColor);
                 audioEntry.title.setTextColor(highlightColor);
             } else {
-                audioEntry.artist.setTextColor(inactiveColor);
-                audioEntry.title.setTextColor(inactiveColor);
+                audioEntry.artist.setTextColor(artistInactiveColor);
+                audioEntry.title.setTextColor(titleInactiveColor);
             }
         }
 

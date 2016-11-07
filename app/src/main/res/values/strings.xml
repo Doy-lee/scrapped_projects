@@ -17,6 +17,7 @@
     <string name="pref_validate_database_on_startup_summ">Auto check for dead/new entries on app startup</string>
 
     <string name="play_bar_current_song_text_view_placeholder">[Artist Name - Title]</string>
+    <string name="play_bar_search_edit_text_placeholder">[Search String]</string>
 
     <string name="internal_pref_library_init_key">internal_pref_library_init_key</string>
     <string name="internal_pref_shuffle_mode">internal_pref_shuffle_mode</string>

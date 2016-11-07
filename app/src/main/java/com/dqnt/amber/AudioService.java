@@ -45,7 +45,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
     private MediaSessionCompat mediaSessionCompat;
     private MediaControllerCompat.TransportControls transportControls;
 
-    public enum PlayState {
+    enum PlayState {
         PLAYING,
         PAUSED,
         STOPPED,
@@ -68,9 +68,9 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
     private final int NOTIFY_ID = 1;
     private AudioManager audioManager;
     PlayState playState;
+
     boolean shuffle;
     boolean repeat;
-
     boolean wasPlayingBeforeAudioDuck;
 
     private List<AudioFile> playlist;

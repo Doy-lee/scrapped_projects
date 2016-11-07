@@ -9,13 +9,14 @@
      android:layout_width="fill_parent"
      android:layout_height="wrap_content"
      android:textSize="20sp"
-     android:textStyle="bold"
+     android:textColor="@color/primary_text_on_light_background"
      android:text="Title" />
 
  <TextView
      android:id="@+id/audio_artist"
      android:layout_width="fill_parent"
      android:layout_height="wrap_content"
-     android:textSize="18sp"
+     android:textSize="16sp"
+     android:textColor="@color/hint_text_on_light_background"
      android:text="Artist" />
 </LinearLayout>

@@ -128,8 +128,9 @@ public class MainActivityTest {
         /* Shuffle backwards */
         oldSongIndex = playSpec.playingPlaylist.index;
         onView(withId(R.id.play_bar_skip_previous_button)).perform(click());
-        assertEquals(service.playState, AudioService.PlayState.PLAYING);
         newSongIndex = playSpec.playingPlaylist.index;
+
+        assertEquals(service.playState, AudioService.PlayState.PLAYING);
         assertNotEquals(oldSongIndex, newSongIndex);
         checkAudioFileEntryExistsAndHighlighted(adapter, playlist.contents.get(playlist.index));
 
