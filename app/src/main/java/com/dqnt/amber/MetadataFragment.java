@@ -33,12 +33,12 @@ public class MetadataFragment extends Fragment {
 
     private static class DisplaySpec {
         final FragmentType type;
-        long playlistTypeId;
+        long playlistKey;
         int listPos;
 
         DisplaySpec(FragmentType type) {
             this.type = type;
-            this.playlistTypeId = -1;
+            this.playlistKey = -1;
             listPos = 0;
         }
     }
@@ -72,8 +72,14 @@ public class MetadataFragment extends Fragment {
         MetadataFragment fragment = new MetadataFragment();
         fragment.allAudioFiles = allAudioFiles;
 
+        DisplaySpec spec = new DisplaySpec(type);
+        if (type == FragmentType.PLAYLIST) {
+            spec.playlistKey = activePlaylist.dbKey;
+        }
+
         fragment.displaySpecList = new ArrayList<>();
-        fragment.displaySpecList.add(new DisplaySpec(type));
+        fragment.displaySpecList.add(spec);
+
         fragment.currDisplaySpecIndex = fragment.displaySpecList.size() - 1;
         fragment.metadataDisplayStack = new Stack<>();
 
@@ -115,7 +121,6 @@ public class MetadataFragment extends Fragment {
                     if (!metadataDisplayStack.isEmpty()) {
                         DisplaySpec spec = metadataDisplayStack.pop();
                         updateMetadataView(spec.type);
-                        listView.setSelection(spec.listPos);
                         result = true;
                     }
                 }
@@ -149,14 +154,12 @@ public class MetadataFragment extends Fragment {
 
     // NOTE(doyle): Need current playing playlist, because if it is'nt the current playing playlist,
     // we don't want to highlight an entry, that may be left active since it last played
-    void updateDisplayingPlaylist(Playlist playingPlaylist, Playlist newPlaylist) {
+    void changeDisplayingPlaylist(Playlist playingPlaylist, Playlist newPlaylist) {
         playlistUiSpec.displayingPlaylist = newPlaylist;
 
         if (playlistUiSpec.displayingPlaylist != playingPlaylist) {
             playlistUiSpec.displayingPlaylist.index = -1;
         }
-
-        updateMetadataView(FragmentType.PLAYLIST);
     }
 
     void updateMetadataView(FragmentType newType) {
@@ -175,81 +178,9 @@ public class MetadataFragment extends Fragment {
                                      final ListView listView,
                                      final String filterBy) {
 
-        { // Get the display spec for the new fragment (create or grab pre-existing if it exists)
-
-            /* Store the list position of the current fragment display */
-            DisplaySpec oldSpec = displaySpecList.get(currDisplaySpecIndex);
-            oldSpec.listPos = listView.getFirstVisiblePosition();
-
-            // NOTE(doyle): All metadata views are top level unless it's a file view, which means we
-            // need to start tracking the view stack, i.e. artist files should return to artist; artist
-            // view itself should return to nothing
-            if (newType == FragmentType.ARTIST_FILES ||
-                    newType == FragmentType.ALBUM_FILES ||
-                    newType == FragmentType.ALBUM_ARTIST_FILES ||
-                    newType == FragmentType.GENRE_FILES) {
-                metadataDisplayStack.push(oldSpec);
-                // TODO(doyle): Do we care about remembering list position for file views?
-            } else {
-                DisplaySpec newSpec = null;
-                metadataDisplayStack.clear();
-
-                /* Get the display spec of the new fragment, if it exists, else create*/
-                // NOTE(doyle): For playlists, we need a way to store list positions for different
-                // playlists, so we also need to store some way of identifiying them
-                if (newType == FragmentType.PLAYLIST) {
-                    boolean matched = false;
-
-                    for (int i = 0; i < displaySpecList.size(); i++) {
-                        DisplaySpec spec = displaySpecList.get(i);
-                        if (spec.type == FragmentType.PLAYLIST &&
-                                spec.playlistTypeId == playlistUiSpec.displayingPlaylist.dbKey) {
-                            newSpec = spec;
-                            currDisplaySpecIndex = i;
-                            matched = true;
-                            break;
-                        }
-                    }
-
-                    if (!matched) {
-                        newSpec = new DisplaySpec(FragmentType.PLAYLIST);
-                        newSpec.playlistTypeId = playlistUiSpec.displayingPlaylist.dbKey;
-                        displaySpecList.add(newSpec);
-                        currDisplaySpecIndex = displaySpecList.size() - 1;
-                    }
-                } else {
-                    boolean matched = false;
-                    for (int i = 0; i < displaySpecList.size(); i++) {
-                        DisplaySpec spec = displaySpecList.get(i);
-                        if (spec.type == newType) {
-                            spec.listPos = listView.getFirstVisiblePosition();
-                            newSpec = spec;
-                            matched = true;
-                            currDisplaySpecIndex = i;
-                            break;
-                        }
-                    }
-
-                    // NOTE(doyle): Doesn't exists yet, so we create, display spec is lazily created
-                    if (!matched) {
-                        newSpec = new DisplaySpec(newType);
-                        displaySpecList.add(newSpec);
-                        currDisplaySpecIndex = displaySpecList.size() - 1;
-
-                        Debug.CAREFUL_ASSERT(
-                                displaySpecList.get(displaySpecList.size() - 1) == newSpec,
-                                this, "Implementation behaviour changed. " +
-                                        "Expected add to array list to append to end");
-                    }
-                }
-
-                if (newSpec == null) {
-                    Debug.CAREFUL_ASSERT(false, this, "New display spec was null");
-                } else {
-                    listView.setSelection(newSpec.listPos);
-                }
-            }
-        }
+        /* Store the list position of the current fragment display */
+        DisplaySpec oldSpec = displaySpecList.get(currDisplaySpecIndex);
+        oldSpec.listPos = listView.getFirstVisiblePosition();
 
         { // Generate the data for the new fragment
             SortedSet<String> dataForFragment = new TreeSet<>();
@@ -407,6 +338,83 @@ public class MetadataFragment extends Fragment {
             }
         }
 
+        { // Special display spec for file views, dummy spec to ignore list pos
+
+            // NOTE(doyle): All metadata views are top level unless it's a file view, which means we
+            // need to start tracking the view stack, i.e. artist files should return to artist; artist
+            // view itself should return to nothing
+            if (newType == FragmentType.ARTIST_FILES ||
+                    newType == FragmentType.ALBUM_FILES ||
+                    newType == FragmentType.ALBUM_ARTIST_FILES ||
+                    newType == FragmentType.GENRE_FILES) {
+                metadataDisplayStack.push(oldSpec);
+
+                boolean matched = false;
+                for (int i = 0; i < displaySpecList.size(); i++) {
+                    DisplaySpec spec = displaySpecList.get(i);
+                    if (spec.type == FragmentType.INVALID) {
+                        currDisplaySpecIndex = i;
+                        matched = true;
+                        break;
+                    }
+                }
+
+                if (!matched) {
+                    DisplaySpec dummySpec = new DisplaySpec(FragmentType.INVALID);
+                    displaySpecList.add(dummySpec);
+                    currDisplaySpecIndex = displaySpecList.size() - 1;
+                }
+
+                return;
+            }
+        }
+
+        // NOTE(doyle): In special display spec, we return early if valid, so always valid to clear
+        metadataDisplayStack.clear();
+
+        { // Get the display spec for the new fragment (create or grab pre-existing if it exists)
+            DisplaySpec newSpec = null;
+            /* Get the display spec of the new fragment, if it exists, else create*/
+            // NOTE(doyle): For playlists, we need a way to store list positions for different
+            // playlists, so we also need to store some way of identifiying them
+            boolean matched = false;
+            for (int i = 0; i < displaySpecList.size(); i++) {
+                DisplaySpec spec = displaySpecList.get(i);
+                if (spec.type == newType) {
+
+                    boolean valid = false;
+                    if (spec.type != FragmentType.PLAYLIST)
+                        valid = true;
+                    else if (spec.playlistKey == playlistUiSpec.displayingPlaylist.dbKey)
+                        valid = true;
+
+                    if (valid) {
+                        newSpec = spec;
+                        matched = true;
+                        currDisplaySpecIndex = i;
+                    }
+                    break;
+                }
+            }
+
+            // NOTE(doyle): Doesn't exists yet, so we create, display spec is lazily created
+            if (!matched) {
+                newSpec = new DisplaySpec(newType);
+
+                if (newType == FragmentType.PLAYLIST)
+                    newSpec.playlistKey = playlistUiSpec.displayingPlaylist.dbKey;
+
+                displaySpecList.add(newSpec);
+                currDisplaySpecIndex = displaySpecList.size() - 1;
+
+                Debug.CAREFUL_ASSERT(
+                        displaySpecList.get(displaySpecList.size() - 1) == newSpec,
+                        this, "Implementation behaviour changed. " +
+                                "Expected add to array list to append to end");
+            }
+
+            listView.setSelection(newSpec.listPos);
+        }
     }
 
     private static class MetadataAdapter extends BaseAdapter {

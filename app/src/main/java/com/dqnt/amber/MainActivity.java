@@ -149,8 +149,6 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
         GENRE_FILES,
         PLAYLIST,
         INVALID;
-
-        long playlistDbKey;
     }
     MetadataFragment metadataFragment;
 
@@ -211,24 +209,6 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
         }
     };
 
-    private void setAndShowFragment(FragmentType type) {
-        if (metadataFragment == null) {
-            metadataFragment = MetadataFragment.newInstance(this, playSpec_.allAudioFiles, type,
-                    playSpec_.playingPlaylist, uiSpec_.toolbar);
-
-            getSupportFragmentManager().beginTransaction()
-                    .replace(R.id.main_content_fragment, metadataFragment)
-                    // .addToBackStack(null)
-                    .commit();
-        } else {
-            // NOTE(doyle): If just init, the fragment was just created to which the
-            // list metadata view will be initialised onCreateView, so we won't need to
-            // manually switch views
-
-            metadataFragment.updateMetadataView(type);
-        }
-    }
-
     private void amberCreate() {
         { // Intialise debug state
             SharedPreferences sharedPref = PreferenceManager.
@@ -253,6 +233,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
 
         // Initialise UI
         uiSpec_ = new UiSpec();
+
 
         audioServiceResponse = new AudioServiceResponse(uiSpec_, playSpec_);
         uiSpec_.toolbar = (Toolbar) findViewById(R.id.main_toolbar);
@@ -283,26 +264,26 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
 
                         switch (item.getItemId()) {
                             case R.id.menu_main_drawer_library: {
-                                metadataFragment.updateDisplayingPlaylist
+                                metadataFragment.changeDisplayingPlaylist
                                         (playSpec_.playingPlaylist, playSpec_.libraryList);
-                                setAndShowFragment(FragmentType.PLAYLIST);
+                                metadataFragment.updateMetadataView(FragmentType.PLAYLIST);
                             } break;
 
                             case R.id.menu_main_drawer_album: {
-                                setAndShowFragment(FragmentType.ALBUM);
+                                metadataFragment.updateMetadataView(FragmentType.ALBUM);
                             } break;
 
                             case R.id.menu_main_drawer_album_artist: {
-                                setAndShowFragment(FragmentType.ALBUM_ARTIST);
+                                metadataFragment.updateMetadataView(FragmentType.ALBUM_ARTIST);
                             } break;
 
                             case R.id.menu_main_drawer_artist: {
-                                setAndShowFragment(FragmentType.ARTIST);
+                                metadataFragment.updateMetadataView(FragmentType.ARTIST);
                             } break;
 
 
                             case R.id.menu_main_drawer_genre: {
-                                setAndShowFragment(FragmentType.GENRE);
+                                metadataFragment.updateMetadataView(FragmentType.GENRE);
                             } break;
 
                             default: {
@@ -556,9 +537,9 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                     currentSongTextView.setVisibility(View.VISIBLE);
 
                     background.setColorFilter(null);
-                    metadataFragment.updateDisplayingPlaylist(playSpec_.playingPlaylist,
+                    metadataFragment.changeDisplayingPlaylist(playSpec_.playingPlaylist,
                             uiSpec_.returnFromSearchPlaylist);
-                    setAndShowFragment(FragmentType.PLAYLIST);
+                    metadataFragment.updateMetadataView(FragmentType.PLAYLIST);
 
                     uiSpec_.returnFromSearchPlaylist = null;
                 }
@@ -605,9 +586,9 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                     }
                 }
 
-                metadataFragment.updateDisplayingPlaylist(playSpec_.playingPlaylist,
+                metadataFragment.changeDisplayingPlaylist(playSpec_.playingPlaylist,
                          uiSpec_.searchResultPlaylist);
-                setAndShowFragment(FragmentType.PLAYLIST);
+                metadataFragment.updateMetadataView(FragmentType.PLAYLIST);
             }
 
             @Override
@@ -712,7 +693,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
         if (getFragmentManager().getBackStackEntryCount() == 0) {
             // TODO(doyle): Add notion of home screen and return to home view
             if (metadataFragment.getFragmentType() != FragmentType.PLAYLIST) {
-                setAndShowFragment(FragmentType.PLAYLIST);
+                metadataFragment.updateMetadataView(FragmentType.PLAYLIST);
 
                 Menu sideMenu = uiSpec_.navigationView.getMenu();
                 for (int i = 0; i < sideMenu.size(); i++) {
@@ -1250,7 +1231,10 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                 // TODO(doyle): Duplicated on exit. Since if we also validate against db, then allow playlist to be updated during update
                 // instead of waiting until entire db load is validated (which may take awhile)
                 playSpec.playingPlaylist = playSpec.libraryList;
-                activity.setAndShowFragment(FragmentType.PLAYLIST);
+
+                activity.createMetadataFragment(playSpec.allAudioFiles, playSpec.playingPlaylist,
+                        activity.uiSpec_.toolbar);
+
                 activity.enqueueToPlayer(playSpec.playingPlaylist, false);
 
                 Intent broadcast = new Intent(MainActivity.BROADCAST_UPDATE_UI);
@@ -1269,7 +1253,9 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                         "Another rescan needed");
             } else {
                 playSpec.playingPlaylist = playSpec.libraryList;
-                activity.setAndShowFragment(FragmentType.PLAYLIST);
+
+                activity.createMetadataFragment(playSpec.allAudioFiles, playSpec.playingPlaylist,
+                        activity.uiSpec_.toolbar);
                 activity.enqueueToPlayer(playSpec.playingPlaylist, false);
 
                 SharedPreferences sharedPref =
@@ -1292,6 +1278,21 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
     /***********************************************************************************************
      * UI FUNCTIONS
      **********************************************************************************************/
+    void createMetadataFragment(List<AudioFile> allAudioFiles, Playlist activePlaylist, Toolbar toolbar) {
+        if (metadataFragment == null) {
+            metadataFragment = MetadataFragment.newInstance(this, allAudioFiles,
+                    FragmentType.PLAYLIST,
+                    activePlaylist,
+                    toolbar);
+
+            getSupportFragmentManager().beginTransaction()
+                    .replace(R.id.main_content_fragment, metadataFragment)
+                    // .addToBackStack(null)
+                    .commit();
+        }
+
+    }
+
     private BroadcastReceiver updateUiReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
@@ -1422,9 +1423,9 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
             for (int i = 0; i < playlistList.size(); i++) {
                 Playlist newPlaylist = playlistList.get(i);
                 if (newPlaylist.menuId == item.getItemId()) {
-                    metadataFragment.updateDisplayingPlaylist(playSpec.playingPlaylist,
+                    metadataFragment.changeDisplayingPlaylist(playSpec.playingPlaylist,
                             newPlaylist);
-                    setAndShowFragment(FragmentType.PLAYLIST);
+                    metadataFragment.updateMetadataView(FragmentType.PLAYLIST);
                     break;
                 }
             }
