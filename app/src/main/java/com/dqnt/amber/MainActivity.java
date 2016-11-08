@@ -143,8 +143,14 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
         ARTIST_FILES,
         ALBUM,
         ALBUM_FILES,
+        ALBUM_ARTIST,
+        ALBUM_ARTIST_FILES,
+        GENRE,
+        GENRE_FILES,
         PLAYLIST,
-        INVALID,
+        INVALID;
+
+        long playlistDbKey;
     }
     MetadataFragment metadataFragment;
 
@@ -218,10 +224,10 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
             // NOTE(doyle): If just init, the fragment was just created to which the
             // list metadata view will be initialised onCreateView, so we won't need to
             // manually switch views
+
             metadataFragment.updateMetadataView(type);
         }
     }
-
 
     private void amberCreate() {
         { // Intialise debug state
@@ -276,19 +282,27 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                         }
 
                         switch (item.getItemId()) {
+                            case R.id.menu_main_drawer_library: {
+                                metadataFragment.updateDisplayingPlaylist
+                                        (playSpec_.playingPlaylist, playSpec_.libraryList);
+                                setAndShowFragment(FragmentType.PLAYLIST);
+                            } break;
 
                             case R.id.menu_main_drawer_album: {
                                 setAndShowFragment(FragmentType.ALBUM);
+                            } break;
+
+                            case R.id.menu_main_drawer_album_artist: {
+                                setAndShowFragment(FragmentType.ALBUM_ARTIST);
                             } break;
 
                             case R.id.menu_main_drawer_artist: {
                                 setAndShowFragment(FragmentType.ARTIST);
                             } break;
 
-                            case R.id.menu_main_drawer_library: {
-                                metadataFragment.updateDisplayingPlaylist
-                                        (playSpec_.playingPlaylist, playSpec_.libraryList);
-                                setAndShowFragment(FragmentType.PLAYLIST);
+
+                            case R.id.menu_main_drawer_genre: {
+                                setAndShowFragment(FragmentType.GENRE);
                             } break;
 
                             default: {
@@ -300,7 +314,9 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                     }
                 });
 
+        SharedPreferences sharedPref = PreferenceManager.getDefaultSharedPreferences(this);
         uiSpec_.handler = new Handler();
+        /*
         uiSpec_.debugRenderer = new Debug.UiUpdateAndRender(this, uiSpec_.handler, 1) {
             @Override
             public void renderElements() {
@@ -364,11 +380,11 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                 Debug.INCREMENT_COUNTER(this, "Debug Renderer");
             }
         };
-
-        SharedPreferences sharedPref = PreferenceManager.getDefaultSharedPreferences(this);
         boolean showDebug =
                 sharedPref.getBoolean(getString(R.string.internal_pref_show_debug), false);
-        uiSpec_.debugRenderer.isRunning = showDebug;
+        uiSpec_.debugRenderer.isRunning = false;
+        */
+
 
         uiSpec_.playBarItems = new PlayBarItems();
         final PlayBarItems playBarItems = uiSpec_.playBarItems;
@@ -694,9 +710,8 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
     @Override
     public void onBackPressed() {
         if (getFragmentManager().getBackStackEntryCount() == 0) {
-
             // TODO(doyle): Add notion of home screen and return to home view
-            if (metadataFragment.type != FragmentType.PLAYLIST) {
+            if (metadataFragment.getFragmentType() != FragmentType.PLAYLIST) {
                 setAndShowFragment(FragmentType.PLAYLIST);
 
                 Menu sideMenu = uiSpec_.navigationView.getMenu();

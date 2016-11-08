@@ -27,6 +27,8 @@
     <string name="menu_main_drawer_library">Library</string>
     <string name="menu_main_drawer_artist">Artist</string>
     <string name="menu_main_drawer_album">Album</string>
+    <string name="menu_main_drawer_album_artist">Album Artist</string>
+    <string name="menu_main_drawer_genre">Genre</string>
     <string name="menu_main_drawer_settings">Settings</string>
 
     <!-- TODO: Remove or change this placeholder text -->
