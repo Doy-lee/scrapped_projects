@@ -101,7 +101,7 @@ public class MetadataFragment extends Fragment {
         // TODO(doyle): Revise
         Handler handler = new Handler();
         Debug.UiUpdateAndRender debugRenderer =
-                new Debug.UiUpdateAndRender(getActivity(), handler, 1) {
+                new Debug.UiUpdateAndRender("METADATA", getActivity(), handler, 1, true) {
             @Override
             public void renderElements() {
                 for (DisplaySpec spec: displaySpecList) {

@@ -6,6 +6,7 @@ import android.os.Handler;
 import android.support.v4.content.ContextCompat;
 import android.util.Log;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
@@ -201,9 +202,12 @@ class Debug {
         Toast.makeText(context, log, length).show();
     }
 
-
-    private static int debugViewId;
+    private static List<Integer> debugViewIdList;
+    private static int globalActivityViewId = -1;
+    static boolean showDebugRenderers = false;
     private static void initViewForActivity(Activity activity) {
+        if (globalActivityViewId != -1) return;
+
         String name = activity.getComponentName().getClassName();
         RelativeLayout debugLayout = new RelativeLayout(activity);
         RelativeLayout.LayoutParams debugLayoutParams = new RelativeLayout.LayoutParams(
@@ -216,36 +220,56 @@ class Debug {
 
         LinearLayout debugStringLayout = new LinearLayout(activity);
         LinearLayout.LayoutParams debugStringLayoutParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.MATCH_PARENT);
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
         debugStringLayout.setOrientation(LinearLayout.VERTICAL);
 
-        debugViewId = View.generateViewId();
+        int debugViewId = View.generateViewId();
         debugStringLayout.setId(debugViewId);
         debugLayout.addView(debugStringLayout, debugStringLayoutParams);
 
         activity.addContentView(debugLayout, debugLayoutParams);
+        globalActivityViewId = debugViewId;
     }
-
 
     abstract static class UiUpdateAndRender implements Runnable {
         private WeakReference<Activity> weakActivity;
         private WeakReference<Handler> weakHandler;
+        private WeakReference<LinearLayout> weakUiLayout;
+        private String label;
+
         float updateRateInMilliseconds;
         boolean isRunning;
 
-        UiUpdateAndRender(Activity activity, Handler handler, int framesPerSecond) {
+        UiUpdateAndRender(String label, Activity activity, Handler handler, int framesPerSecond, boolean isRunning) {
             ASSERT(activity != null);
             ASSERT(handler != null);
             ASSERT(framesPerSecond > 0);
 
-            this.weakActivity = new WeakReference<Activity>(activity);
-            this.weakHandler = new WeakReference<Handler>(handler);
+            initViewForActivity(activity);
             updateRateInMilliseconds = 1000 / framesPerSecond;
 
-            initViewForActivity(activity);
+            this.weakActivity = new WeakReference<>(activity);
+            this.weakHandler = new WeakReference<>(handler);
+            this.isRunning = isRunning;
+            this.label = label;
 
-            isRunning = true;
+            { // Create this renderer instance debug layout to push elements to
+                int debugViewId = View.generateViewId();
+                LinearLayout debugStringLayout = new LinearLayout(activity);
+                LinearLayout.LayoutParams debugStringLayoutParams = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT);
+                debugStringLayout.setOrientation(LinearLayout.VERTICAL);
+                debugStringLayout.setId(debugViewId);
+
+                LinearLayout globalDebugLayout = (LinearLayout)
+                        activity.findViewById(globalActivityViewId);
+                globalDebugLayout.addView(debugStringLayout, debugStringLayoutParams);
+
+                this.weakUiLayout = new WeakReference<>(debugStringLayout);
+            }
+
             activity.runOnUiThread(this);
         }
 
@@ -253,17 +277,22 @@ class Debug {
         public void run() {
             Activity activity = weakActivity.get();
             Handler handler = weakHandler.get();
+            LinearLayout view = weakUiLayout.get();
             if (activity != null && handler != null) {
-                clearView(activity);
-                if (isRunning) {
+                clearView();
+                if (isRunning && Debug.showDebugRenderers) {
+                    view.setVisibility(View.VISIBLE);
+                    createAndRenderDebugText(activity, view, null, label);
                     renderElements();
+                } else {
+                    view.setVisibility(View.GONE);
                 }
                 handler.postDelayed(this, (long) updateRateInMilliseconds);
             }
         }
 
-        private void clearView(Activity activity) {
-            LinearLayout view = (LinearLayout) activity.findViewById(debugViewId);
+        private void clearView() {
+            LinearLayout view = weakUiLayout.get();
             if (view == null) return;
 
             view.removeAllViewsInLayout();
@@ -272,53 +301,47 @@ class Debug {
 
         void pushVariable(String name, Object value) {
             Activity activity = weakActivity.get();
+            LinearLayout view = weakUiLayout.get();
             if (activity != null && value != null) {
-                LinearLayout view = (LinearLayout) activity.findViewById(debugViewId);
-                if (view != null) {
-                    String debugString = name + ": ";
-                    String debugValue = "--";
+                String debugString = name + ": ";
+                String debugValue = "--";
 
-                    if (value instanceof Integer) {
-                        int tmp = (int) value;
-                        debugValue = String.valueOf(tmp);
+                if (value instanceof Integer) {
+                    int tmp = (int) value;
+                    debugValue = String.valueOf(tmp);
 
-                    } else if (value instanceof Float) {
-                        debugValue = String.valueOf(value);
+                } else if (value instanceof Float) {
+                    debugValue = String.valueOf(value);
 
-                    } else if (value instanceof Boolean) {
-                        boolean tmp = (boolean) value;
-                        if (tmp) debugValue = "true";
-                        else debugValue = "false";
+                } else if (value instanceof Boolean) {
+                    boolean tmp = (boolean) value;
+                    if (tmp) debugValue = "true";
+                    else debugValue = "false";
 
-                    } else if (value instanceof String) {
-                        debugValue = (String) value;
+                } else if (value instanceof String) {
+                    debugValue = (String) value;
 
-                    } else {
-                        CAREFUL_ASSERT(false, Debug.class, "Debug type not handled yet");
-                    }
-
-                    createAndRenderDebugText(activity, view, debugString, debugValue);
+                } else {
+                    CAREFUL_ASSERT(false, Debug.class, "Debug type not handled yet");
                 }
+
+                createAndRenderDebugText(activity, view, debugString, debugValue);
             }
         }
 
         void pushText(String debugString) {
             Activity activity = weakActivity.get();
-            if (activity != null && debugString != null && !debugString.isEmpty()) {
-                LinearLayout view = (LinearLayout) activity.findViewById(debugViewId);
-                if (view != null) {
-                    createAndRenderDebugText(activity, view, debugString, null);
-                }
+            LinearLayout view = weakUiLayout.get();
+            if (activity != null && view != null && debugString != null && !debugString.isEmpty()) {
+                createAndRenderDebugText(activity, view, debugString, null);
             }
         }
 
         void pushClass(Object object, boolean ignoreStatic, boolean ignoreFinal, boolean ignoreClassRefs) {
             Activity activity = weakActivity.get();
+            LinearLayout view = weakUiLayout.get();
 
-            if (activity == null || object == null) { return; }
-
-            LinearLayout view = (LinearLayout) activity.findViewById(debugViewId);
-            if (view == null) { return; }
+            if (activity == null || view == null || object == null) { return; }
 
             Field[] fields = object.getClass().getDeclaredFields();
             for (Field field: fields) {

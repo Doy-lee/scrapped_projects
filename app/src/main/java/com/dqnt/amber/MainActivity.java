@@ -296,9 +296,13 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                 });
 
         SharedPreferences sharedPref = PreferenceManager.getDefaultSharedPreferences(this);
+        boolean showDebug =
+                sharedPref.getBoolean(getString(R.string.internal_pref_show_debug), false);
+        Debug.showDebugRenderers = showDebug;
+
         uiSpec_.handler = new Handler();
-        /*
-        uiSpec_.debugRenderer = new Debug.UiUpdateAndRender(this, uiSpec_.handler, 1) {
+        uiSpec_.debugRenderer = new Debug.UiUpdateAndRender
+                ("MAIN", this, uiSpec_.handler, 1, true) {
             @Override
             public void renderElements() {
 
@@ -361,11 +365,6 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                 Debug.INCREMENT_COUNTER(this, "Debug Renderer");
             }
         };
-        boolean showDebug =
-                sharedPref.getBoolean(getString(R.string.internal_pref_show_debug), false);
-        uiSpec_.debugRenderer.isRunning = false;
-        */
-
 
         uiSpec_.playBarItems = new PlayBarItems();
         final PlayBarItems playBarItems = uiSpec_.playBarItems;
@@ -751,13 +750,12 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
             } break;
 
             case R.id.action_debug_overlay: {
-                if (uiSpec_.debugRenderer != null)
-                    uiSpec_.debugRenderer.isRunning = !uiSpec_.debugRenderer.isRunning;
+                    Debug.showDebugRenderers= !Debug.showDebugRenderers;
 
                 SharedPreferences sharedPref = PreferenceManager.getDefaultSharedPreferences(this);
                 sharedPref.edit().putBoolean(
                         getString(R.string.internal_pref_show_debug),
-                        uiSpec_.debugRenderer.isRunning).apply();
+                        Debug.showDebugRenderers).apply();
             } break;
 
             case R.id.action_rescan_music: {
