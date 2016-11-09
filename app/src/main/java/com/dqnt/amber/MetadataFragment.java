@@ -1,6 +1,7 @@
 package com.dqnt.amber;
 
 
+import android.app.Activity;
 import android.content.Context;
 import android.os.Bundle;
 import android.os.Handler;
@@ -63,31 +64,45 @@ public class MetadataFragment extends Fragment {
         }
     }
     PlaylistUiSpec playlistUiSpec;
+    boolean init;
 
-    public MetadataFragment() {}
+    public MetadataFragment() {
+        init = false;
+    }
 
-    public static MetadataFragment newInstance(Context context, List<AudioFile> allAudioFiles,
-                                               FragmentType type, Playlist activePlaylist,
-                                               Toolbar toolbar) {
-        MetadataFragment fragment = new MetadataFragment();
-        fragment.allAudioFiles = allAudioFiles;
+    public void init(Activity context, List<AudioFile> allAudioFiles,
+                     FragmentType type, Playlist activePlaylist,
+                     Toolbar toolbar) {
+        this.allAudioFiles = allAudioFiles;
 
         DisplaySpec spec = new DisplaySpec(type);
         if (type == FragmentType.PLAYLIST) {
             spec.playlistKey = activePlaylist.dbKey;
         }
 
-        fragment.displaySpecList = new ArrayList<>();
-        fragment.displaySpecList.add(spec);
+        displaySpecList = new ArrayList<>();
+        displaySpecList.add(spec);
 
-        fragment.currDisplaySpecIndex = fragment.displaySpecList.size() - 1;
-        fragment.metadataDisplayStack = new Stack<>();
+        currDisplaySpecIndex = displaySpecList.size() - 1;
+        metadataDisplayStack = new Stack<>();
 
-        fragment.toolbar = toolbar;
-        fragment.metadataAdapter = new MetadataAdapter(new ArrayList<String>(), context);
+        this.toolbar = toolbar;
+        metadataAdapter = new MetadataAdapter(new ArrayList<String>(), context);
 
-        fragment.playlistUiSpec = new PlaylistUiSpec(context, activePlaylist);
-        return fragment;
+        playlistUiSpec = new PlaylistUiSpec(context, activePlaylist);
+        init = true;
+
+        Handler handler = new Handler();
+        Debug.UiUpdateAndRender debugRenderer =
+                new Debug.UiUpdateAndRender("METADATA", context, handler, 1, true) {
+                    @Override
+                    public void renderElements() {
+                        for (DisplaySpec spec: displaySpecList) {
+                            pushText("==" + spec.type.toString() + "==");
+                            pushClass(spec, true, true, false);
+                        }
+                    }
+                };
     }
 
     @Override
@@ -96,20 +111,6 @@ public class MetadataFragment extends Fragment {
         View rootView = inflater.inflate(R.layout.fragment_metadata_view, container, false);
 
         listView = (ListView) rootView.findViewById(R.id.fragment_metadata_list_view);
-        updateMetadataView(displaySpecList.get(currDisplaySpecIndex).type);
-
-        // TODO(doyle): Revise
-        Handler handler = new Handler();
-        Debug.UiUpdateAndRender debugRenderer =
-                new Debug.UiUpdateAndRender("METADATA", getActivity(), handler, 1, true) {
-            @Override
-            public void renderElements() {
-                for (DisplaySpec spec: displaySpecList) {
-                    pushText("==" + spec.type.toString() + "==");
-                    pushClass(spec, true, true, false);
-                }
-            }
-        };
 
         rootView.setFocusable(true);
         rootView.requestFocus();
@@ -118,10 +119,12 @@ public class MetadataFragment extends Fragment {
             public boolean onKey(View v, int keyCode, KeyEvent event) {
                 boolean result = false;
                 if (event.getAction() == KeyEvent.ACTION_UP && keyCode == KeyEvent.KEYCODE_BACK) {
-                    if (!metadataDisplayStack.isEmpty()) {
-                        DisplaySpec spec = metadataDisplayStack.pop();
-                        updateMetadataView(spec.type);
-                        result = true;
+                    if (init) {
+                        if (!metadataDisplayStack.isEmpty()) {
+                            DisplaySpec spec = metadataDisplayStack.pop();
+                            updateMetadataView(spec.type);
+                            result = true;
+                        }
                     }
                 }
                 return result;

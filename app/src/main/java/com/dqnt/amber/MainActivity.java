@@ -207,6 +207,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                         .setColorFilter(activeColor, PorterDuff.Mode.SRC_IN);
             }
 
+            // TODO(doyle): Media controls need to reflect on main ui
             audioService.setNotificationMediaCallbacks(new MediaSessionCompat.Callback() {
                 @Override
                 public void onPlay() {
@@ -265,11 +266,16 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
         // Initialise UI
         uiSpec_ = new UiSpec();
 
-
         audioServiceResponse = new AudioServiceResponse(uiSpec_, playSpec_);
         uiSpec_.toolbar = (Toolbar) findViewById(R.id.main_toolbar);
         setSupportActionBar(uiSpec_.toolbar);
         getSupportActionBar().setDefaultDisplayHomeAsUpEnabled(true);
+
+        metadataFragment = new MetadataFragment();
+        getSupportFragmentManager().beginTransaction()
+                .replace(R.id.main_content_fragment, metadataFragment)
+                // .addToBackStack(null)
+                .commit();
 
         uiSpec_.primaryColor = ContextCompat.getColor(this, R.color.colorPrimary);
         uiSpec_.accentColor = ContextCompat.getColor(this, R
@@ -352,7 +358,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
 
                 // TODO(doyle): Revise. Is messy but works
                 Playlist playingPlaylist = playSpec_.playingPlaylist;
-                if (metadataFragment != null) {
+                if (metadataFragment != null && metadataFragment.init) {
                     Playlist displayingPlaylist = metadataFragment.playlistUiSpec.displayingPlaylist;
                     if (displayingPlaylist != null) {
 
@@ -715,6 +721,12 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
         if (serviceBound) { unbindService(audioConnection); }
         unregisterReceiver(updateUiReceiver);
 
+        // TODO(doyle): Possible memory leak here
+        // On destroy, we don't in particular release the old activity view, because on re-create
+        // we have a new activity view to which we must add our debug overlay ontop off, i.e. we're
+        // relying on GC? atm, and that's valid if all references to old activity are cleared
+        // (unlikely)
+        Debug.globalActivityViewId = -1;
         Debug.TOAST(this, "Activity destroyed", Toast.LENGTH_SHORT);
     }
 
@@ -1256,16 +1268,15 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
             super.onProgressUpdate();
             MainActivity activity = weakActivity.get();
             PlaySpec playSpec = weakPlaySpec.get();
-            if (activity != null) {
+            if (activity != null && playSpec != null) {
                 // TODO(doyle): Duplicated on exit. Since if we also validate against db, then allow playlist to be updated during update
                 // instead of waiting until entire db load is validated (which may take awhile)
                 playSpec.playingPlaylist = playSpec.libraryList;
-
-                activity.createMetadataFragment(playSpec.allAudioFiles, playSpec.playingPlaylist,
-                        activity.uiSpec_.toolbar);
-
                 activity.enqueueToPlayer(playSpec.playingPlaylist, false);
-
+                activity.metadataFragment.init(activity, activity.playSpec_.allAudioFiles,
+                        FragmentType.PLAYLIST, activity.playSpec_.playingPlaylist,
+                        activity.uiSpec_.toolbar);
+                activity.metadataFragment.updateMetadataView(FragmentType.PLAYLIST);
                 Intent broadcast = new Intent(MainActivity.BROADCAST_UPDATE_UI);
                 activity.sendBroadcast(broadcast);
             }
@@ -1282,11 +1293,11 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                         "Another rescan needed");
             } else {
                 playSpec.playingPlaylist = playSpec.libraryList;
-
-                activity.createMetadataFragment(playSpec.allAudioFiles, playSpec.playingPlaylist,
+                activity.metadataFragment.init(activity, activity.playSpec_.allAudioFiles,
+                        FragmentType.PLAYLIST, activity.playSpec_.playingPlaylist,
                         activity.uiSpec_.toolbar);
+                activity.metadataFragment.updateMetadataView(FragmentType.PLAYLIST);
                 activity.enqueueToPlayer(playSpec.playingPlaylist, false);
-
                 SharedPreferences sharedPref =
                         PreferenceManager.getDefaultSharedPreferences(activity);
                 String libraryInitKey = activity.getResources().
@@ -1307,21 +1318,6 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
     /***********************************************************************************************
      * UI FUNCTIONS
      **********************************************************************************************/
-    void createMetadataFragment(List<AudioFile> allAudioFiles, Playlist activePlaylist, Toolbar toolbar) {
-        if (metadataFragment == null) {
-            metadataFragment = MetadataFragment.newInstance(this, allAudioFiles,
-                    FragmentType.PLAYLIST,
-                    activePlaylist,
-                    toolbar);
-
-            getSupportFragmentManager().beginTransaction()
-                    .replace(R.id.main_content_fragment, metadataFragment)
-                    // .addToBackStack(null)
-                    .commit();
-        }
-
-    }
-
     static void SendUpdateBroadcast(Context context, UpdateRequest flag) {
         Intent broadcast = new Intent(MainActivity.BROADCAST_UPDATE_UI);
         broadcast.putExtra("main_activity_update_flags", flag);

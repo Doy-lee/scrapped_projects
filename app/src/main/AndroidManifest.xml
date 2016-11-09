@@ -42,6 +42,7 @@
         <service
             android:name="com.dqnt.amber.AudioService"
             android:enabled="true"
+            android:stopWithTask="false"
             android:exported="false">
 
             <!-- Intents received by MediaButtonReceiver will now be available in

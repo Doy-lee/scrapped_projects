@@ -202,14 +202,14 @@ class Debug {
         Toast.makeText(context, log, length).show();
     }
 
-    private static List<Integer> debugViewIdList;
-    private static int globalActivityViewId = -1;
+    // TODO(doyle): Global activity view id causes crashed, if an activity is destroyed
+    // this doesnt get reset properly, so we look up invalid activity for invalid view
+    static int globalActivityViewId = -1;
     static boolean showDebugRenderers = false;
     private static void initViewForActivity(Activity activity) {
         if (globalActivityViewId != -1)
             return;
 
-        String name = activity.getComponentName().getClassName();
         RelativeLayout debugLayout = new RelativeLayout(activity);
         RelativeLayout.LayoutParams debugLayoutParams = new RelativeLayout.LayoutParams(
                 RelativeLayout.LayoutParams.MATCH_PARENT,

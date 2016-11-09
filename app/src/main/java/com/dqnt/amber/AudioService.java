@@ -196,15 +196,9 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
 
         Notification notification = builder.build();
 
-        ((NotificationManager)getSystemService
-                (Context.NOTIFICATION_SERVICE)).notify(NOTIFICATION_ID, notification);
+        // ((NotificationManager)getSystemService
+        //         (Context.NOTIFICATION_SERVICE)).notify(NOTIFICATION_ID, notification);
         this.startForeground(NOTIFICATION_ID, notification);
-    }
-
-    private void removeNotification() {
-        NotificationManager notificationManager =
-                (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-        notificationManager.cancel(NOTIFICATION_ID);
     }
 
     private PendingIntent playbackAction(NotificationAction action) {
@@ -270,21 +264,36 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
 
     @Override
     public void onDestroy() {
-        Debug.LOG_D(this, "Service destroyed");
+        endService();
+    }
 
-        // NOTE(doyle): Stop notification running in foreground
+    @Override
+    public void onTaskRemoved(Intent rootIntent) {
+        super.onTaskRemoved(rootIntent);
+        endService();
+    }
+
+    private void endService() {
+        Debug.LOG_D(this, "Service destroyed");
         stopForeground(true);
         if (player != null) {
             stopMedia();
             player.release();
+            player = null;
         }
 
-        // TODO(doyle):  Think about focus only requested during playback
-        removeAudioFocus();
-        removeNotification();
+        /*
+        { // removeNotification(): Remove notifications that are not started in foreground
+            NotificationManager notificationManager =
+                    (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            notificationManager.cancel(NOTIFICATION_ID);
+        }
+        */
 
-        unregisterReceiver(becomingNoisyReceiver);
-        unregisterCallStateListener(phoneStateListener);
+        // unregisterCallStateListener()
+        if (listener != null)
+            telephonyManager.listen(phoneStateListener, PhoneStateListener.LISTEN_NONE);
+
     }
 
     private boolean requestAudioFocus() {
@@ -516,7 +525,6 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
                     player.pause();
                     playState = PlayState.PAUSED;
                     resumePosInMs = player.getCurrentPosition();
-                    unregisterReceiver(becomingNoisyReceiver);
                     buildNotification(playState);
                 }
             } break;
@@ -531,7 +539,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
                     removeAudioFocus();
                     player.stop();
                     playState = PlayState.STOPPED;
-                    buildNotification(playState);
+                    unregisterReceiver(becomingNoisyReceiver);
                 }
             } break;
         }
@@ -680,10 +688,4 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
         // NOTE(doyle): Register the listener for changes to the device call playState
         telephonyManager.listen(phoneStateListener, PhoneStateListener.LISTEN_CALL_STATE);
     }
-
-    private void unregisterCallStateListener(PhoneStateListener listener) {
-        if (listener != null)
-            telephonyManager.listen(listener, PhoneStateListener.LISTEN_NONE);
-    }
-
 }
