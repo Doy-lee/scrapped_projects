@@ -206,7 +206,8 @@ class Debug {
     private static int globalActivityViewId = -1;
     static boolean showDebugRenderers = false;
     private static void initViewForActivity(Activity activity) {
-        if (globalActivityViewId != -1) return;
+        if (globalActivityViewId != -1)
+            return;
 
         String name = activity.getComponentName().getClassName();
         RelativeLayout debugLayout = new RelativeLayout(activity);

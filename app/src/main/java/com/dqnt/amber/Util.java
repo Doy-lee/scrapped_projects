@@ -13,7 +13,6 @@ import com.dqnt.amber.PlaybackData.AudioFile;
 
 class Util {
     private static final Class DEBUG_TAG = Util.class;
-
     private static String extractAudioKeyData(MediaMetadataRetriever retriever, int key) {
         String field = retriever.extractMetadata(key);
         if (field == null) field = "Unknown";

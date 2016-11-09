@@ -28,6 +28,7 @@ import android.support.annotation.NonNull;
 import android.support.design.widget.NavigationView;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
+import android.support.v4.media.session.MediaSessionCompat;
 import android.support.v4.widget.DrawerLayout;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
@@ -71,6 +72,11 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
     public static final String BROADCAST_UPDATE_UI = "com.dqnt.amber.BroadcastUpdateUi";
     private static final int AMBER_READ_EXTERNAL_STORAGE_REQUEST = 1;
     private static final int AMBER_VERSION = 1;
+
+    enum UpdateRequest {
+        AUDIO_SERVICE,
+        SENTINEL,
+    }
 
     class PlaySpec {
         final List<AudioFile> allAudioFiles;
@@ -201,6 +207,31 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                         .setColorFilter(activeColor, PorterDuff.Mode.SRC_IN);
             }
 
+            audioService.setNotificationMediaCallbacks(new MediaSessionCompat.Callback() {
+                @Override
+                public void onPlay() {
+                    super.onPlay();
+                    audioService.playMedia();
+                }
+
+                @Override
+                public void onPause() {
+                    super.onPause();
+                    audioService.pauseMedia();
+                }
+
+                @Override
+                public void onSkipToNext() {
+                    super.onSkipToNext();
+                    audioService.skipToNextOrPrevious(AudioService.PlaybackSkipDirection.NEXT);
+                }
+
+                @Override
+                public void onSkipToPrevious() {
+                    super.onSkipToPrevious();
+                    audioService.skipToNextOrPrevious(AudioService.PlaybackSkipDirection.PREVIOUS);
+                }
+            });
         }
 
         @Override
@@ -619,7 +650,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 if (serviceBound && fromUser && audioService.activeAudio != null) {
                     audioService.seekTo(progress);
-                    audioService.resumePosInMsec = progress;
+                    audioService.resumePosInMs = progress;
                 }
             }
 
@@ -1291,11 +1322,21 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
 
     }
 
+    static void SendUpdateBroadcast(Context context, UpdateRequest flag) {
+        Intent broadcast = new Intent(MainActivity.BROADCAST_UPDATE_UI);
+        broadcast.putExtra("main_activity_update_flags", flag);
+        context.sendBroadcast(broadcast);
+    }
+
+
     private BroadcastReceiver updateUiReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
             Debug.LOG_D(this, "Ui update request received");
-            updateUiData(uiSpec_, playSpec_);
+
+            UpdateRequest request =
+                    (UpdateRequest) intent.getSerializableExtra("main_activity_update_flags");
+            updateUiData_(uiSpec_, playSpec_, request);
         }
     };
 
@@ -1304,12 +1345,29 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
         registerReceiver(receiver, intentFilter);
     }
 
-    void updateUiData(UiSpec uiSpec, PlaySpec playSpec) {
+    void updateUiData_(UiSpec uiSpec, PlaySpec playSpec, UpdateRequest request) {
         Debug.INCREMENT_COUNTER(this);
-        updateSideNavWithPlaylists(playSpec, uiSpec);
 
-        if (metadataFragment != null) {
-            metadataFragment.updateMetadataView(FragmentType.PLAYLIST);
+        UpdateRequest requestChecked = request;
+        if (requestChecked == null) {
+            requestChecked = UpdateRequest.SENTINEL;
+        }
+
+        switch (requestChecked) {
+            case AUDIO_SERVICE: {
+                updatePlayBarUi(uiSpec);
+            } break;
+
+            case SENTINEL: {
+                updateSideNavWithPlaylists(playSpec, uiSpec);
+                if (metadataFragment != null) {
+                    metadataFragment.updateMetadataView(FragmentType.PLAYLIST);
+                }
+
+            } break;
+
+            default: {
+            }
         }
     }
 
@@ -1493,6 +1551,19 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
         @Override
         public void audioHasStartedPlayback(int songIndex) {
             updatePlayBarUi(uiSpec);
+
+            // NOTE(doyle): Occurs if, a song has completed and has moved to the next song without
+            // user interaction. Then song index is updated on the service side but not the client
+            // side.
+            if (songIndex != playSpec_.playingPlaylist.index) {
+                playSpec_.playingPlaylist.index = songIndex;
+                if (metadataFragment.getFragmentType() == FragmentType.PLAYLIST &&
+                        metadataFragment.playlistUiSpec.displayingPlaylist
+                                == playSpec_.playingPlaylist) {
+
+                    metadataFragment.updateMetadataView(FragmentType.PLAYLIST);
+                }
+            }
         }
     }
 }

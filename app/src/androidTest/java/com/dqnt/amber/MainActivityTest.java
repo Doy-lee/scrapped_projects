@@ -87,7 +87,7 @@ public class MainActivityTest {
         onView(withId(R.id.play_bar_skip_next_button)).perform(click());
         assertEquals(service.playState, AudioService.PlayState.PLAYING);
         assertEquals(firstFile, service.activeAudio);
-        assertEquals(service.resumePosInMsec, 0);
+        assertEquals(service.resumePosInMs, 0);
 
         onView(withId(R.id.play_bar_seek_bar)).perform(TestUtil.scrubSeekBarAction(50));
         checkAudioFileEntryExistsAndHighlighted(adapter, firstFile);
@@ -96,7 +96,7 @@ public class MainActivityTest {
         onView(withId(R.id.play_bar_skip_previous_button)).perform(click());
         assertEquals(service.playState, AudioService.PlayState.PLAYING);
         assertEquals(lastFile, service.activeAudio);
-        assertEquals(service.resumePosInMsec, 0);
+        assertEquals(service.resumePosInMs, 0);
         checkAudioFileEntryExistsAndHighlighted(adapter, lastFile);
 
         /* Test that if song is paused, the track actually pauses, i.e. resume position is static */
@@ -140,7 +140,7 @@ public class MainActivityTest {
         onView(withId(R.id.play_bar_skip_next_button)).perform(click());
         newSongIndex = playSpec.playingPlaylist.index;
         assertEquals(oldSongIndex, newSongIndex);
-        assertEquals(service.resumePosInMsec, 0);
+        assertEquals(service.resumePosInMs, 0);
         assertEquals(service.playState, AudioService.PlayState.PLAYING);
         onView(withId(R.id.play_bar_seek_bar)).perform(TestUtil.scrubSeekBarAction(25));
         checkAudioFileEntryExistsAndHighlighted(adapter, playlist.contents.get(playlist.index));
@@ -149,7 +149,7 @@ public class MainActivityTest {
         onView(withId(R.id.play_bar_skip_previous_button)).perform(click());
         newSongIndex = playSpec.playingPlaylist.index;
         assertEquals(oldSongIndex, newSongIndex);
-        assertEquals(service.resumePosInMsec, 0);
+        assertEquals(service.resumePosInMs, 0);
         assertEquals(service.playState, AudioService.PlayState.PLAYING);
         checkAudioFileEntryExistsAndHighlighted(adapter, playlist.contents.get(playlist.index));
 
@@ -162,7 +162,7 @@ public class MainActivityTest {
         onView(withId(R.id.play_bar_skip_next_button)).perform(click());
         newSongIndex = playSpec.playingPlaylist.index;
         assertEquals(oldSongIndex, newSongIndex);
-        assertEquals(service.resumePosInMsec, 0);
+        assertEquals(service.resumePosInMs, 0);
         assertEquals(service.playState, AudioService.PlayState.PLAYING);
         checkAudioFileEntryExistsAndHighlighted(adapter, playlist.contents.get(playlist.index));
 
@@ -170,7 +170,7 @@ public class MainActivityTest {
         onView(withId(R.id.play_bar_skip_previous_button)).perform(click());
         newSongIndex = playSpec.playingPlaylist.index;
         assertEquals(oldSongIndex, newSongIndex);
-        assertEquals(service.resumePosInMsec, 0);
+        assertEquals(service.resumePosInMs, 0);
         assertEquals(service.playState, AudioService.PlayState.PLAYING);
         checkAudioFileEntryExistsAndHighlighted(adapter, playlist.contents.get(playlist.index));
 
