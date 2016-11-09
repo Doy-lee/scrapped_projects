@@ -82,6 +82,10 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
         List<Playlist> playlistList;
 
         Playlist playingPlaylist;
+        boolean searchMode;
+        Playlist searchResultPlaylist;
+        Playlist returnFromSearchPlaylist;
+
 
         PlaySpec() {
             allAudioFiles = new ArrayList<>();
@@ -98,9 +102,6 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
         NavigationView navigationView;
 
         PlayBarItems playBarItems;
-
-        Playlist searchResultPlaylist;
-        Playlist returnFromSearchPlaylist;
 
         Handler handler;
 
@@ -119,7 +120,6 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
         Button repeatButton;
         Button searchButton;
         EditText searchEditText;
-        boolean searchMode;
 
         TextView currentSongTextView;
 
@@ -256,9 +256,9 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
 
                         // NOTE(doyle): Disable search first, since this will return the playlist
                         // view to the original view first, then apply the new view
-                        if (uiSpec_.playBarItems.searchMode) {
+                        if (playSpec_.searchMode) {
                             uiSpec_.playBarItems.searchButton.performClick();
-                            Debug.CAREFUL_ASSERT(!uiSpec_.playBarItems.searchMode, this, "Search " +
+                            Debug.CAREFUL_ASSERT(!playSpec_.searchMode, this, "Search " +
                                     "mode did not toggle on menu item click");
                         }
 
@@ -311,7 +311,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                 pushClass(this, true, false, true);
                 pushVariable("Service Bound", serviceBound);
 
-                Playlist returnFromSearchPlaylist = uiSpec_.returnFromSearchPlaylist;
+                Playlist returnFromSearchPlaylist = playSpec_.returnFromSearchPlaylist;
                 if (returnFromSearchPlaylist != null) {
                     pushText("=======================================================================");
                     pushVariable("Return Search Playlist", returnFromSearchPlaylist.name);
@@ -393,7 +393,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
         playBarItems.currentSongTextView = (TextView)
                 findViewById(R.id.play_bar_current_song_text_view);
 
-        if (playBarItems.searchMode) {
+        if (playSpec_.searchMode) {
             if (playBarItems.searchEditText.getVisibility() != View.VISIBLE) {
                 playBarItems.searchEditText.setVisibility(View.VISIBLE);
             }
@@ -512,15 +512,15 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
         playBarItems.searchButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                playBarItems.searchMode = !playBarItems.searchMode;
+                playSpec_.searchMode = !playSpec_.searchMode;
                 EditText searchEditText = playBarItems.searchEditText;
                 TextView currentSongTextView = playBarItems.currentSongTextView;
 
                 Drawable background = ContextCompat.getDrawable
                         (v.getContext(), R.drawable.ic_magnify);
 
-                if (playBarItems.searchMode) {
-                    uiSpec_.returnFromSearchPlaylist =
+                if (playSpec_.searchMode) {
+                    playSpec_.returnFromSearchPlaylist =
                             metadataFragment.playlistUiSpec.displayingPlaylist;
 
                     searchEditText.setVisibility(View.VISIBLE);
@@ -537,10 +537,10 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
 
                     background.setColorFilter(null);
                     metadataFragment.changeDisplayingPlaylist(playSpec_.playingPlaylist,
-                            uiSpec_.returnFromSearchPlaylist);
+                            playSpec_.returnFromSearchPlaylist);
                     metadataFragment.updateMetadataView(FragmentType.PLAYLIST);
 
-                    uiSpec_.returnFromSearchPlaylist = null;
+                    playSpec_.returnFromSearchPlaylist = null;
                 }
 
                 v.setBackground(background);
@@ -569,24 +569,24 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
             public void onTextChanged(CharSequence s, int start, int before, int count) {
                 String sequenceToString = s.toString();
 
-                if (uiSpec_.searchResultPlaylist == null) {
-                    uiSpec_.searchResultPlaylist = new Playlist("Search Result");
+                if (playSpec_.searchResultPlaylist == null) {
+                    playSpec_.searchResultPlaylist = new Playlist("Search Result");
                 } else {
-                    uiSpec_.searchResultPlaylist.contents.clear();
-                    uiSpec_.searchResultPlaylist.index = -1;
+                    playSpec_.searchResultPlaylist.contents.clear();
+                    playSpec_.searchResultPlaylist.index = -1;
                 }
 
-                for (AudioFile file: uiSpec_.returnFromSearchPlaylist.contents) {
+                for (AudioFile file: playSpec_.returnFromSearchPlaylist.contents) {
                     if (splitStringAndCheckIfPrefixed(file.title, sequenceToString) ||
                             splitStringAndCheckIfPrefixed(file.artist, sequenceToString) ||
                             splitStringAndCheckIfPrefixed(file.album, sequenceToString) ||
                             splitStringAndCheckIfPrefixed(file.year, sequenceToString)) {
-                        uiSpec_.searchResultPlaylist.contents.add(file);
+                        playSpec_.searchResultPlaylist.contents.add(file);
                     }
                 }
 
                 metadataFragment.changeDisplayingPlaylist(playSpec_.playingPlaylist,
-                         uiSpec_.searchResultPlaylist);
+                         playSpec_.searchResultPlaylist);
                 metadataFragment.updateMetadataView(FragmentType.PLAYLIST);
             }
 
@@ -602,7 +602,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                 if (event.getAction() == KeyEvent.ACTION_UP && keyCode == KeyEvent.KEYCODE_BACK) {
                     v.clearFocus();
 
-                    if (Debug.CAREFUL_ASSERT(uiSpec_.returnFromSearchPlaylist != null, this,
+                    if (Debug.CAREFUL_ASSERT(playSpec_.returnFromSearchPlaylist != null, this,
                             "Exit search, return playlist is not defined")) {
                         playBarItems.searchButton.performClick();
                     }
@@ -1440,9 +1440,26 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
     // Playback does not happen until it is complete! We know when playback is complete in the
     // callback
     public void audioFileClicked (Playlist newPlaylist) {
-        if (playSpec_.playingPlaylist != newPlaylist) {
-            playSpec_.playingPlaylist.index = -1;
-            playSpec_.playingPlaylist = newPlaylist;
+
+        if (!playSpec_.searchMode) {
+            if (playSpec_.playingPlaylist != newPlaylist) {
+                playSpec_.playingPlaylist.index = -1;
+                playSpec_.playingPlaylist = newPlaylist;
+            }
+        } else {
+            // NOTE(doyle): In search mode, we don't want to replace the active playlist with the
+            // search result. Let it play in place from the playlist we're searching in. So we need
+            // to mark the file to be highlighted on the original playlist we're searching in
+            long songToPlayKey = newPlaylist.contents.get(newPlaylist.index).dbKey;
+
+            // TODO(doyle): Is linear search here, profile
+            for (int i = 0; i < playSpec_.returnFromSearchPlaylist.contents.size(); i++) {
+                AudioFile file = playSpec_.returnFromSearchPlaylist.contents.get(i);
+                if (file.dbKey == songToPlayKey) {
+                    playSpec_.returnFromSearchPlaylist.index = i;
+                    break;
+                }
+            }
         }
         enqueueToPlayer(newPlaylist, true);
     }
