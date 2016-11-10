@@ -23,8 +23,8 @@ import java.util.List;
 import java.util.Stack;
 import java.util.TreeSet;
 
-import com.dqnt.amber.PlaybackData.AudioFile;
-import com.dqnt.amber.PlaybackData.Playlist;
+import com.dqnt.amber.Models.AudioFile;
+import com.dqnt.amber.Models.Playlist;
 import com.dqnt.amber.MainActivity.FragmentType;
 
 public class MetadataFragment extends Fragment {
@@ -311,8 +311,8 @@ public class MetadataFragment extends Fragment {
                             @Override
                             public void onItemClick
                                     (AdapterView<?> parent, View view, int position, long id) {
-                                PlaybackData.Playlist playlist =
-                                        new PlaybackData.Playlist("Now playing");
+                                Models.Playlist playlist =
+                                        new Models.Playlist("Now playing");
 
                                 // TODO(doyle): Store file data into metadataAdapter, instead of search list
                                 // again to find the file to play

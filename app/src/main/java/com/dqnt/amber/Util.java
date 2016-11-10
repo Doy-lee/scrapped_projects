@@ -1,15 +1,15 @@
 package com.dqnt.amber;
 
 import android.content.Context;
-import android.database.Cursor;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.media.MediaMetadataRetriever;
 import android.net.Uri;
-import android.provider.MediaStore;
 
 import java.io.File;
 import java.util.List;
 
-import com.dqnt.amber.PlaybackData.AudioFile;
+import com.dqnt.amber.Models.AudioFile;
 
 class Util {
     private static final Class DEBUG_TAG = Util.class;
@@ -62,9 +62,19 @@ class Util {
         long sizeInKb =  (file.length() / 1024);
         Debug.LOG_V(DEBUG_TAG, "File: " + file.getName() + ", Parsed audio: " + artist +  " - " + title);
 
+        byte[] coverArt = mmr.getEmbeddedPicture();
+        Bitmap bitmap = null;
+        if (coverArt != null) {
+            bitmap = BitmapFactory.decodeByteArray(coverArt, 0, coverArt.length);
+        }
 
-        AudioFile result = new AudioFile(PlaybackData.AUDIO_NOT_IN_DB,
+        AudioFile result = new AudioFile(Models.AUDIO_NOT_IN_DB,
                                          uri,
+
+                                         // TODO(doyle): Revise how to store bitmap stuff
+                                         bitmap,
+                                         null,
+
                                          album,
                                          albumArtist,
                                          artist,

@@ -5,17 +5,23 @@ import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.net.Uri;
+import android.os.Environment;
 import android.provider.BaseColumns;
 
 import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.dqnt.amber.PlaybackData.AudioFile;
-import com.dqnt.amber.PlaybackData.Playlist;
+import com.dqnt.amber.Models.AudioFile;
+import com.dqnt.amber.Models.Playlist;
 
-class AudioDatabase extends SQLiteOpenHelper {
+class AudioStorage extends SQLiteOpenHelper {
 
     enum TableType {
         AUDIO_FILE,
@@ -133,16 +139,16 @@ class AudioDatabase extends SQLiteOpenHelper {
             PlaylistEntry.KEY_PATH
     };
 
-    private static AudioDatabase handle;
-    static synchronized AudioDatabase getHandle(Context context) {
+    private static AudioStorage handle;
+    static synchronized AudioStorage getHandle(Context context) {
         if (handle == null) {
-            handle = new AudioDatabase(context);
+            handle = new AudioStorage(context);
         }
 
         return handle;
     }
 
-    private AudioDatabase(Context context) {
+    private AudioStorage(Context context) {
         super(context, DB_NAME, null, DB_VERSION);
     }
 
@@ -244,22 +250,53 @@ class AudioDatabase extends SQLiteOpenHelper {
     /***********************************************************************************************
      * AUDIO FILE FUNCTIONS
      **********************************************************************************************/
-    // TODO(doyle): Synchronisation problem on all db manipulation methods, since all tables sharing same db
-    void insertAudioFileToDb(final PlaybackData.AudioFile file) {
+    // TODO(doyle): Don't store duplicate cover art, i.e. albums all have singular art
+    private void writeAudioFileCoverArtToDisk(Context context, AudioFile file) {
+        if (file.bitmap != null) {
+            File appDir = context.getFilesDir();
+
+            try {
+                boolean fileValid = false;
+
+                File coverArtDir = new File(appDir + "/cover_art");
+                File coverArtFile = new File(coverArtDir, file.dbKey + ".png");
+                if (coverArtFile.exists()) fileValid = true;
+                else {
+                    coverArtDir.mkdirs();
+                    coverArtFile.createNewFile();
+                    if (coverArtDir.exists() && coverArtFile.exists()) fileValid = true;
+                }
+
+                if (fileValid) {
+                    FileOutputStream out = new FileOutputStream(coverArtFile);
+                    file.bitmap.compress(Bitmap.CompressFormat.PNG, 100, out);
+                    out.close();
+                } else {
+                    Debug.LOG_W(this, "Could not create cover art file for: "
+                            + file.uri.toString() + " to: " + coverArtFile.getAbsolutePath());
+                }
+
+            } catch (IOException e) {
+                Debug.LOG_D(this, "IOException could not store cover art for: "
+                        + file.uri.toString());
+                e.printStackTrace();
+            }
+        }
+    }
+
+    void insertAudioFileToDb(final Context context, final Models.AudioFile file) {
         if (Debug.CAREFUL_ASSERT(file != null, this, "File is null")) {
             if (Debug.CAREFUL_ASSERT(file.dbKey == -1, this,
                     "Inserting new audio files must not have a db key already defined: "
                             + file.dbKey)) {
 
-                // NOTE(doyle): This gets cached according to docs, so okay to open every time
                 ContentValues value = serialiseAudioFileToContentValues(file);
-
                 long dbKey = insert_(AudioFileEntry.TABLE_NAME, null, value);
-
                 Debug.CAREFUL_ASSERT(dbKey != -1, this,
                         "Could not insert audio file to db " + file.uri.getPath());
-
                 file.dbKey = dbKey;
+
+                writeAudioFileCoverArtToDisk(context, file);
             }
         }
     }
@@ -290,7 +327,7 @@ class AudioDatabase extends SQLiteOpenHelper {
         return result;
     }
 
-    void updateAudioFileInDbWithKey(AudioFile file) {
+    void updateAudioFileInDbWithKey(Context context, AudioFile file) {
         if (file == null) {
             Debug.LOG_W(this, "Attempted to update db with null file");
             return;
@@ -306,6 +343,8 @@ class AudioDatabase extends SQLiteOpenHelper {
             Debug.CAREFUL_ASSERT(result == 1, this,
                     "Db update affected more/less than one row: " + result);
 
+            // TODO(doyle): Only do if cover art has changed
+            writeAudioFileCoverArtToDisk(context, file);
         }
     }
 
@@ -328,7 +367,8 @@ class AudioDatabase extends SQLiteOpenHelper {
     // the arguments in whereArgs.
     // String whereClause = field + " = ? ";
     // String whereArgs[] = new String[] { value };
-    synchronized EntryCheckResult checkIfExistFromFieldWithValue(String whereClause,
+    synchronized EntryCheckResult checkIfExistFromFieldWithValue(Context context,
+                                                                 String whereClause,
                                                                  String[] whereArgs) {
         final SQLiteDatabase db = this.getReadableDatabase();
 
@@ -348,7 +388,7 @@ class AudioDatabase extends SQLiteOpenHelper {
             cursor.moveToFirst();
             entryCheck.result = CheckResult.EXISTS;
             while (!cursor.isAfterLast()) {
-                AudioFile file = convertCursorEntryToAudioFile(cursor);
+                AudioFile file = convertCursorEntryToAudioFile(context, cursor);
                 entryCheck.entries.add(file);
                 cursor.moveToNext();
             }
@@ -361,7 +401,7 @@ class AudioDatabase extends SQLiteOpenHelper {
         return entryCheck;
     }
 
-    private AudioFile convertCursorEntryToAudioFile(Cursor cursor) {
+    private AudioFile convertCursorEntryToAudioFile(Context context, Cursor cursor) {
         int cursorIndex = 0;
 
         // NOTE(doyle): Since DB primary keys start from 1
@@ -387,15 +427,25 @@ class AudioDatabase extends SQLiteOpenHelper {
         Debug.CAREFUL_ASSERT(cursorIndex == AUDIO_FILE_PROJECTION.length, this,
                 "Cursor index exceeded projection bounds");
 
-        AudioFile file = new AudioFile(dbKey, uri, album, albumArtist, artist, author, bitrate,
-                cdTrackNumber, composer, date, discNumber, duration, genre, title, writer,
+        Bitmap bitmap = null;
+        Uri bitmapUri = null;
+        File appDir = context.getFilesDir();
+        File coverArtFile = new File(appDir + "/cover_art", dbKey + ".png");
+        if (coverArtFile.exists()) {
+            // TODO(doyle): Check, how we should store the bitmap, probably decode uri on request?
+            // bitmap = BitmapFactory.decodeFile(coverArtFile.getAbsolutePath());
+            bitmapUri = Uri.fromFile(coverArtFile);
+        }
+
+        AudioFile file = new AudioFile(dbKey, uri, bitmap, bitmapUri, album, albumArtist, artist, author,
+                bitrate, cdTrackNumber, composer, date, discNumber, duration, genre, title, writer,
                 year, sizeInKb);
         return file;
     }
 
-    synchronized ArrayList<PlaybackData.AudioFile> getAllAudioFiles() {
+    synchronized ArrayList<Models.AudioFile> getAllAudioFiles(Context context) {
         SQLiteDatabase db = this.getReadableDatabase();
-        ArrayList<PlaybackData.AudioFile> result = null;
+        ArrayList<Models.AudioFile> result = null;
 
         if (Debug.CAREFUL_ASSERT(db != null, this, "Could not get readable database")) {
             Cursor cursor = db.query(AudioFileEntry.TABLE_NAME,
@@ -409,7 +459,7 @@ class AudioDatabase extends SQLiteOpenHelper {
             result = new ArrayList<>();
             cursor.moveToFirst();
             while (!cursor.isAfterLast()) {
-                AudioFile file = convertCursorEntryToAudioFile(cursor);
+                AudioFile file = convertCursorEntryToAudioFile(context, cursor);
                 result.add(file);
                 cursor.moveToNext();
             }
@@ -420,7 +470,8 @@ class AudioDatabase extends SQLiteOpenHelper {
         return result;
     }
 
-    synchronized private AudioFile getAudioFileEntryFromKey(SQLiteDatabase db, int key) {
+    synchronized private AudioFile getAudioFileEntryFromKey(Context context, SQLiteDatabase db,
+                                                            int key) {
         AudioFile result = null;
 
         if (db == null) {
@@ -440,7 +491,7 @@ class AudioDatabase extends SQLiteOpenHelper {
                 orderBy);
         cursor.moveToFirst();
         if (!cursor.isAfterLast()) {
-            result = convertCursorEntryToAudioFile(cursor);
+            result = convertCursorEntryToAudioFile(context, cursor);
         } else {
             Debug.LOG_D(this, "Key entry does not exist: " + key);
         }
@@ -515,7 +566,7 @@ class AudioDatabase extends SQLiteOpenHelper {
         deleteEntryFromDbWithKey(TableType.PLAYLIST, key);
     }
 
-    synchronized ArrayList<Playlist> getAllPlaylists() {
+    synchronized ArrayList<Playlist> getAllPlaylists(Context context) {
         SQLiteDatabase db = this.getReadableDatabase();
         ArrayList<Playlist> result = new ArrayList<>();
 
@@ -535,7 +586,7 @@ class AudioDatabase extends SQLiteOpenHelper {
 
             Playlist playlist = new Playlist(name, uri);
             playlist.dbKey = playlistKey;
-            playlist.contents = getPlaylistContents(db, playlistKey);
+            playlist.contents = getPlaylistContents(context, db, playlistKey);
             result.add(playlist);
             cursor.moveToNext();
         }
@@ -545,7 +596,8 @@ class AudioDatabase extends SQLiteOpenHelper {
         return result;
     }
 
-    synchronized private List<AudioFile> getPlaylistContents(SQLiteDatabase db, int playlistKey) {
+    synchronized private List<AudioFile> getPlaylistContents(Context context, SQLiteDatabase db,
+                                                             int playlistKey) {
         List<AudioFile> result = null;
         if (db == null) {
             Debug.CAREFUL_ASSERT(false, this, "Db argument was null");
@@ -567,7 +619,7 @@ class AudioDatabase extends SQLiteOpenHelper {
         result = new ArrayList<>();
         while (!cursor.isAfterLast()) {
             int audioKey = cursor.getInt(0);
-            AudioFile file = getAudioFileEntryFromKey(db, audioKey);
+            AudioFile file = getAudioFileEntryFromKey(context, db, audioKey);
             if (file != null) result.add(file);
             cursor.moveToNext();
         }

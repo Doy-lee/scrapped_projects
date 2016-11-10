@@ -57,8 +57,8 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Random;
 
-import com.dqnt.amber.PlaybackData.AudioFile;
-import com.dqnt.amber.PlaybackData.Playlist;
+import com.dqnt.amber.Models.AudioFile;
+import com.dqnt.amber.Models.Playlist;
 
 import static com.dqnt.amber.Debug.ASSERT;
 import static com.dqnt.amber.Debug.CAREFUL_ASSERT;
@@ -246,17 +246,17 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
             SharedPreferences sharedPref = PreferenceManager.
                     getDefaultSharedPreferences(getApplicationContext());
 
-            if (Debug.RESET_DB) this.deleteDatabase(AudioDatabase.DB_NAME);
+            if (Debug.RESET_DB) this.deleteDatabase(AudioStorage.DB_NAME);
             if (Debug.RESET_CONFIG) {
                 sharedPref.edit().clear().apply();
                 sharedPref.edit().putString(getString(R.string.pref_music_path_key),
                         "/storage/emulated/0/Music").apply();
             }
 
-            AudioDatabase dbHandle = AudioDatabase.getHandle(this);
+            AudioStorage dbHandle = AudioStorage.getHandle(this);
             if (Debug.RESET_PLAYLIST) {
-                dbHandle.deleteAllEntries(AudioDatabase.TableType.PLAYLIST);
-                dbHandle.deleteAllEntries(AudioDatabase.TableType.PLAYLIST_CONTENTS);
+                dbHandle.deleteAllEntries(AudioStorage.TableType.PLAYLIST);
+                dbHandle.deleteAllEntries(AudioStorage.TableType.PLAYLIST_CONTENTS);
             }
         }
 
@@ -796,7 +796,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
 
             case R.id.action_rescan_music: {
                 // TODO(doyle): For now just drop all the data in the db
-                AudioDatabase dbHandle = AudioDatabase.getHandle(this);
+                AudioStorage dbHandle = AudioStorage.getHandle(this);
                 playSpec_.allAudioFiles.clear();
 
                 metadataFragment.playlistUiSpec.adapter_.notifyDataSetChanged();
@@ -883,7 +883,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
     }
 
     private void queryDeviceForAudioData(PlaySpec playSpec) {
-        AudioDatabase dbHandle = AudioDatabase.getHandle(this);
+        AudioStorage dbHandle = AudioStorage.getHandle(this);
 
         SharedPreferences sharedPref = PreferenceManager.getDefaultSharedPreferences(this);
         boolean validateDatabase
@@ -898,10 +898,10 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
     private static class GetAudioFromDevice extends AsyncTask<Void, Void, Void> {
         private WeakReference<MainActivity> weakActivity;
         private WeakReference<PlaySpec> weakPlaySpec;
-        private AudioDatabase dbHandle;
+        private AudioStorage dbHandle;
         private boolean validateDatabase;
 
-        GetAudioFromDevice(MainActivity activity, PlaySpec playSpec, AudioDatabase dbHandle,
+        GetAudioFromDevice(MainActivity activity, PlaySpec playSpec, AudioStorage dbHandle,
                            boolean validateDatabase) {
             this.dbHandle = dbHandle;
 
@@ -921,17 +921,17 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                 return null;
             }
 
-            String checkFields = AudioDatabase.AudioFileEntry.KEY_PATH + " =  ? ";
+            String checkFields = AudioStorage.AudioFileEntry.KEY_PATH + " =  ? ";
             String[] checkArgs = new String[] {
                 newFile.getPath(),
             };
 
             Uri newFileUri = Uri.fromFile(newFile);
             long newFileSizeInKb = newFile.length() / 1024;
-            AudioDatabase.EntryCheckResult dbCheck =
-                    dbHandle.checkIfExistFromFieldWithValue(checkFields, checkArgs);
+            AudioStorage.EntryCheckResult dbCheck =
+                    dbHandle.checkIfExistFromFieldWithValue(context, checkFields, checkArgs);
 
-            if (dbCheck.result == AudioDatabase.CheckResult.EXISTS) {
+            if (dbCheck.result == AudioStorage.CheckResult.EXISTS) {
 
                 // NOTE(doyle): If a result exists, then we check the file sizes to ensure they
                 // still match
@@ -947,7 +947,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                                 Util.extractAudioMetadata(context, retriever, newFileUri);
                         newAudio.dbKey = dbAudioFile.dbKey;
 
-                        dbHandle.updateAudioFileInDbWithKey(newAudio);
+                        dbHandle.updateAudioFileInDbWithKey(context, newAudio);
                         result = newAudio;
                     }
 
@@ -972,15 +972,15 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                     }
 
                     result = Util.extractAudioMetadata(context, retriever, newFileUri);
-                    dbHandle.insertAudioFileToDb(result);
+                    dbHandle.insertAudioFileToDb(context, result);
                 } else {
                     Debug.CAREFUL_ASSERT(false, this, "Error! An empty db check " +
                             "result should not occur when marked existing!");
                 }
 
-            } else if (dbCheck.result == AudioDatabase.CheckResult.NOT_EXIST) {
+            } else if (dbCheck.result == AudioStorage.CheckResult.NOT_EXIST) {
                 result = Util.extractAudioMetadata(context, retriever, newFileUri);
-                dbHandle.insertAudioFileToDb(result);
+                dbHandle.insertAudioFileToDb(context, result);
             }
 
             return result;
@@ -1002,86 +1002,78 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
 
         }
 
-        private void quickLoadFromDb(PlaySpec playSpec) {
-            // TODO(doyle): Use the sort param in query from db
-            List<AudioFile> fileListFromDb = dbHandle.getAllAudioFiles();
-            List<Playlist> playlistListFromDb = dbHandle.getAllPlaylists();
-
-            if (fileListFromDb != null) {
-                if (fileListFromDb.size() > 0) {
-                    playSpec.allAudioFiles.clear();
-                    playSpec.allAudioFiles.addAll(fileListFromDb);
-
-                    Collections.sort(playSpec.allAudioFiles, new Comparator<AudioFile>() {
-                        @Override
-                        public int compare(AudioFile a, AudioFile b) {
-                            return a.title.compareTo(b.title);
-                        }
-                    });
-                }
-            }
-
-            if (playlistListFromDb != null) {
-                if (playlistListFromDb.size() > 0) {
-                    playSpec.playlistList.clear();
-                    playSpec.playlistList.addAll(playlistListFromDb);
-
-                    Collections.sort(playSpec.playlistList, new Comparator<Playlist>() {
-                        @Override
-                        public int compare(Playlist a, Playlist b) {
-                            return a.name.compareTo(b.name);
-                        }
-                    });
-                }
-            }
-        }
-
         @Override
         protected Void doInBackground(Void... params) {
-            /*
-             ******************************
-             * READ AUDIO FROM MEDIA STORE
-             ******************************
-             */
             PlaySpec playSpec = weakPlaySpec.get();
             if (playSpec == null) {
                 Debug.LOG_W(this, "playSpec got GC'ed early, scan ending early");
                 return null;
             }
 
-            // NOTE(doyle): Load whatever is in the DB first and let the user interact with that,
-            // then recheck information is valid afterwards
-            quickLoadFromDb(playSpec);
-            if (!validateDatabase) {
-                return null;
-            } else {
-                publishProgress();
-            }
-
-            // After load, delete any invalid entries first- so that scanning new files has a
-            // smaller list to compare to
-            for (int i = 0; i < playSpec.allAudioFiles.size(); i++) {
-                AudioFile audioFile = playSpec.allAudioFiles.get(i);
-                File file = new File(audioFile.uri.getPath());
-                if (!file.exists()) {
-                    dbHandle.deleteAudioFileFromDbWithKey(audioFile.dbKey);
-                    playSpec.allAudioFiles.remove(audioFile);
-                }
-            }
-
-            for (int i = 0; i < playSpec.playlistList.size(); i++) {
-                Playlist playlist = playSpec.playlistList.get(i);
-                File file = new File(playlist.uri.getPath());
-                if (!file.exists()) {
-                    dbHandle.deletePlaylistFromDbWithKey(playlist.dbKey);
-                    playSpec.playlistList.remove(playlist);
-                }
-            }
-
             Activity context = weakActivity.get();
             if (context == null) {
                 Debug.LOG_W(this, "Context got GC'ed. MediaStore not scanned");
                 return null;
+            }
+
+            { // NOTE(doyle): Load whatever is in the DB first and let the user interact with that,
+              // then recheck information is valid afterwards
+                // TODO(doyle): Use the sort param in query from db
+                List<AudioFile> fileListFromDb = dbHandle.getAllAudioFiles(context);
+                List<Playlist> playlistListFromDb = dbHandle.getAllPlaylists(context);
+
+                if (fileListFromDb != null) {
+                    if (fileListFromDb.size() > 0) {
+                        playSpec.allAudioFiles.clear();
+                        playSpec.allAudioFiles.addAll(fileListFromDb);
+
+                        Collections.sort(playSpec.allAudioFiles, new Comparator<AudioFile>() {
+                            @Override
+                            public int compare(AudioFile a, AudioFile b) {
+                                return a.title.compareTo(b.title);
+                            }
+                        });
+                    }
+                }
+
+                if (playlistListFromDb != null) {
+                    if (playlistListFromDb.size() > 0) {
+                        playSpec.playlistList.clear();
+                        playSpec.playlistList.addAll(playlistListFromDb);
+
+                        Collections.sort(playSpec.playlistList, new Comparator<Playlist>() {
+                            @Override
+                            public int compare(Playlist a, Playlist b) {
+                                return a.name.compareTo(b.name);
+                            }
+                        });
+                    }
+                }
+            }
+
+            if (!validateDatabase) return null;
+            else publishProgress();
+
+            {
+                // After load, delete any invalid entries first- so that scanning new files has a
+                // smaller list to compare to
+                for (int i = 0; i < playSpec.allAudioFiles.size(); i++) {
+                    AudioFile audioFile = playSpec.allAudioFiles.get(i);
+                    File file = new File(audioFile.uri.getPath());
+                    if (!file.exists()) {
+                        dbHandle.deleteAudioFileFromDbWithKey(audioFile.dbKey);
+                        playSpec.allAudioFiles.remove(audioFile);
+                    }
+                }
+
+                for (int i = 0; i < playSpec.playlistList.size(); i++) {
+                    Playlist playlist = playSpec.playlistList.get(i);
+                    File file = new File(playlist.uri.getPath());
+                    if (!file.exists()) {
+                        dbHandle.deletePlaylistFromDbWithKey(playlist.dbKey);
+                        playSpec.playlistList.remove(playlist);
+                    }
+                }
             }
 
             /* Start scanning from device */
@@ -1150,7 +1142,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                 Debug.LOG_W(this, "Could not find/read music directory: " + musicDir);
             }
 
-            List<AudioFile> filesFromDb = dbHandle.getAllAudioFiles();
+            List<AudioFile> filesFromDb = dbHandle.getAllAudioFiles(context);
             playSpec.allAudioFiles.clear();
             playSpec.allAudioFiles.addAll(filesFromDb);
             List<AudioFile> allAudioFiles = playSpec.allAudioFiles;
@@ -1247,7 +1239,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
             retriever.release();
 
             playSpec.playlistList.clear();
-            playSpec.playlistList = dbHandle.getAllPlaylists();
+            playSpec.playlistList = dbHandle.getAllPlaylists(context);
             return null;
         }
 

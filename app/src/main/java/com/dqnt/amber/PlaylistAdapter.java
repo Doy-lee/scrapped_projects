@@ -1,23 +1,26 @@
 package com.dqnt.amber;
 
 import android.content.Context;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
+import android.widget.ImageView;
 import android.widget.TextView;
 
-import com.dqnt.amber.PlaybackData.AudioFile;
+import com.dqnt.amber.Models.AudioFile;
 
 /**
  * Created by Doyle on 25/09/2016.
  */
 class PlaylistAdapter extends BaseAdapter {
-    PlaybackData.Playlist playlist;
+    Models.Playlist playlist;
     private LayoutInflater inflater;
     private int highlightColor;
 
-    PlaylistAdapter(Context context, PlaybackData.Playlist playlist, int highlightColor) {
+    PlaylistAdapter(Context context, Models.Playlist playlist, int highlightColor) {
         this.inflater = LayoutInflater.from(context);
         this.playlist = playlist;
         this.highlightColor = highlightColor;
@@ -52,7 +55,8 @@ class PlaylistAdapter extends BaseAdapter {
     }
 
     // NOTE(doyle): Cache the inflated layout elements in a audio entry into the tag of a list item
-    class AudioEntryInView {
+    class PlaylistItemEntry {
+        ImageView coverArt;
         TextView artistAndAlbum;
         TextView title;
     }
@@ -61,15 +65,19 @@ class PlaylistAdapter extends BaseAdapter {
     int titleInactiveColor = -1;
     @Override
     public View getView(int position, View convertView, ViewGroup parent) {
-        AudioEntryInView audioEntry;
+        PlaylistItemEntry audioEntry;
         // NOTE(doyle): convertView is a recycled entry going offscreen to be
         // reused for another element
         if (convertView == null) {
-            convertView = inflater.inflate(R.layout.list_item, parent, false);
+            convertView = inflater.inflate(R.layout.playlist_item, parent, false);
 
-            audioEntry = new AudioEntryInView();
-            audioEntry.artistAndAlbum = (TextView) convertView.findViewById(R.id.list_item_subtitle_text_view);
-            audioEntry.title = (TextView) convertView.findViewById(R.id.list_item_title_text_view);
+            audioEntry = new PlaylistItemEntry();
+            audioEntry.artistAndAlbum =
+                    (TextView) convertView.findViewById(R.id.playlist_item_subtitle_text_view);
+            audioEntry.title =
+                    (TextView) convertView.findViewById(R.id.playlist_item_title_text_view);
+            audioEntry.coverArt =
+                    (ImageView) convertView.findViewById(R.id.playlist_item_image_view);
 
             convertView.setTag(audioEntry);
 
@@ -78,16 +86,22 @@ class PlaylistAdapter extends BaseAdapter {
                 titleInactiveColor = audioEntry.title.getCurrentTextColor();
             }
         } else {
-            audioEntry = (AudioEntryInView) convertView.getTag();
+            audioEntry = (PlaylistItemEntry) convertView.getTag();
         }
 
         AudioFile audio = playlist.contents.get(position);
         if (Debug.CAREFUL_ASSERT(audio != null, this, "Audio file is null")) {
-                /* Set view data */
-
+            /* Set view data */
             String artistAndAlbumString = audio.artist + " | " + audio.album;
             audioEntry.artistAndAlbum.setText(artistAndAlbumString);
             audioEntry.title.setText(audio.title);
+
+            if (audio.bitmapUri != null) {
+                Bitmap bitmap = BitmapFactory.decodeFile(audio.bitmapUri.getPath());
+                audioEntry.coverArt.setImageBitmap(bitmap);
+            } else {
+                audioEntry.coverArt.setImageBitmap(null);
+            }
 
             if (playlist.index == position) {
                 audioEntry.artistAndAlbum.setTextColor(highlightColor);

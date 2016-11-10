@@ -1,11 +1,12 @@
 package com.dqnt.amber;
 
+import android.graphics.Bitmap;
 import android.net.Uri;
 
 import java.util.ArrayList;
 import java.util.List;
 
-class PlaybackData {
+class Models {
     static final int AUDIO_NOT_IN_DB = -1;
 
     static class Playlist {
@@ -36,6 +37,13 @@ class PlaybackData {
     static class AudioFile {
         long dbKey;
         Uri uri;
+
+        // TODO(doyle): Either downsample bitmap or resolve bitmap from uri when requested
+        // otherwise we have memory problems. The bitmap is just there so that on retrieval from
+        // file we can store it until we get to the db logic which stores it onto the disc
+        Bitmap bitmap;
+        Uri bitmapUri;
+
         String album;
         String albumArtist;
         String artist;
@@ -56,6 +64,10 @@ class PlaybackData {
 
         AudioFile(long dbKey,
                   Uri uri,
+
+                  Bitmap bitmap,
+                  Uri bitmapUri,
+
                   String album,
                   String albumArtist,
                   String artist,
@@ -74,6 +86,10 @@ class PlaybackData {
         ) {
             this.dbKey = dbKey;
             this.uri = uri;
+
+            this.bitmap = bitmap;
+            this.bitmapUri = bitmapUri;
+
             this.album = album;
             this.albumArtist = albumArtist;
             this.artist = artist;

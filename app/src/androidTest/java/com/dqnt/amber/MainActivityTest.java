@@ -19,7 +19,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import com.dqnt.amber.PlaybackData.AudioFile;
+import com.dqnt.amber.Models.AudioFile;
 
 import static android.content.Context.NOTIFICATION_SERVICE;
 import static android.support.test.espresso.Espresso.onView;
@@ -77,11 +77,11 @@ public class MainActivityTest {
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     @Test
     public void playBarElements() throws InterruptedException {
-        PlaylistAdapter adapter = activity.metadataFragment.playlistUiSpec.adapter;
-        PlaybackData.Playlist playlist = playSpec.playingPlaylist;
+        PlaylistAdapter adapter = activity.metadataFragment.playlistUiSpec.adapter_;
+        Models.Playlist playlist = playSpec.playingPlaylist;
 
-        PlaybackData.AudioFile firstFile = playlist.contents.get(0);
-        PlaybackData.AudioFile lastFile = playlist.contents.get(playlist.contents.size() - 1);
+        Models.AudioFile firstFile = playlist.contents.get(0);
+        Models.AudioFile lastFile = playlist.contents.get(playlist.contents.size() - 1);
 
         /* Check next button starts playing at initialisation */
         onView(withId(R.id.play_bar_skip_next_button)).perform(click());
@@ -260,7 +260,7 @@ public class MainActivityTest {
         for (int i = 0; i < numItems; i++) {
             if (adapter.getItem(i).title.equals(checkFile.title)) {
                 View view = adapter.getView(i, null, null);
-                AudioEntryInView entry = (AudioEntryInView) view.getTag();
+                PlaylistItemEntry entry = (PlaylistItemEntry) view.getTag();
                 assertEquals(entry.title.getCurrentTextColor(), uiSpec.accentColor);
                 matchedEntryWithHighlight = true;
                 break;

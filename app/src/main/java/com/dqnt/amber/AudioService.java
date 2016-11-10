@@ -1,7 +1,6 @@
 package com.dqnt.amber;
 
 import android.app.Notification;
-import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.BroadcastReceiver;
@@ -28,7 +27,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Random;
 
-import com.dqnt.amber.PlaybackData.AudioFile;
+import com.dqnt.amber.Models.AudioFile;
 
 // TODO(doyle): Audio focus/audio manager API to manage what happens to sound on lose focus
 public class AudioService extends Service implements MediaPlayer.OnPreparedListener,
