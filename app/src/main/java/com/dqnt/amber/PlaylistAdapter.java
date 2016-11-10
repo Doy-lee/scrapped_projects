@@ -4,15 +4,10 @@ import android.content.Context;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Adapter;
 import android.widget.BaseAdapter;
-import android.widget.ListView;
 import android.widget.TextView;
 
 import com.dqnt.amber.PlaybackData.AudioFile;
-
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * Created by Doyle on 25/09/2016.
@@ -58,7 +53,6 @@ class PlaylistAdapter extends BaseAdapter {
 
     // NOTE(doyle): Cache the inflated layout elements in a audio entry into the tag of a list item
     class AudioEntryInView {
-        int position;
         TextView artistAndAlbum;
         TextView title;
     }
@@ -71,11 +65,11 @@ class PlaylistAdapter extends BaseAdapter {
         // NOTE(doyle): convertView is a recycled entry going offscreen to be
         // reused for another element
         if (convertView == null) {
-            convertView = inflater.inflate(R.layout.file_audio, parent, false);
+            convertView = inflater.inflate(R.layout.list_item, parent, false);
 
             audioEntry = new AudioEntryInView();
-            audioEntry.artistAndAlbum = (TextView) convertView.findViewById(R.id.audio_artist);
-            audioEntry.title = (TextView) convertView.findViewById(R.id.audio_title);
+            audioEntry.artistAndAlbum = (TextView) convertView.findViewById(R.id.list_item_subtitle_text_view);
+            audioEntry.title = (TextView) convertView.findViewById(R.id.list_item_title_text_view);
 
             convertView.setTag(audioEntry);
 
@@ -94,7 +88,6 @@ class PlaylistAdapter extends BaseAdapter {
             String artistAndAlbumString = audio.artist + " | " + audio.album;
             audioEntry.artistAndAlbum.setText(artistAndAlbumString);
             audioEntry.title.setText(audio.title);
-            audioEntry.position = position;
 
             if (playlist.index == position) {
                 audioEntry.artistAndAlbum.setTextColor(highlightColor);

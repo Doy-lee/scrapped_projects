@@ -20,7 +20,6 @@ import android.widget.Toast;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.SortedSet;
 import java.util.Stack;
 import java.util.TreeSet;
 
@@ -29,9 +28,6 @@ import com.dqnt.amber.PlaybackData.Playlist;
 import com.dqnt.amber.MainActivity.FragmentType;
 
 public class MetadataFragment extends Fragment {
-    private List<AudioFile> allAudioFiles;
-    private ListView listView;
-
     private static class DisplaySpec {
         final FragmentType type;
         long playlistKey;
@@ -45,12 +41,15 @@ public class MetadataFragment extends Fragment {
     }
     private List<DisplaySpec> displaySpecList;
     private int currDisplaySpecIndex;
+    private Stack<DisplaySpec> metadataDisplayStack;
+
+    private List<AudioFile> allAudioFiles;
+    private MetadataAdapter metadataAdapter;
+    private ListView listView;
+    private Toolbar toolbar;
+    private boolean init;
 
     AudioFileClickListener listener;
-    private Toolbar toolbar;
-
-    private MetadataAdapter metadataAdapter;
-    private Stack<DisplaySpec> metadataDisplayStack;
 
     static class PlaylistUiSpec {
         Playlist displayingPlaylist;
@@ -64,15 +63,34 @@ public class MetadataFragment extends Fragment {
         }
     }
     PlaylistUiSpec playlistUiSpec;
-    boolean init;
 
-    public MetadataFragment() {
-        init = false;
+    public MetadataFragment() {}
+
+    public static MetadataFragment newInstance() {
+        MetadataFragment result = new MetadataFragment();
+        result.init = false;
+        return result;
     }
+
+    public static MetadataFragment newInstance(Activity context, List<AudioFile> allAudioFiles,
+                                               FragmentType type, Playlist activePlaylist,
+                                               Toolbar toolbar) {
+        MetadataFragment result = new MetadataFragment();
+        result.init(context, allAudioFiles, type, activePlaylist, toolbar);
+        return result;
+    }
+
+    public boolean isInit() { return init; }
 
     public void init(Activity context, List<AudioFile> allAudioFiles,
                      FragmentType type, Playlist activePlaylist,
                      Toolbar toolbar) {
+
+        if (init) {
+            Debug.CAREFUL_ASSERT(false, this, "Metadata fragment is already initialised");
+            return;
+        }
+
         this.allAudioFiles = allAudioFiles;
 
         DisplaySpec spec = new DisplaySpec(type);
@@ -87,10 +105,9 @@ public class MetadataFragment extends Fragment {
         metadataDisplayStack = new Stack<>();
 
         this.toolbar = toolbar;
-        metadataAdapter = new MetadataAdapter(new ArrayList<String>(), context);
+        metadataAdapter = new MetadataAdapter(new ArrayList<ListItemEntry>(), context);
 
         playlistUiSpec = new PlaylistUiSpec(context, activePlaylist);
-        init = true;
 
         Handler handler = new Handler();
         Debug.UiUpdateAndRender debugRenderer =
@@ -103,6 +120,8 @@ public class MetadataFragment extends Fragment {
                         }
                     }
                 };
+
+        init = true;
     }
 
     @Override
@@ -186,7 +205,7 @@ public class MetadataFragment extends Fragment {
         oldSpec.listPos = listView.getFirstVisiblePosition();
 
         { // Generate the data for the new fragment
-            SortedSet<String> dataForFragment = new TreeSet<>();
+            TreeSet<ListItemEntry> dataForFragment = new TreeSet<>();
             // TODO: Cache the lists instead of rebuilding each time
             switch (newType) {
                 case ALBUM:
@@ -196,19 +215,35 @@ public class MetadataFragment extends Fragment {
 
                     final FragmentType detailedType;
                     if (newType == FragmentType.ALBUM) {
-                        for (AudioFile file : allAudioFiles) dataForFragment.add(file.album);
+                        for (AudioFile file : allAudioFiles) {
+                            String subtitle;
+                            if (file.albumArtist.equals("Unknown")) subtitle = file.artist;
+                            else subtitle = file.albumArtist;
+
+                            ListItemEntry entry = new ListItemEntry(file.album, subtitle);
+                            dataForFragment.add(entry);
+                        }
                         detailedType = FragmentType.ALBUM_FILES;
                         toolbar.setTitle("Album");
                     } else if (newType == FragmentType.ARTIST) {
-                        for (AudioFile file : allAudioFiles) dataForFragment.add(file.artist);
+                        for (AudioFile file : allAudioFiles) {
+                            ListItemEntry entry = new ListItemEntry(file.artist, null);
+                            dataForFragment.add(entry);
+                        }
                         detailedType = FragmentType.ARTIST_FILES;
                         toolbar.setTitle("Artist");
                     } else if (newType == FragmentType.ALBUM_ARTIST) {
-                        for (AudioFile file : allAudioFiles) dataForFragment.add(file.albumArtist);
+                        for (AudioFile file : allAudioFiles) {
+                            ListItemEntry entry = new ListItemEntry(file.albumArtist, null);
+                            dataForFragment.add(entry);
+                        }
                         detailedType = FragmentType.ALBUM_ARTIST_FILES;
                         toolbar.setTitle("Album Artist");
                     } else {
-                        for (AudioFile file : allAudioFiles) dataForFragment.add(file.genre);
+                        for (AudioFile file : allAudioFiles) {
+                            ListItemEntry entry = new ListItemEntry(file.genre, null);
+                            dataForFragment.add(entry);
+                        }
                         detailedType = FragmentType.GENRE_FILES;
                         toolbar.setTitle("Genre");
                     }
@@ -218,9 +253,9 @@ public class MetadataFragment extends Fragment {
                         public void onItemClick(AdapterView<?> parent, View view, int position,
                                                 long id) {
 
-                            TextView textView = (TextView) view.getTag();
+                            ListItemEntryView entry = (ListItemEntryView) view.getTag();
                             updateMetadataView_(detailedType, playlistUiSpec, displaySpecList,
-                                    metadataAdapter, listView, textView.getText().toString());
+                                    metadataAdapter, listView, entry.title.getText().toString());
                         }
                     });
                 }
@@ -234,21 +269,40 @@ public class MetadataFragment extends Fragment {
                             "Cannot call metadata file view without a filter")) {
 
                         if (newType == FragmentType.ARTIST_FILES) {
-                            for (AudioFile file : allAudioFiles)
-                                if (filterBy.equals(file.artist))
-                                    dataForFragment.add(file.title);
+                            for (AudioFile file : allAudioFiles) {
+                                if (filterBy.equals(file.artist)) {
+                                    String artistAndAlbumString = file.artist + " | " + file.album;
+                                    ListItemEntry entry = new ListItemEntry(file.title, artistAndAlbumString);
+                                    dataForFragment.add(entry);
+                                }
+                            }
+
                         } else if (newType == FragmentType.ALBUM_FILES) {
-                            for (AudioFile file : allAudioFiles)
-                                if (filterBy.equals(file.album))
-                                    dataForFragment.add(file.title);
+                            for (AudioFile file : allAudioFiles) {
+                                if (filterBy.equals(file.album)) {
+                                    String artistAndAlbumString = file.artist + " | " + file.album;
+                                    ListItemEntry entry = new ListItemEntry(file.title, artistAndAlbumString);
+                                    dataForFragment.add(entry);
+                                }
+                            }
+
                         } else if (newType == FragmentType.ALBUM_ARTIST_FILES) {
-                            for (AudioFile file : allAudioFiles)
-                                if (filterBy.equals(file.albumArtist))
-                                    dataForFragment.add(file.title);
+                            for (AudioFile file : allAudioFiles) {
+                                if (filterBy.equals(file.albumArtist)) {
+                                    String artistAndAlbumString = file.artist + " | " + file.album;
+                                    ListItemEntry entry = new ListItemEntry(file.title, artistAndAlbumString);
+                                    dataForFragment.add(entry);
+                                }
+                            }
+
                         } else if (newType == FragmentType.GENRE_FILES) {
-                            for (AudioFile file : allAudioFiles)
-                                if (filterBy.equals(file.genre))
-                                    dataForFragment.add(file.title);
+                            for (AudioFile file : allAudioFiles) {
+                                if (filterBy.equals(file.genre)) {
+                                    String artistAndAlbumString = file.artist + " | " + file.album;
+                                    ListItemEntry entry = new ListItemEntry(file.title, artistAndAlbumString);
+                                    dataForFragment.add(entry);
+                                }
+                            }
                         }
 
                         toolbar.setTitle(filterBy);
@@ -262,8 +316,8 @@ public class MetadataFragment extends Fragment {
 
                                 // TODO(doyle): Store file data into metadataAdapter, instead of search list
                                 // again to find the file to play
-                                TextView textView = (TextView) view.getTag();
-                                String audioTitleToPlay = textView.getText().toString();
+                                ListItemEntryView entry = (ListItemEntryView) view.getTag();
+                                String audioTitleToPlay = entry.title.getText().toString();
                                 for (AudioFile file : allAudioFiles) {
                                     if (file.title.equals(audioTitleToPlay)) {
                                         playlist.contents.add(file);
@@ -300,18 +354,13 @@ public class MetadataFragment extends Fragment {
                     listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
                         @Override
                         public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-
-                            PlaylistAdapter.AudioEntryInView entry =
-                                    (PlaylistAdapter.AudioEntryInView) view.getTag();
-                            int index = entry.position;
-
                             /* Update playlist view after song click */
                             Playlist newPlaylist = playlistUiSpec.displayingPlaylist;
                             PlaylistAdapter adapter = playlistUiSpec.adapter_;
                             adapter.playlist = newPlaylist;
 
-                            if (newPlaylist.index != index) {
-                                newPlaylist.index = index;
+                            if (newPlaylist.index != position) {
+                                newPlaylist.index = position;
                                 listView.invalidateViews();
                             }
 
@@ -331,10 +380,10 @@ public class MetadataFragment extends Fragment {
 
             /* Switch to new fragment data display */
             if (newType != FragmentType.PLAYLIST) {
-                List<String> dataList = new ArrayList<>();
+                List<ListItemEntry> dataList = new ArrayList<>();
                 dataList.addAll(dataForFragment);
                 listView.setAdapter(metadataAdapter);
-                metadataAdapter.stringList = dataList;
+                metadataAdapter.listEntries = dataList;
                 metadataAdapter.notifyDataSetChanged();
             } else {
                 listView.setAdapter(playlistUiSpec.adapter_);
@@ -420,25 +469,50 @@ public class MetadataFragment extends Fragment {
         }
     }
 
+    private class ListItemEntry implements Comparable<ListItemEntry> {
+        final String title;
+        final String subtitle;
+
+        public ListItemEntry(String title, String subtitle) {
+            this.title = title;
+            this.subtitle = subtitle;
+        }
+
+        @Override
+        public int compareTo(ListItemEntry o) {
+            return this.title.compareTo(o.title);
+        }
+    }
+
+    private static class ListItemEntryView {
+        final TextView title;
+        final TextView subtitle;
+
+        ListItemEntryView(TextView title, TextView subtitle) {
+            this.title = title;
+            this.subtitle = subtitle;
+        }
+    }
+
     private static class MetadataAdapter extends BaseAdapter {
-        List<String> stringList;
+        List<ListItemEntry> listEntries;
         private LayoutInflater inflater;
 
-        MetadataAdapter(List<String> stringList, Context context) {
-            this.stringList = stringList;
+        MetadataAdapter(List<ListItemEntry> listEntries, Context context) {
+            this.listEntries = listEntries;
             inflater = LayoutInflater.from(context);
         }
 
         @Override
         public int getCount() {
-            int result = stringList.size();
+            int result = listEntries.size();
             return result;
         }
 
         @Override
-        public Object getItem(int position) {
-            if (stringList != null) {
-                return stringList.get(position);
+        public ListItemEntry getItem(int position) {
+            if (listEntries != null) {
+                return listEntries.get(position);
             }
             return null;
         }
@@ -448,19 +522,26 @@ public class MetadataFragment extends Fragment {
             return 0;
         }
 
+
         @Override
         public View getView(int position, View convertView, ViewGroup parent) {
-            TextView textView;
+            ListItemEntryView entry;
             if (convertView == null) {
                 convertView = inflater.inflate(R.layout.list_item, parent, false);
-                textView = (TextView) convertView.findViewById(R.id.list_item_text_view);
 
-                convertView.setTag(textView);
+                TextView title = (TextView) convertView.findViewById(R.id.list_item_title_text_view);
+                TextView subtitle = (TextView) convertView.findViewById(R.id.list_item_subtitle_text_view);
+                entry = new ListItemEntryView(title, subtitle);
+
+                convertView.setTag(entry);
             } else {
-                textView = (TextView) convertView.getTag();
+                entry = (ListItemEntryView) convertView.getTag();
             }
 
-            textView.setText(stringList.get(position));
+            ListItemEntry entryData = listEntries.get(position);
+            entry.title.setText(entryData.title);
+            entry.subtitle.setText(entryData.subtitle);
+
             return convertView;
         }
     }

@@ -6,7 +6,6 @@ import android.os.Handler;
 import android.support.v4.content.ContextCompat;
 import android.util.Log;
 import android.view.View;
-import android.view.ViewGroup;
 import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
@@ -17,7 +16,6 @@ import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.List;
 
 class Debug {
     final static boolean DEBUG_MODE = true;
@@ -204,37 +202,43 @@ class Debug {
 
     // TODO(doyle): Global activity view id causes crashed, if an activity is destroyed
     // this doesnt get reset properly, so we look up invalid activity for invalid view
-    static int globalActivityViewId = -1;
     static boolean showDebugRenderers = false;
+    private static WeakReference<Activity> weakGlobalActivityRef = null;
+    private static int globalActivityViewId = -1;
     private static void initViewForActivity(Activity activity) {
-        if (globalActivityViewId != -1)
-            return;
 
-        RelativeLayout debugLayout = new RelativeLayout(activity);
-        RelativeLayout.LayoutParams debugLayoutParams = new RelativeLayout.LayoutParams(
+        if (weakGlobalActivityRef == null || weakGlobalActivityRef.get() == null) {
+            weakGlobalActivityRef = new WeakReference<>(activity);
+        } else {
+            // NOTE(doyle): Global activity still valid and has been set up
+            return;
+        }
+
+        Activity globalActivity = weakGlobalActivityRef.get();
+
+        RelativeLayout debugOverlay = new RelativeLayout(globalActivity);
+        RelativeLayout.LayoutParams debugOverlayParams = new RelativeLayout.LayoutParams(
                 RelativeLayout.LayoutParams.MATCH_PARENT,
                 RelativeLayout.LayoutParams.MATCH_PARENT);
 
         // NOTE: Offset beyond the android status bar so debug layout doesn't get covered.
         // If we reaalllly care, then TODO: calculate the actual height
-        debugLayout.setPadding(0, 100, 0, 0);
+        debugOverlay.setPadding(0, 100, 0, 0);
 
-        LinearLayout debugStringLayout = new LinearLayout(activity);
+        LinearLayout debugStringLayout = new LinearLayout(globalActivity);
         LinearLayout.LayoutParams debugStringLayoutParams = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT);
         debugStringLayout.setOrientation(LinearLayout.VERTICAL);
 
-        int debugViewId = View.generateViewId();
-        debugStringLayout.setId(debugViewId);
-        debugLayout.addView(debugStringLayout, debugStringLayoutParams);
+        globalActivityViewId = View.generateViewId();
+        debugStringLayout.setId(globalActivityViewId);
 
-        activity.addContentView(debugLayout, debugLayoutParams);
-        globalActivityViewId = debugViewId;
+        debugOverlay.addView(debugStringLayout, debugStringLayoutParams);
+        activity.addContentView(debugOverlay, debugOverlayParams);
     }
 
     abstract static class UiUpdateAndRender implements Runnable {
-        private WeakReference<Activity> weakActivity;
         private WeakReference<Handler> weakHandler;
         private WeakReference<LinearLayout> weakUiLayout;
         private String label;
@@ -250,14 +254,15 @@ class Debug {
             initViewForActivity(activity);
             updateRateInMilliseconds = 1000 / framesPerSecond;
 
-            this.weakActivity = new WeakReference<>(activity);
             this.weakHandler = new WeakReference<>(handler);
             this.isRunning = isRunning;
             this.label = label;
 
+            // TODO(doyle): Totally broken, on app swipe out. Reinitialising activity doesnt show debug
+            Activity globalActivity = weakGlobalActivityRef.get();
             { // Create this renderer instance debug layout to push elements to
                 int debugViewId = View.generateViewId();
-                LinearLayout debugStringLayout = new LinearLayout(activity);
+                LinearLayout debugStringLayout = new LinearLayout(globalActivity);
                 LinearLayout.LayoutParams debugStringLayoutParams = new LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.WRAP_CONTENT,
                         LinearLayout.LayoutParams.WRAP_CONTENT);
@@ -265,7 +270,7 @@ class Debug {
                 debugStringLayout.setId(debugViewId);
 
                 LinearLayout globalDebugLayout = (LinearLayout)
-                        activity.findViewById(globalActivityViewId);
+                        globalActivity.findViewById(globalActivityViewId);
                 globalDebugLayout.addView(debugStringLayout, debugStringLayoutParams);
 
                 this.weakUiLayout = new WeakReference<>(debugStringLayout);
@@ -276,7 +281,7 @@ class Debug {
 
         @Override
         public void run() {
-            Activity activity = weakActivity.get();
+            Activity activity = weakGlobalActivityRef.get();
             Handler handler = weakHandler.get();
             LinearLayout view = weakUiLayout.get();
             if (activity != null && handler != null) {
@@ -301,7 +306,7 @@ class Debug {
         }
 
         void pushVariable(String name, Object value) {
-            Activity activity = weakActivity.get();
+            Activity activity = weakGlobalActivityRef.get();
             LinearLayout view = weakUiLayout.get();
             if (activity != null && value != null) {
                 String debugString = name + ": ";
@@ -331,7 +336,7 @@ class Debug {
         }
 
         void pushText(String debugString) {
-            Activity activity = weakActivity.get();
+            Activity activity = weakGlobalActivityRef.get();
             LinearLayout view = weakUiLayout.get();
             if (activity != null && view != null && debugString != null && !debugString.isEmpty()) {
                 createAndRenderDebugText(activity, view, debugString, null);
@@ -339,7 +344,7 @@ class Debug {
         }
 
         void pushClass(Object object, boolean ignoreStatic, boolean ignoreFinal, boolean ignoreClassRefs) {
-            Activity activity = weakActivity.get();
+            Activity activity = weakGlobalActivityRef.get();
             LinearLayout view = weakUiLayout.get();
 
             if (activity == null || view == null || object == null) { return; }

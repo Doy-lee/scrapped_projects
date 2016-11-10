@@ -271,7 +271,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
         setSupportActionBar(uiSpec_.toolbar);
         getSupportActionBar().setDefaultDisplayHomeAsUpEnabled(true);
 
-        metadataFragment = new MetadataFragment();
+        metadataFragment = MetadataFragment.newInstance();
         getSupportFragmentManager().beginTransaction()
                 .replace(R.id.main_content_fragment, metadataFragment)
                 // .addToBackStack(null)
@@ -358,7 +358,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
 
                 // TODO(doyle): Revise. Is messy but works
                 Playlist playingPlaylist = playSpec_.playingPlaylist;
-                if (metadataFragment != null && metadataFragment.init) {
+                if (metadataFragment != null && metadataFragment.isInit()) {
                     Playlist displayingPlaylist = metadataFragment.playlistUiSpec.displayingPlaylist;
                     if (displayingPlaylist != null) {
 
@@ -720,13 +720,6 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
 
         if (serviceBound) { unbindService(audioConnection); }
         unregisterReceiver(updateUiReceiver);
-
-        // TODO(doyle): Possible memory leak here
-        // On destroy, we don't in particular release the old activity view, because on re-create
-        // we have a new activity view to which we must add our debug overlay ontop off, i.e. we're
-        // relying on GC? atm, and that's valid if all references to old activity are cleared
-        // (unlikely)
-        Debug.globalActivityViewId = -1;
         Debug.TOAST(this, "Activity destroyed", Toast.LENGTH_SHORT);
     }
 
@@ -1273,10 +1266,14 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                 // instead of waiting until entire db load is validated (which may take awhile)
                 playSpec.playingPlaylist = playSpec.libraryList;
                 activity.enqueueToPlayer(playSpec.playingPlaylist, false);
-                activity.metadataFragment.init(activity, activity.playSpec_.allAudioFiles,
-                        FragmentType.PLAYLIST, activity.playSpec_.playingPlaylist,
-                        activity.uiSpec_.toolbar);
-                activity.metadataFragment.updateMetadataView(FragmentType.PLAYLIST);
+
+                MetadataFragment fragment = activity.metadataFragment;
+                if (!fragment.isInit()) {
+                    fragment.init(activity, activity.playSpec_.allAudioFiles,
+                            FragmentType.PLAYLIST, activity.playSpec_.playingPlaylist,
+                            activity.uiSpec_.toolbar);
+                }
+
                 Intent broadcast = new Intent(MainActivity.BROADCAST_UPDATE_UI);
                 activity.sendBroadcast(broadcast);
             }
@@ -1293,10 +1290,14 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                         "Another rescan needed");
             } else {
                 playSpec.playingPlaylist = playSpec.libraryList;
-                activity.metadataFragment.init(activity, activity.playSpec_.allAudioFiles,
-                        FragmentType.PLAYLIST, activity.playSpec_.playingPlaylist,
-                        activity.uiSpec_.toolbar);
-                activity.metadataFragment.updateMetadataView(FragmentType.PLAYLIST);
+
+                MetadataFragment fragment = activity.metadataFragment;
+                if (!fragment.isInit()) {
+                    fragment.init(activity, activity.playSpec_.allAudioFiles,
+                            FragmentType.PLAYLIST, activity.playSpec_.playingPlaylist,
+                            activity.uiSpec_.toolbar);
+                }
+
                 activity.enqueueToPlayer(playSpec.playingPlaylist, false);
                 SharedPreferences sharedPref =
                         PreferenceManager.getDefaultSharedPreferences(activity);
