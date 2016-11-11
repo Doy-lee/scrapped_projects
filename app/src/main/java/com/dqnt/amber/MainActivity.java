@@ -890,16 +890,22 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                 = sharedPref.getBoolean(getString(R.string.pref_validate_database_on_startup_key),
                 false);
 
+        boolean libraryInit
+                = sharedPref.getBoolean(getString(R.string.internal_pref_library_init_key),
+                false);
+
+        if (!libraryInit) validateDatabase = true;
+
         GetAudioFromDevice task = new GetAudioFromDevice(this, playSpec, dbHandle,
                 validateDatabase);
         task.execute();
     }
 
     private static class GetAudioFromDevice extends AsyncTask<Void, Void, Void> {
-        private WeakReference<MainActivity> weakActivity;
-        private WeakReference<PlaySpec> weakPlaySpec;
-        private AudioStorage dbHandle;
-        private boolean validateDatabase;
+        final private WeakReference<MainActivity> weakActivity;
+        final private WeakReference<PlaySpec> weakPlaySpec;
+        final private AudioStorage dbHandle;
+        final private boolean validateDatabase;
 
         GetAudioFromDevice(MainActivity activity, PlaySpec playSpec, AudioStorage dbHandle,
                            boolean validateDatabase) {
@@ -1010,8 +1016,8 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                 return null;
             }
 
-            Activity context = weakActivity.get();
-            if (context == null) {
+            MainActivity activity = weakActivity.get();
+            if (activity == null) {
                 Debug.LOG_W(this, "Context got GC'ed. MediaStore not scanned");
                 return null;
             }
@@ -1019,8 +1025,8 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
             { // NOTE(doyle): Load whatever is in the DB first and let the user interact with that,
               // then recheck information is valid afterwards
                 // TODO(doyle): Use the sort param in query from db
-                List<AudioFile> fileListFromDb = dbHandle.getAllAudioFiles(context);
-                List<Playlist> playlistListFromDb = dbHandle.getAllPlaylists(context);
+                List<AudioFile> fileListFromDb = dbHandle.getAllAudioFiles(activity);
+                List<Playlist> playlistListFromDb = dbHandle.getAllPlaylists(activity);
 
                 if (fileListFromDb != null) {
                     if (fileListFromDb.size() > 0) {
@@ -1076,12 +1082,18 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                 }
             }
 
+            boolean updateLibraryWithEachLoad = false;
+            if (playSpec.allAudioFiles.size() == 0) updateLibraryWithEachLoad = true;
+
             /* Start scanning from device */
             MediaMetadataRetriever retriever = new MediaMetadataRetriever();
-            ContentResolver musicResolver = context.getContentResolver();
+            ContentResolver musicResolver = activity.getContentResolver();
             Uri musicUri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
             Cursor musicCursor = musicResolver.query(musicUri, null, null, null, null);
 
+            final int updateThreshold = 20;
+            int updateCounter = 0;
+            List<AudioFile> fileBatch = new ArrayList<>();
             if (Debug.CAREFUL_ASSERT(musicCursor != null, this,
                     "Cursor could not be resolved from ContentResolver")) {
                 if (musicCursor.moveToFirst()) {
@@ -1096,7 +1108,19 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                             String absPath = musicCursor.getString(absPathIndex);
                             File file = new File(absPath);
 
-                            updateAndCheckAgainstDbList(context, retriever, file);
+                            AudioFile result = updateAndCheckAgainstDbList(activity, retriever, file);
+
+                            if (updateLibraryWithEachLoad) {
+                                fileBatch.add(result);
+                                if (updateCounter++ > updateThreshold) {
+                                    playSpec.allAudioFiles.addAll(fileBatch);
+                                    fileBatch.clear();
+
+                                    publishProgress();
+                                    updateCounter = 0;
+                                }
+                            }
+
                         }
                     } while (musicCursor.moveToNext());
                 } else {
@@ -1111,7 +1135,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
             /* Get music from the path set in preferences */
             // TODO(doyle): Add callback handling on preference change
             SharedPreferences sharedPref = PreferenceManager.
-                    getDefaultSharedPreferences(context);
+                    getDefaultSharedPreferences(activity);
             String musicPath = sharedPref.getString("pref_music_path_key", "");
             File musicDir = new File(musicPath);
 
@@ -1127,7 +1151,19 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                     String fileName = file.getName();
 
                     if (fileName.endsWith(".opus")) {
-                        updateAndCheckAgainstDbList(context, retriever, file);
+                        AudioFile result = updateAndCheckAgainstDbList(activity, retriever, file);
+
+                        if (updateLibraryWithEachLoad) {
+                            fileBatch.add(result);
+                            if (updateCounter++ > updateThreshold) {
+                                playSpec.allAudioFiles.addAll(fileBatch);
+                                fileBatch.clear();
+
+                                publishProgress();
+                                updateCounter = 0;
+                            }
+                        }
+
                     } else if (fileName.endsWith(".m3u") || fileName.endsWith(".m3u8")) {
                         if (file.canRead()) {
                             listOfPlaylistsFiles.add(file);
@@ -1142,11 +1178,17 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                 Debug.LOG_W(this, "Could not find/read music directory: " + musicDir);
             }
 
-            List<AudioFile> filesFromDb = dbHandle.getAllAudioFiles(context);
+            // TODO(doyle): We ignore the rest because we will replace all entries with the DB entries. This handles invalid file entries
+            // By completely nuking the in memory representation since the DB is guaranteed to be correct
+            fileBatch.clear();
+
+            List<AudioFile> filesFromDb = dbHandle.getAllAudioFiles(activity);
             playSpec.allAudioFiles.clear();
             playSpec.allAudioFiles.addAll(filesFromDb);
             List<AudioFile> allAudioFiles = playSpec.allAudioFiles;
+            publishProgress();
 
+            // TODO(doyle): On resort the playlist index becomes invalid.
             /* Sort list */
             Collections.sort(allAudioFiles, new Comparator<AudioFile>() {
                 public int compare(AudioFile a, AudioFile b) {
@@ -1192,7 +1234,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                             actualFile = new File(entryFolder, playlistEntry);
                         }
 
-                        AudioFile file = updateAndCheckAgainstDbList(context, retriever,
+                        AudioFile file = updateAndCheckAgainstDbList(activity, retriever,
                                 actualFile);
                         if (file != null) {
                             rawPlaylist.contents.add(file);
@@ -1239,7 +1281,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
             retriever.release();
 
             playSpec.playlistList.clear();
-            playSpec.playlistList = dbHandle.getAllPlaylists(context);
+            playSpec.playlistList = dbHandle.getAllPlaylists(activity);
             return null;
         }
 
@@ -1259,12 +1301,21 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                 playSpec.playingPlaylist = playSpec.libraryList;
                 activity.enqueueToPlayer(playSpec.playingPlaylist, false);
 
+                Collections.sort(playSpec.allAudioFiles, new Comparator<AudioFile>() {
+                    public int compare(AudioFile a, AudioFile b) {
+                        return a.title.compareTo(b.title);
+                    }
+                });
+
                 MetadataFragment fragment = activity.metadataFragment;
                 if (!fragment.isInit()) {
                     fragment.init(activity, activity.playSpec_.allAudioFiles,
                             FragmentType.PLAYLIST, activity.playSpec_.playingPlaylist,
                             activity.uiSpec_.toolbar);
+                } else {
+                    fragment.updateMetadataView(FragmentType.PLAYLIST);
                 }
+
 
                 Intent broadcast = new Intent(MainActivity.BROADCAST_UPDATE_UI);
                 activity.sendBroadcast(broadcast);

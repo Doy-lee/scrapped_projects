@@ -106,7 +106,6 @@ public class MetadataFragment extends Fragment {
 
         this.toolbar = toolbar;
         metadataAdapter = new MetadataAdapter(new ArrayList<ListItemEntry>(), context);
-
         playlistUiSpec = new PlaylistUiSpec(context, activePlaylist);
 
         Handler handler = new Handler();
@@ -347,8 +346,9 @@ public class MetadataFragment extends Fragment {
 
                         if (adapter.playlist != playlistUiSpec.displayingPlaylist) {
                             adapter.playlist = playlistUiSpec.displayingPlaylist;
-                            adapter.notifyDataSetChanged();
                         }
+                        // NOTE(doyle): Playlist could be the same but new files in list
+                        adapter.notifyDataSetChanged();
                     }
 
                     listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {

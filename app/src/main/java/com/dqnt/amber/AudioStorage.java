@@ -271,6 +271,9 @@ class AudioStorage extends SQLiteOpenHelper {
                     FileOutputStream out = new FileOutputStream(coverArtFile);
                     file.bitmap.compress(Bitmap.CompressFormat.PNG, 100, out);
                     out.close();
+
+                    // TODO(doyle): This causes performance problem, so on load we don't show images until load is completed and we pull from the DB
+                    // file.bitmapUri = Uri.fromFile(coverArtFile);
                 } else {
                     Debug.LOG_W(this, "Could not create cover art file for: "
                             + file.uri.toString() + " to: " + coverArtFile.getAbsolutePath());
@@ -281,6 +284,8 @@ class AudioStorage extends SQLiteOpenHelper {
                         + file.uri.toString());
                 e.printStackTrace();
             }
+
+            file.bitmap = null;
         }
     }
 
