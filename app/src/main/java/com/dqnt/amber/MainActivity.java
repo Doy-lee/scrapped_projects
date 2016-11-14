@@ -60,6 +60,7 @@ import java.util.Random;
 
 import com.dqnt.amber.Models.AudioFile;
 import com.dqnt.amber.Models.Playlist;
+import com.google.gson.Gson;
 
 import static com.dqnt.amber.Debug.ASSERT;
 import static com.dqnt.amber.Debug.CAREFUL_ASSERT;
@@ -142,6 +143,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
     private boolean playlistQueued;
     private boolean serviceBound;
     private AudioService.Response audioServiceResponse;
+    private GetAudioFromDevice getAudioFromDevice;
 
     AudioService audioService;
 
@@ -349,6 +351,16 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                 pushClass(audioService, true, false, true);
                 pushClass(this, true, false, true);
                 pushVariable("Service Bound", serviceBound);
+
+                if (metadataFragment == null) {
+                    pushText("metadataFragment: NULL");
+                } else {
+                    if (metadataFragment.isInit()) {
+                        pushText("metadataFragment: INIT");
+                    } else {
+                        pushText("metadataFragment: NOT-INIT");
+                    }
+                }
 
                 Playlist returnFromSearchPlaylist = playSpec_.returnFromSearchPlaylist;
                 if (returnFromSearchPlaylist != null) {
@@ -707,6 +719,10 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
         }
 
         updatePlayBarUi(uiSpec_);
+        if (metadataFragment.isVisible()) {
+            Debug.LOG_D(this, "Metadata fragment is visible");
+        }
+
         Debug.TOAST(this, "Activity started", Toast.LENGTH_SHORT);
     }
 
@@ -735,6 +751,13 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
 
         if (serviceBound) { unbindService(audioConnection); }
         unregisterReceiver(updateUiReceiver);
+        metadataFragment = null;
+
+        if (getAudioFromDevice != null) {
+            getAudioFromDevice.cancel(true);
+            getAudioFromDevice = null;
+        }
+
         Debug.TOAST(this, "Activity destroyed", Toast.LENGTH_SHORT);
     }
 
@@ -826,8 +849,12 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                 playSpec_.allAudioFiles.clear();
 
                 metadataFragment.playlistUiSpec.adapter_.notifyDataSetChanged();
-                GetAudioFromDevice task = new GetAudioFromDevice(this, playSpec_, dbHandle, true);
-                task.execute();
+                if (getAudioFromDevice != null) {
+                    getAudioFromDevice.cancel(true);
+                }
+
+                getAudioFromDevice = new GetAudioFromDevice(this, playSpec_, dbHandle, true);
+                getAudioFromDevice.execute();
             } break;
 
             case R.id.action_ui_follow_playback: {
@@ -930,9 +957,13 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
 
         if (!libraryInit) validateDatabase = true;
 
-        GetAudioFromDevice task = new GetAudioFromDevice(this, playSpec, dbHandle,
-                validateDatabase);
-        task.execute();
+        if (getAudioFromDevice != null) {
+            getAudioFromDevice.cancel(true);
+            getAudioFromDevice = null;
+        }
+
+        getAudioFromDevice = new GetAudioFromDevice(this, playSpec, dbHandle, validateDatabase);
+        getAudioFromDevice.execute();
     }
 
     private static class GetAudioFromDevice extends AsyncTask<Void, Void, Void> {
@@ -940,6 +971,8 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
         final private WeakReference<PlaySpec> weakPlaySpec;
         final private AudioStorage dbHandle;
         final private boolean validateDatabase;
+
+        final private MetadataFragment.DisplaySpec displaySpecToUse;
 
         GetAudioFromDevice(MainActivity activity, PlaySpec playSpec, AudioStorage dbHandle,
                            boolean validateDatabase) {
@@ -949,6 +982,20 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
             this.weakPlaySpec = new WeakReference<>(playSpec);
 
             this.validateDatabase = validateDatabase;
+
+            SharedPreferences sharedPref = PreferenceManager.getDefaultSharedPreferences(activity);
+            String displaySpecInJson =
+                    sharedPref.getString(activity.getString(R.string.internal_pref_display_spec_key),
+                            null);
+
+            if (displaySpecInJson != null) {
+                Gson gson = new Gson();
+                displaySpecToUse =
+                        gson.fromJson(displaySpecInJson, MetadataFragment.DisplaySpec.class);
+            } else {
+                displaySpecToUse = null;
+            }
+
         }
 
         private AudioFile updateAndCheckAgainstDbList(Context context,
@@ -956,8 +1003,12 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                                                       File newFile) {
 
             AudioFile result = null;
-            if (newFile == null || !newFile.exists()) {
-                Debug.LOG_W(this, "File is null or does not exist, cannot check/add against db");
+            if (newFile == null) {
+                Debug.LOG_W(this, "File arg is null , cannot check/add against db");
+                return null;
+            } else if (!newFile.exists()) {
+                Debug.LOG_W(this, "File does not exist, cannot check/add against db: "
+                        + newFile.getAbsolutePath());
                 return null;
             }
 
@@ -1042,6 +1093,19 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
 
         }
 
+        private class AudioSorter implements Comparator<AudioFile> {
+            @Override
+            public int compare(AudioFile a, AudioFile b) {
+                try {
+                    return a.title.compareTo(b.title);
+                } catch (IllegalArgumentException e) {
+                    Debug.LOG_D(this, a.uri.toString() + " : " + b.uri.toString());
+                    ASSERT(false);
+                }
+                return 0;
+            }
+        }
+
         @Override
         protected Void doInBackground(Void... params) {
             PlaySpec playSpec = weakPlaySpec.get();
@@ -1067,12 +1131,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                         playSpec.allAudioFiles.clear();
                         playSpec.allAudioFiles.addAll(fileListFromDb);
 
-                        Collections.sort(playSpec.allAudioFiles, new Comparator<AudioFile>() {
-                            @Override
-                            public int compare(AudioFile a, AudioFile b) {
-                                return a.title.compareTo(b.title);
-                            }
-                        });
+                        Collections.sort(playSpec.allAudioFiles, new AudioSorter());
                     }
                 }
 
@@ -1116,6 +1175,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                 }
             }
 
+            if (isCancelled()) return null;
             boolean updateLibraryWithEachBatch = false;
             if (playSpec.allAudioFiles.size() == 0) updateLibraryWithEachBatch = true;
 
@@ -1152,6 +1212,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
 
                                     publishProgress();
                                     updateCounter = 0;
+                                    if (isCancelled()) return null;
                                 }
                             }
 
@@ -1195,6 +1256,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
 
                                 publishProgress();
                                 updateCounter = 0;
+                                if (isCancelled()) return null;
                             }
                         }
 
@@ -1220,16 +1282,15 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
             playSpec.allAudioFiles.clear();
             playSpec.allAudioFiles.addAll(filesFromDb);
             List<AudioFile> allAudioFiles = playSpec.allAudioFiles;
+
+            Collections.sort(playSpec.allAudioFiles, new AudioSorter());
+
             publishProgress();
+            if (isCancelled()) return null;
 
             // TODO(doyle): On resort the playlist index becomes invalid.
             /* Sort list */
-            Collections.sort(allAudioFiles, new Comparator<AudioFile>() {
-                public int compare(AudioFile a, AudioFile b) {
-                    Debug.LOG_V(this, "A: " + a + " compared to B: " + b);
-                    return a.title.compareTo(b.title);
-                }
-            });
+            Collections.sort(allAudioFiles, new AudioSorter());
 
             class RawPlaylist {
                 private String name;
@@ -1282,10 +1343,16 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                     /* Replace file entries with references to the global audio list */
                     for (AudioFile findFile: rawPlaylist.contents) {
                         int index = findAudioFileInList(allAudioFiles, findFile);
-                        ASSERT(index != -1);
 
-                        newPlaylist.contents.add(allAudioFiles.get(index));
+                        if (index == -1) {
+                            Debug.LOG_W(this, "Could not find file, excluded from playlist: "
+                                            + findFile.uri.getPath());
+                        } else {
+                            newPlaylist.contents.add(allAudioFiles.get(index));
+                        }
+
                     }
+                    if (isCancelled()) return null;
 
                     String newPlaylistPath = newPlaylist.uri.getPath();
                     boolean matched = false;
@@ -1325,6 +1392,53 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
             super.onCancelled();
         }
 
+        private void updateMetadataFragment(MainActivity activity, PlaySpec playSpec) {
+            MetadataFragment fragment = activity.metadataFragment;
+            if (!fragment.isInit()) {
+
+                Playlist playlistToUse = playSpec.libraryList;
+                boolean displaySpecIsStillValid = false;
+
+                if (displaySpecToUse != null) {
+
+                    // TODO(doyle): Unify notion of library as a playlist included in the playlist list
+                    // i.e. a virtual playlist "concept" which does not get stored into the db or validated against
+                    // like playlists built at runtime or something
+
+                    // NOTE(doyle): A key of 0 is invalid in DBs, as they start from 1. We use it to
+                    // store out universal playlist, the library list
+                    if (displaySpecToUse.playlistKey == 0) {
+                        displaySpecIsStillValid = true;
+                    } else {
+                        for (Playlist playlist : playSpec.playlistList) {
+                            if (playlist.dbKey == displaySpecToUse.playlistKey
+                                    && displaySpecToUse.type == FragmentType.PLAYLIST) {
+                                displaySpecIsStillValid = true;
+                                playlistToUse = playlist;
+                                break;
+                            }
+                        }
+                    }
+                }
+                playSpec.playingPlaylist = playlistToUse;
+                activity.enqueueToPlayer(playSpec.playingPlaylist, false);
+
+                if (displaySpecIsStillValid) {
+                    fragment.init(activity, activity.playSpec_.allAudioFiles,
+                            FragmentType.PLAYLIST, playlistToUse,
+                            activity.uiSpec_.toolbar, displaySpecToUse);
+                } else {
+                    fragment.init(activity, activity.playSpec_.allAudioFiles,
+                            FragmentType.PLAYLIST, playlistToUse,
+                            activity.uiSpec_.toolbar);
+                }
+            }
+            fragment.updateMetadataView(FragmentType.PLAYLIST);
+
+            Intent broadcast = new Intent(MainActivity.BROADCAST_UPDATE_UI);
+            activity.sendBroadcast(broadcast);
+        }
+
         @Override
         protected void onProgressUpdate(Void... args) {
             super.onProgressUpdate();
@@ -1333,27 +1447,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
             if (activity != null && playSpec != null) {
                 // TODO(doyle): Duplicated on exit. Since if we also validate against db, then allow playlist to be updated during update
                 // instead of waiting until entire db load is validated (which may take awhile)
-                playSpec.playingPlaylist = playSpec.libraryList;
-                activity.enqueueToPlayer(playSpec.playingPlaylist, false);
-
-                Collections.sort(playSpec.allAudioFiles, new Comparator<AudioFile>() {
-                    public int compare(AudioFile a, AudioFile b) {
-                        return a.title.compareTo(b.title);
-                    }
-                });
-
-                MetadataFragment fragment = activity.metadataFragment;
-                if (!fragment.isInit()) {
-                    fragment.init(activity, activity.playSpec_.allAudioFiles,
-                            FragmentType.PLAYLIST, activity.playSpec_.playingPlaylist,
-                            activity.uiSpec_.toolbar);
-                } else {
-                    fragment.updateMetadataView(FragmentType.PLAYLIST);
-                }
-
-
-                Intent broadcast = new Intent(MainActivity.BROADCAST_UPDATE_UI);
-                activity.sendBroadcast(broadcast);
+                updateMetadataFragment(activity, playSpec);
             }
         }
 
@@ -1367,16 +1461,8 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                 Debug.LOG_W(this, "Acitivty or playSpec got GC'ed, library init key not written. " +
                         "Another rescan needed");
             } else {
-                playSpec.playingPlaylist = playSpec.libraryList;
+                updateMetadataFragment(activity, playSpec);
 
-                MetadataFragment fragment = activity.metadataFragment;
-                if (!fragment.isInit()) {
-                    fragment.init(activity, activity.playSpec_.allAudioFiles,
-                            FragmentType.PLAYLIST, activity.playSpec_.playingPlaylist,
-                            activity.uiSpec_.toolbar);
-                }
-
-                activity.enqueueToPlayer(playSpec.playingPlaylist, false);
                 SharedPreferences sharedPref =
                         PreferenceManager.getDefaultSharedPreferences(activity);
                 String libraryInitKey = activity.getResources().
@@ -1387,9 +1473,6 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                     Toast.makeText(activity, "Library Initialisation has been confirmed",
                             Toast.LENGTH_SHORT).show();
                 }
-
-                Intent broadcast = new Intent(MainActivity.BROADCAST_UPDATE_UI);
-                activity.sendBroadcast(broadcast);
             }
         }
     }
@@ -1641,14 +1724,16 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                     = sharedPref.getBoolean(getString(R.string.internal_pref_ui_follows_playback)
                     , false);
 
-            if (metadataFragment.getFragmentType() == FragmentType.PLAYLIST &&
-                    metadataFragment.playlistUiSpec.displayingPlaylist
-                            == playSpec_.playingPlaylist) {
+            if (metadataFragment != null) {
+                if (metadataFragment.getFragmentType() == FragmentType.PLAYLIST &&
+                        metadataFragment.playlistUiSpec.displayingPlaylist
+                                == playSpec_.playingPlaylist) {
 
-                metadataFragment.updateMetadataView(FragmentType.PLAYLIST);
+                    metadataFragment.updateMetadataView(FragmentType.PLAYLIST);
 
-                if (followPlaybackEnabled && skippedToNewSong) {
-                    metadataFragment.listView.setSelection(songIndex);
+                    if (followPlaybackEnabled && skippedToNewSong) {
+                        metadataFragment.listView.setSelection(songIndex);
+                    }
                 }
             }
         }

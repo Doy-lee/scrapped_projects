@@ -26,6 +26,7 @@
     <string name="internal_pref_show_debug">internal_pref_show_debug</string>
     <string name="internal_pref_ui_follows_playback">internal_pref_ui_follows_playback</string>
 
+    <string name="internal_pref_display_spec_key">internal_pref_display_spec_key</string>
 
     <string name="menu_main_drawer_library">Library</string>
     <string name="menu_main_drawer_artist">Artist</string>

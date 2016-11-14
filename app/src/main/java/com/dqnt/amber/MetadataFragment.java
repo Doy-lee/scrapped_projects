@@ -3,8 +3,10 @@ package com.dqnt.amber;
 
 import android.app.Activity;
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.Handler;
+import android.preference.PreferenceManager;
 import android.support.v4.app.Fragment;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.widget.Toolbar;
@@ -26,9 +28,10 @@ import java.util.TreeSet;
 import com.dqnt.amber.Models.AudioFile;
 import com.dqnt.amber.Models.Playlist;
 import com.dqnt.amber.MainActivity.FragmentType;
+import com.google.gson.Gson;
 
 public class MetadataFragment extends Fragment {
-    private static class DisplaySpec {
+    static class DisplaySpec {
         final FragmentType type;
         long playlistKey;
         int listPos;
@@ -76,15 +79,27 @@ public class MetadataFragment extends Fragment {
                                                FragmentType type, Playlist activePlaylist,
                                                Toolbar toolbar) {
         MetadataFragment result = new MetadataFragment();
-        result.init(context, allAudioFiles, type, activePlaylist, toolbar);
+        result.init_(context, allAudioFiles, type, activePlaylist, toolbar, null);
         return result;
     }
 
     public boolean isInit() { return init; }
 
     public void init(Activity context, List<AudioFile> allAudioFiles,
-                     FragmentType type, Playlist activePlaylist,
-                     Toolbar toolbar) {
+                      FragmentType type, Playlist activePlaylist,
+                      Toolbar toolbar) {
+        init_(context, allAudioFiles, type, activePlaylist, toolbar, null);
+    }
+
+    public void init(Activity context, List<AudioFile> allAudioFiles,
+                      FragmentType type, Playlist activePlaylist,
+                      Toolbar toolbar, DisplaySpec displaySpec) {
+        init_(context, allAudioFiles, type, activePlaylist, toolbar, displaySpec);
+    }
+
+    private void init_(Activity context, List<AudioFile> allAudioFiles,
+                       FragmentType type, Playlist activePlaylist,
+                       Toolbar toolbar, DisplaySpec displaySpec) {
 
         if (init) {
             Debug.CAREFUL_ASSERT(false, this, "Metadata fragment is already initialised");
@@ -93,13 +108,16 @@ public class MetadataFragment extends Fragment {
 
         this.allAudioFiles = allAudioFiles;
 
-        DisplaySpec spec = new DisplaySpec(type);
-        if (type == FragmentType.PLAYLIST) {
-            spec.playlistKey = activePlaylist.dbKey;
+        DisplaySpec specToUse = displaySpec;
+        if (displaySpec == null) {
+            specToUse = new DisplaySpec(type);
+            if (type == FragmentType.PLAYLIST) {
+                specToUse.playlistKey = activePlaylist.dbKey;
+            }
         }
 
         displaySpecList = new ArrayList<>();
-        displaySpecList.add(spec);
+        displaySpecList.add(specToUse);
 
         currDisplaySpecIndex = displaySpecList.size() - 1;
         metadataDisplayStack = new Stack<>();
@@ -171,6 +189,16 @@ public class MetadataFragment extends Fragment {
         listener = null;
 
         Debug.TOAST(getContext(), "Metadata view fragment + listener detached", Toast.LENGTH_SHORT);
+
+        // TODO(doyle): We store display spec but only use it to restore the last view playlist, not index
+        Gson gson = new Gson();
+        DisplaySpec currDisplaySpec = displaySpecList.get(currDisplaySpecIndex);
+        currDisplaySpec.listPos = listView.getFirstVisiblePosition();
+        String displaySpecInJson = gson.toJson(currDisplaySpec);
+        SharedPreferences sharedPref = PreferenceManager.getDefaultSharedPreferences(getActivity());
+
+        sharedPref.edit().putString(getString(R.string.internal_pref_display_spec_key),
+                displaySpecInJson).apply();
     }
 
     // NOTE(doyle): Need current playing playlist, because if it is'nt the current playing playlist,
@@ -397,6 +425,7 @@ public class MetadataFragment extends Fragment {
                     newType == FragmentType.ALBUM_FILES ||
                     newType == FragmentType.ALBUM_ARTIST_FILES ||
                     newType == FragmentType.GENRE_FILES) {
+
                 metadataDisplayStack.push(oldSpec);
 
                 boolean matched = false;
@@ -442,8 +471,8 @@ public class MetadataFragment extends Fragment {
                         newSpec = spec;
                         matched = true;
                         currDisplaySpecIndex = i;
+                        break;
                     }
-                    break;
                 }
             }
 
