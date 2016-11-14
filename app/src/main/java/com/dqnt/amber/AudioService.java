@@ -7,6 +7,8 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.media.session.MediaSessionManager;
@@ -48,6 +50,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
 
     enum PlayState {
         PLAYING,
+        ADVANCE_TO_NEW_AUDIO,
         PAUSED,
         STOPPED,
     }
@@ -161,7 +164,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
         if (status == PlayState.PLAYING) {
             playPauseNotificationResource = R.drawable.ic_pause;
             playPauseAction = playbackAction(NotificationAction.PAUSE);
-        } else if (status == PlayState.PAUSED) {
+        } else if (status == PlayState.PAUSED || status == PlayState.STOPPED) {
             playPauseNotificationResource = R.drawable.ic_play;
             playPauseAction = playbackAction(NotificationAction.PLAY);
         }
@@ -175,14 +178,19 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
         PendingIntent intentToSendToApp = PendingIntent.getActivity
                 (this, 0, notificationIntent, PendingIntent.FLAG_UPDATE_CURRENT);
 
+        Bitmap bitmap = null;
+        if (activeAudio != null && activeAudio.bitmapUri != null) {
+            bitmap = BitmapFactory.decodeFile(activeAudio.bitmapUri.getPath());
+        }
+
         NotificationCompat.Builder builder = (NotificationCompat.Builder)
                 new NotificationCompat.Builder(this)
                 .setShowWhen(false)
                 .setStyle(new NotificationCompat.MediaStyle()
                         .setMediaSession(mediaSessionCompat.getSessionToken())
                         .setShowActionsInCompactView(0, 1, 2))
-                // .setLargeIcon(largeIcon)
-                .setSmallIcon(android.R.drawable.stat_sys_headset)
+                .setLargeIcon(bitmap)
+                .setSmallIcon(R.drawable.ic_play)
                 .setContentIntent(intentToSendToApp)
                 .setContentText(activeAudio.artist)
                 .setContentTitle(activeAudio.title)
@@ -318,7 +326,9 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
 
     // NOTE(doyle): Callback so we know when playback has actually started, because playback is not
     // immediate. Does not start until player is "prepared()"
-    public interface Response { void audioHasStartedPlayback(int songIndex); }
+    public interface Response {
+        void audioHasStartedPlayback(int songIndex, boolean skippedToNewSong);
+    }
     Response listener;
 
     // NOTE(doyle): Triggers when track finished/skipped or new track is selected
@@ -381,6 +391,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
                 stopMedia();
                 player.release();
                 player = null;
+
                 Debug.TOAST(this, "Audio focus lost, stop media & release player", Toast.LENGTH_SHORT);
                 Debug.INCREMENT_COUNTER(this, "Focus lost");
                 break;
@@ -463,9 +474,14 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
         registerBecomingNoisyReceiver();
         player.seekTo(resumePosInMs);
         player.start();
+
+        boolean skippedToNewSong =
+                (playState == PlayState.ADVANCE_TO_NEW_AUDIO);
         playState = PlayState.PLAYING;
+
+        listener.audioHasStartedPlayback(playlistIndex, skippedToNewSong);
+
         buildNotification(playState);
-        listener.audioHasStartedPlayback(playlistIndex);
     }
 
     private void controlPlayback(PlayCommand command) {
@@ -539,6 +555,8 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
                     player.stop();
                     playState = PlayState.STOPPED;
                     unregisterReceiver(becomingNoisyReceiver);
+
+                    buildNotification(PlayState.STOPPED);
                 }
             } break;
         }
@@ -580,6 +598,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
             }
         }
 
+        playState = PlayState.ADVANCE_TO_NEW_AUDIO;
         queuedNewSong = true;
         // TODO(doyle): In the event that we stop the player (i.e. audio focus loss) and then
         // skip to next song, in playMedia, the playstate is at "STOPPED", which will preserve
@@ -639,22 +658,6 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
         IntentFilter intentFilter = new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY);
         registerReceiver(becomingNoisyReceiver, intentFilter);
     }
-
-    // TODO(doyle): Do we need a broadcaster for playing audio? Or just use play function directly
-    /*
-    private BroadcastReceiver playNewAudioReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            Log.d(this, "Received play new audio intent");
-            prepareSongAndPlay();
-        }
-    };
-
-    private void registerPlayNewAudio() {
-        IntentFilter intentFilter = new IntentFilter(MainActivity.BROADCAST_PLAY_NEW_AUDIO);
-        registerReceiver(playNewAudioReceiver, intentFilter);
-    }
-    */
 
     private boolean ongoingCall = false;
     private PhoneStateListener phoneStateListener;

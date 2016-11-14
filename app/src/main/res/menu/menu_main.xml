@@ -4,25 +4,29 @@
     tools:context="com.dqnt.amberMainActivity">
     <item
         android:id="@+id/action_settings"
-        android:orderInCategory="100"
         android:title="@string/action_settings"
         app:showAsAction="never" />
 
     <item
         android:id="@+id/action_rescan_music"
-        android:orderInCategory="100"
         android:title="@string/action_rescan_music"
         app:showAsAction="never" />
 
     <item
         android:id="@+id/action_debug_overlay"
-        android:orderInCategory="100"
         android:title="@string/action_debug_overlay"
         app:showAsAction="never" />
 
     <item
+        android:id="@+id/action_ui_follow_playback"
+        android:title="@string/action_ui_follows_playback"
+        android:checkable="true"
+        android:icon="@android:drawable/ic_menu_preferences"
+        app:showAsAction="never" />
+
+    <item
         android:id="@+id/action_exit"
-        android:orderInCategory="100"
         android:title="@string/action_exit"
         app:showAsAction="never" />
+
 </menu>

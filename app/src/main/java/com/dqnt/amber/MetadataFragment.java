@@ -45,7 +45,7 @@ public class MetadataFragment extends Fragment {
 
     private List<AudioFile> allAudioFiles;
     private MetadataAdapter metadataAdapter;
-    private ListView listView;
+    ListView listView;
     private Toolbar toolbar;
     private boolean init;
 
@@ -367,15 +367,13 @@ public class MetadataFragment extends Fragment {
                             listener.audioFileClicked(playlistUiSpec.displayingPlaylist);
                         }
                     });
-                }
-                break;
+                } break;
 
                 default: {
                     Debug.CAREFUL_ASSERT(false, this,
                             "Fragment type not handled in metadata fragment: " +
                                     newType.toString());
-                }
-                break;
+                } break;
             }
 
             /* Switch to new fragment data display */

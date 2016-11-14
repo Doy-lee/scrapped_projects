@@ -3,6 +3,7 @@ package com.dqnt.amber;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.backup.SharedPreferencesBackupHelper;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.ContentResolver;
@@ -219,6 +220,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                 public void onPause() {
                     super.onPause();
                     audioService.pauseMedia();
+                    updatePlayBarUi(uiSpec_);
                 }
 
                 @Override
@@ -266,7 +268,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
         // Initialise UI
         uiSpec_ = new UiSpec();
 
-        audioServiceResponse = new AudioServiceResponse(uiSpec_, playSpec_);
+        audioServiceResponse = new AudioServiceResponse(this, uiSpec_, playSpec_);
         uiSpec_.toolbar = (Toolbar) findViewById(R.id.main_toolbar);
         setSupportActionBar(uiSpec_.toolbar);
         getSupportActionBar().setDefaultDisplayHomeAsUpEnabled(true);
@@ -427,8 +429,21 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
         playBarItems.searchButton = (Button) findViewById(R.id.play_bar_search_button);
         playBarItems.searchEditText = (EditText)
                 findViewById(R.id.play_bar_search_edit_text);
+
         playBarItems.currentSongTextView = (TextView)
                 findViewById(R.id.play_bar_current_song_text_view);
+
+        playBarItems.currentSongTextView.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (metadataFragment != null) {
+                    metadataFragment.changeDisplayingPlaylist
+                            (playSpec_.playingPlaylist, playSpec_.playingPlaylist);
+                    metadataFragment.updateMetadataView(FragmentType.PLAYLIST);
+                    metadataFragment.listView.setSelection(playSpec_.playingPlaylist.index);
+                }
+            }
+        });
 
         if (playSpec_.searchMode) {
             if (playBarItems.searchEditText.getVisibility() != View.VISIBLE) {
@@ -752,6 +767,17 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
             menu.removeItem(R.id.action_debug_overlay);
         }
 
+        SharedPreferences sharedPref = PreferenceManager.getDefaultSharedPreferences(this);
+        boolean followPlaybackEnabled
+                = sharedPref.getBoolean(getString(R.string.internal_pref_ui_follows_playback)
+                , false);
+
+        MenuItem followPlaybackCheckbox = menu.findItem(R.id.action_ui_follow_playback);
+        if (Debug.CAREFUL_ASSERT(followPlaybackCheckbox != null, this,
+                "Could not find ui follows playback menu item")) {
+            followPlaybackCheckbox.setChecked(followPlaybackEnabled);
+        }
+
         return super.onPrepareOptionsMenu(menu);
     }
 
@@ -802,6 +828,14 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                 metadataFragment.playlistUiSpec.adapter_.notifyDataSetChanged();
                 GetAudioFromDevice task = new GetAudioFromDevice(this, playSpec_, dbHandle, true);
                 task.execute();
+            } break;
+
+            case R.id.action_ui_follow_playback: {
+                item.setChecked(!item.isChecked());
+
+                SharedPreferences sharedPref = PreferenceManager.getDefaultSharedPreferences(this);
+                sharedPref.edit().putBoolean(getString(R.string.internal_pref_ui_follows_playback),
+                        item.isChecked()).apply();
             } break;
 
             default: {
@@ -1082,8 +1116,8 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                 }
             }
 
-            boolean updateLibraryWithEachLoad = false;
-            if (playSpec.allAudioFiles.size() == 0) updateLibraryWithEachLoad = true;
+            boolean updateLibraryWithEachBatch = false;
+            if (playSpec.allAudioFiles.size() == 0) updateLibraryWithEachBatch = true;
 
             /* Start scanning from device */
             MediaMetadataRetriever retriever = new MediaMetadataRetriever();
@@ -1110,7 +1144,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
 
                             AudioFile result = updateAndCheckAgainstDbList(activity, retriever, file);
 
-                            if (updateLibraryWithEachLoad) {
+                            if (updateLibraryWithEachBatch) {
                                 fileBatch.add(result);
                                 if (updateCounter++ > updateThreshold) {
                                     playSpec.allAudioFiles.addAll(fileBatch);
@@ -1153,7 +1187,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                     if (fileName.endsWith(".opus")) {
                         AudioFile result = updateAndCheckAgainstDbList(activity, retriever, file);
 
-                        if (updateLibraryWithEachLoad) {
+                        if (updateLibraryWithEachBatch) {
                             fileBatch.add(result);
                             if (updateCounter++ > updateThreshold) {
                                 playSpec.allAudioFiles.addAll(fileBatch);
@@ -1192,6 +1226,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
             /* Sort list */
             Collections.sort(allAudioFiles, new Comparator<AudioFile>() {
                 public int compare(AudioFile a, AudioFile b) {
+                    Debug.LOG_V(this, "A: " + a + " compared to B: " + b);
                     return a.title.compareTo(b.title);
                 }
             });
@@ -1580,16 +1615,18 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
     public class AudioServiceResponse implements AudioService.Response {
         UiSpec uiSpec;
         PlaySpec playSpec;
+        Context context;
 
-        AudioServiceResponse(UiSpec uiSpec, PlaySpec playSpec) {
+        AudioServiceResponse(Context context, UiSpec uiSpec, PlaySpec playSpec) {
             Debug.CAREFUL_ASSERT(uiSpec != null && playSpec != null, this, "Arguments are null");
 
+            this.context = context;
             this.uiSpec = uiSpec;
             this.playSpec = playSpec;
         }
 
         @Override
-        public void audioHasStartedPlayback(int songIndex) {
+        public void audioHasStartedPlayback(int songIndex, boolean skippedToNewSong) {
             updatePlayBarUi(uiSpec);
 
             // NOTE(doyle): Occurs if, a song has completed and has moved to the next song without
@@ -1597,11 +1634,21 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
             // side.
             if (songIndex != playSpec_.playingPlaylist.index) {
                 playSpec_.playingPlaylist.index = songIndex;
-                if (metadataFragment.getFragmentType() == FragmentType.PLAYLIST &&
-                        metadataFragment.playlistUiSpec.displayingPlaylist
-                                == playSpec_.playingPlaylist) {
+            }
 
-                    metadataFragment.updateMetadataView(FragmentType.PLAYLIST);
+            SharedPreferences sharedPref = PreferenceManager.getDefaultSharedPreferences(context);
+            boolean followPlaybackEnabled
+                    = sharedPref.getBoolean(getString(R.string.internal_pref_ui_follows_playback)
+                    , false);
+
+            if (metadataFragment.getFragmentType() == FragmentType.PLAYLIST &&
+                    metadataFragment.playlistUiSpec.displayingPlaylist
+                            == playSpec_.playingPlaylist) {
+
+                metadataFragment.updateMetadataView(FragmentType.PLAYLIST);
+
+                if (followPlaybackEnabled && skippedToNewSong) {
+                    metadataFragment.listView.setSelection(songIndex);
                 }
             }
         }
