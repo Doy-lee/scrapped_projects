@@ -75,11 +75,6 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
     private static final int AMBER_READ_EXTERNAL_STORAGE_REQUEST = 1;
     private static final int AMBER_VERSION = 1;
 
-    enum UpdateRequest {
-        AUDIO_SERVICE,
-        SENTINEL,
-    }
-
     static class PlaySpecFlags {
         static final int SHUFFLE = 1 << 1;
         static final int REPEAT  = 1 << 2;
@@ -200,8 +195,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
             }
 
             if (playlistQueued) {
-                Playlist activePlaylist = playSpec_.playingPlaylist;
-                enqueueToPlayer(activePlaylist, true);
+                enqueueToPlayer(true);
                 playlistQueued = false;
             }
 
@@ -759,10 +753,6 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
         }
 
         updatePlayBarUi(uiSpec_);
-        if (metadataFragment.isVisible()) {
-            Debug.LOG_D(this, "Metadata fragment is visible");
-        }
-
         Debug.TOAST(this, "Activity started", Toast.LENGTH_SHORT);
     }
 
@@ -1474,7 +1464,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                     }
                 }
                 playSpec.playingPlaylist = playlistToUse;
-                activity.enqueueToPlayer(playSpec.playingPlaylist, false);
+                activity.enqueueToPlayer(false);
 
                 if (displaySpecIsStillValid) {
                     fragment.init(activity, activity.playSpec_.allAudioFiles,
@@ -1533,21 +1523,11 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
     /***********************************************************************************************
      * UI FUNCTIONS
      **********************************************************************************************/
-    static void SendUpdateBroadcast(Context context, UpdateRequest flag) {
-        Intent broadcast = new Intent(MainActivity.BROADCAST_UPDATE_UI);
-        broadcast.putExtra("main_activity_update_flags", flag);
-        context.sendBroadcast(broadcast);
-    }
-
-
     private BroadcastReceiver updateUiReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
             Debug.LOG_D(this, "Ui update request received");
-
-            UpdateRequest request =
-                    (UpdateRequest) intent.getSerializableExtra("main_activity_update_flags");
-            updateUiData_(uiSpec_, playSpec_, request);
+            updateUiData_(uiSpec_, playSpec_);
         }
     };
 
@@ -1556,29 +1536,11 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
         registerReceiver(receiver, intentFilter);
     }
 
-    void updateUiData_(UiSpec uiSpec, PlaySpec playSpec, UpdateRequest request) {
+    void updateUiData_(UiSpec uiSpec, PlaySpec playSpec) {
         Debug.INCREMENT_COUNTER(this);
-
-        UpdateRequest requestChecked = request;
-        if (requestChecked == null) {
-            requestChecked = UpdateRequest.SENTINEL;
-        }
-
-        switch (requestChecked) {
-            case AUDIO_SERVICE: {
-                updatePlayBarUi(uiSpec);
-            } break;
-
-            case SENTINEL: {
-                updateSideNavWithPlaylists(playSpec, uiSpec);
-                if (metadataFragment != null) {
-                    metadataFragment.updateMetadataView(FragmentType.PLAYLIST);
-                }
-
-            } break;
-
-            default: {
-            }
+        updateSideNavWithPlaylists(playSpec, uiSpec);
+        if (metadataFragment != null) {
+            metadataFragment.updateMetadataView(FragmentType.PLAYLIST);
         }
     }
 
@@ -1730,10 +1692,11 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                 }
             }
         }
-        enqueueToPlayer(newPlaylist, true);
+
+        enqueueToPlayer(true);
     }
 
-    void enqueueToPlayer(Playlist playlist, boolean playImmediately) {
+    void enqueueToPlayer(boolean playImmediately) {
         if (!serviceBound) {
             LOG_D(this, "Rebinding audio service");
             Intent playerIntent = new Intent(this, AudioService.class);
@@ -1743,7 +1706,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
             // NOTE(doyle): Queue playlist whereby onServiceConnected will detect and begin playing
             playlistQueued = true;
         } else {
-            audioService.preparePlaylist(playlist.contents, playlist.index);
+            audioService.queuedNewSong = true;
             if (playImmediately) audioService.playMedia();
         }
     }
@@ -1762,16 +1725,8 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
         }
 
         @Override
-        public void audioHasStartedPlayback(int songIndex, boolean skippedToNewSong) {
+        public void audioHasStartedPlayback(boolean skippedToNewSong) {
             updatePlayBarUi(uiSpec);
-
-            // NOTE(doyle): Occurs if, a song has completed and has moved to the next song without
-            // user interaction. Then song index is updated on the service side but not the client
-            // side.
-            if (songIndex != playSpec_.playingPlaylist.index) {
-                playSpec_.playingPlaylist.index = songIndex;
-            }
-
             SharedPreferences sharedPref = PreferenceManager.getDefaultSharedPreferences(context);
             boolean followPlaybackEnabled
                     = sharedPref.getBoolean(getString(R.string.internal_pref_ui_follows_playback)
@@ -1783,12 +1738,12 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                                 == playSpec_.playingPlaylist) {
 
                     metadataFragment.updateMetadataView(FragmentType.PLAYLIST);
-
                     if (followPlaybackEnabled && skippedToNewSong) {
-                        metadataFragment.listView.setSelection(songIndex);
+                        metadataFragment.listView.setSelection(playSpec_.playingPlaylist.index);
                     }
                 }
             }
+
         }
     }
 }

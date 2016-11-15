@@ -56,6 +56,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
     private MediaPlayer player;
     MainActivity.PlaySpec playSpec;
     boolean wasPlayingBeforeAudioDuck;
+    boolean queuedNewSong = false;
 
     // NOTE(doyle): Interface between client and service. Allows client to get service instance from
     // the binder
@@ -169,18 +170,24 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
             bitmap = BitmapFactory.decodeFile(activeAudio.bitmapUri.getPath());
         }
 
-        NotificationCompat.Builder builder = (NotificationCompat.Builder)
-                new NotificationCompat.Builder(this)
+        NotificationCompat.Builder builder =
+                (NotificationCompat.Builder) new NotificationCompat.Builder(this)
                 .setShowWhen(false)
+
                 .setStyle(new NotificationCompat.MediaStyle()
                         .setMediaSession(mediaSessionCompat.getSessionToken())
                         .setShowActionsInCompactView(0, 1, 2))
+                        .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+
                 .setLargeIcon(bitmap)
                 .setSmallIcon(R.drawable.ic_play)
+
+                .setDefaults(NotificationCompat.COLOR_DEFAULT)
+
                 .setContentIntent(intentToSendToApp)
                 .setContentText(activeAudio.artist)
                 .setContentTitle(activeAudio.title)
-                .setContentInfo(activeAudio.album)
+
                 .addAction(R.drawable.ic_skip_previous, "Skip Previous",
                         playbackAction(NotificationAction.SKIP_PREV))
                 .addAction(playPauseNotificationResource, "Play/Pause", playPauseAction)
@@ -276,15 +283,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
             player = null;
         }
 
-        /*
-        { // removeNotification(): Remove notifications that are not started in foreground
-            NotificationManager notificationManager =
-                    (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-            notificationManager.cancel(NOTIFICATION_ID);
-        }
-        */
-
-        // unregisterCallStateListener()
+        // Unregister call state listener
         if (listener != null)
             telephonyManager.listen(phoneStateListener, PhoneStateListener.LISTEN_NONE);
 
@@ -314,7 +313,7 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
     // NOTE(doyle): Callback so we know when playback has actually started, because playback is not
     // immediate. Does not start until player is "prepared()"
     public interface Response {
-        void audioHasStartedPlayback(int songIndex, boolean skippedToNewSong);
+        void audioHasStartedPlayback(boolean skippedToNewSong);
     }
     Response listener;
 
@@ -439,11 +438,6 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
         return true;
     }
 
-    boolean queuedNewSong = false;
-    void preparePlaylist(List<AudioFile> playlist, int index) {
-        queuedNewSong = true;
-    }
-
     void playMedia() { controlPlayback(PlayCommand.PLAY); }
     void stopMedia() { controlPlayback(PlayCommand.STOP); }
     void pauseMedia() { controlPlayback(PlayCommand.PAUSE); }
@@ -456,16 +450,16 @@ public class AudioService extends Service implements MediaPlayer.OnPreparedListe
 
     private void startPlayback() {
         registerBecomingNoisyReceiver();
-        player.seekTo(playSpec.resumePosInMs);
-        player.start();
 
+        player.seekTo(playSpec.resumePosInMs);
+
+        player.start();
         boolean skippedToNewSong =
                 (playSpec.state == MainActivity.PlayState.ADVANCE_TO_NEW_AUDIO);
+
         playSpec.state = MainActivity.PlayState.PLAYING;
 
-        Models.Playlist playlist = playSpec.playingPlaylist;
-        listener.audioHasStartedPlayback(playlist.index, skippedToNewSong);
-
+        listener.audioHasStartedPlayback(skippedToNewSong);
         buildNotification(playSpec.state);
     }
 
