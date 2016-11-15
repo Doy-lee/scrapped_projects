@@ -2,8 +2,6 @@ package com.dqnt.amber;
 
 
 import android.Manifest;
-import android.app.Activity;
-import android.app.backup.SharedPreferencesBackupHelper;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.ContentResolver;
@@ -55,6 +53,7 @@ import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Random;
 
@@ -65,6 +64,7 @@ import com.google.gson.Gson;
 import static com.dqnt.amber.Debug.ASSERT;
 import static com.dqnt.amber.Debug.CAREFUL_ASSERT;
 import static com.dqnt.amber.Debug.LOG_D;
+import static com.dqnt.amber.Util.flagIsSet;
 
 interface AudioFileClickListener {
     void audioFileClicked (Playlist newPlaylist);
@@ -80,6 +80,18 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
         SENTINEL,
     }
 
+    static class PlaySpecFlags {
+        static final int SHUFFLE = 1 << 1;
+        static final int REPEAT  = 1 << 2;
+    }
+
+    enum PlayState {
+        PLAYING,
+        ADVANCE_TO_NEW_AUDIO,
+        PAUSED,
+        STOPPED,
+    }
+
     class PlaySpec {
         final List<AudioFile> allAudioFiles;
         // NOTE(doyle): Permanent list that has all the files the app has scanned, separate from the
@@ -90,10 +102,14 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
         List<Playlist> playlistList;
 
         Playlist playingPlaylist;
-        boolean searchMode;
         Playlist searchResultPlaylist;
         Playlist returnFromSearchPlaylist;
 
+        boolean searchMode;
+        int flags;
+        int resumePosInMs;
+        AudioFile activeAudio;
+        PlayState state;
 
         PlaySpec() {
             allAudioFiles = new ArrayList<>();
@@ -176,6 +192,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
             AudioService.LocalBinder binder = (AudioService.LocalBinder) service;
             audioService = binder.getService();
             audioService.listener = audioServiceResponse;
+            audioService.playSpec = playSpec_;
             serviceBound = true;
 
             if (Debug.DEBUG_MODE) {
@@ -194,8 +211,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
             boolean onRepeat =
                     sharedPref.getBoolean(getString(R.string.internal_pref_repeat_mode), false);
             if (onRepeat) {
-                audioService.repeat = true;
-
+                playSpec_.flags |= PlaySpecFlags.REPEAT;
                 int activeColor = uiSpec_.accentColor;
                 uiSpec_.playBarItems.repeatButton.getBackground()
                         .setColorFilter(activeColor, PorterDuff.Mode.SRC_IN);
@@ -204,37 +220,31 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
             boolean onShuffle =
                     sharedPref.getBoolean(getString(R.string.internal_pref_shuffle_mode), false);
             if (onShuffle) {
-                audioService.shuffle = true;
+                playSpec_.flags |= PlaySpecFlags.SHUFFLE;
                 int activeColor = uiSpec_.accentColor;
                 uiSpec_.playBarItems.shuffleButton.getBackground()
                         .setColorFilter(activeColor, PorterDuff.Mode.SRC_IN);
             }
 
-            // TODO(doyle): Media controls need to reflect on main ui
             audioService.setNotificationMediaCallbacks(new MediaSessionCompat.Callback() {
                 @Override
                 public void onPlay() {
-                    super.onPlay();
-                    audioService.playMedia();
+                    handleMediaInput(Input.PLAY, null);
                 }
 
                 @Override
                 public void onPause() {
-                    super.onPause();
-                    audioService.pauseMedia();
-                    updatePlayBarUi(uiSpec_);
+                    handleMediaInput(Input.PAUSE, null);
                 }
 
                 @Override
                 public void onSkipToNext() {
-                    super.onSkipToNext();
-                    audioService.skipToNextOrPrevious(AudioService.PlaybackSkipDirection.NEXT);
+                    handleMediaInput(Input.SKIP_TO_NEXT, null);
                 }
 
                 @Override
                 public void onSkipToPrevious() {
-                    super.onSkipToPrevious();
-                    audioService.skipToNextOrPrevious(AudioService.PlaybackSkipDirection.PREVIOUS);
+                    handleMediaInput(Input.SKIP_TO_PREV, null);
                 }
             });
         }
@@ -427,7 +437,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
         playBarItems.seekBarUpdater = new Runnable() {
             @Override
             public void run() {
-                if (audioService.playState == AudioService.PlayState.PLAYING) {
+                if (playSpec_.state == PlayState.PLAYING) {
                     int position = audioService.getCurrTrackPosition();
                     uiSpec_.playBarItems.seekBar.setProgress(position);
                 }
@@ -477,138 +487,32 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
 
         playBarItems.playPauseButton.setOnClickListener(new View.OnClickListener() {
             @Override
-            public void onClick(View v) {
-                if (serviceBound) {
-                    AudioService.PlayState state = audioService.playState;
-                    if (state == AudioService.PlayState.PLAYING) {
-                        // TODO(doyle): I don't like this. playMedia() will eventually call updatePlayBarUi on callback .. should we make pause media callback as well?
-                        audioService.pauseMedia();
-                        updatePlayBarUi(uiSpec_);
-                    } else if (state == AudioService.PlayState.PAUSED
-                            || state == AudioService.PlayState.STOPPED) {
-                        audioService.playMedia();
-                    }
-                }
-            }
+            public void onClick(View v) { handleMediaInput(Input.PLAY, v); }
         });
 
         playBarItems.skipNextButton.setOnClickListener(new View.OnClickListener() {
             @Override
-            public void onClick(View v) {
-                if (serviceBound) {
-                    int newIndex =
-                            audioService.skipToNextOrPrevious
-                                    (AudioService.PlaybackSkipDirection.NEXT);
-
-                    playSpec_.playingPlaylist.index = newIndex;
-                    if (metadataFragment.playlistUiSpec.displayingPlaylist == playSpec_.playingPlaylist) {
-                        metadataFragment.playlistUiSpec.adapter_.notifyDataSetChanged();
-                    }
-                }
-            }
+            public void onClick(View v) { handleMediaInput(Input.SKIP_TO_NEXT, v); }
         });
 
         playBarItems.skipPreviousButton.setOnClickListener(new View.OnClickListener() {
             @Override
-            public void onClick(View v) {
-                if (serviceBound) {
-                    int newIndex =
-                            audioService.skipToNextOrPrevious
-                                    (AudioService.PlaybackSkipDirection.PREVIOUS);
-
-                    playSpec_.playingPlaylist.index = newIndex;
-                    if (metadataFragment.playlistUiSpec.displayingPlaylist == playSpec_.playingPlaylist) {
-                        metadataFragment.playlistUiSpec.adapter_.notifyDataSetChanged();
-                    }
-                }
-            }
+            public void onClick(View v) { handleMediaInput(Input.SKIP_TO_PREV, v); }
         });
 
         playBarItems.shuffleButton.setOnClickListener(new View.OnClickListener() {
             @Override
-            public void onClick(View v) {
-                if (serviceBound) {
-                    audioService.shuffle = !audioService.shuffle;
-                    Drawable background = ContextCompat.getDrawable
-                            (v.getContext(), R.drawable.ic_shuffle);
-                    if (audioService.shuffle) {
-                        int color = ContextCompat.getColor(v.getContext(), R.color.colorAccent);
-                        background.setColorFilter(color, PorterDuff.Mode.SRC_IN);
-                    } else {
-                        background.setColorFilter(null);
-                    }
-
-                    v.setBackground(background);
-
-                    SharedPreferences sharedPref =
-                            PreferenceManager.getDefaultSharedPreferences(v.getContext());
-                    sharedPref.edit().putBoolean(getString(R.string.internal_pref_shuffle_mode),
-                            audioService.shuffle).apply();
-                }
-            }
+            public void onClick(View v) { handleMediaInput(Input.SHUFFLE, v); }
         });
 
         playBarItems.repeatButton.setOnClickListener(new View.OnClickListener() {
             @Override
-            public void onClick(View v) {
-                if (serviceBound) {
-                    audioService.repeat = !audioService.repeat;
-                    Drawable background = ContextCompat.getDrawable
-                            (v.getContext(), R.drawable.ic_repeat);
-
-                    if (audioService.repeat) {
-                        int color = ContextCompat.getColor(v.getContext(), R.color.colorAccent);
-                        background.setColorFilter(color, PorterDuff.Mode.SRC_IN);
-                    } else {
-                        background.setColorFilter(null);
-                    }
-
-                    v.setBackground(background);
-
-                    SharedPreferences sharedPref =
-                            PreferenceManager.getDefaultSharedPreferences(v.getContext());
-                    sharedPref.edit().putBoolean(getString(R.string.internal_pref_repeat_mode),
-                            audioService.repeat).apply();
-                }
-            }
+            public void onClick(View v) { handleMediaInput(Input.REPEAT, v); }
         });
 
         playBarItems.searchButton.setOnClickListener(new View.OnClickListener() {
             @Override
-            public void onClick(View v) {
-                playSpec_.searchMode = !playSpec_.searchMode;
-                EditText searchEditText = playBarItems.searchEditText;
-                TextView currentSongTextView = playBarItems.currentSongTextView;
-
-                Drawable background = ContextCompat.getDrawable
-                        (v.getContext(), R.drawable.ic_magnify);
-
-                if (playSpec_.searchMode) {
-                    playSpec_.returnFromSearchPlaylist =
-                            metadataFragment.playlistUiSpec.displayingPlaylist;
-
-                    searchEditText.setVisibility(View.VISIBLE);
-                    currentSongTextView.setVisibility(View.GONE);
-
-                    searchEditText.setText("");
-                    searchEditText.requestFocus();
-
-                    int color = ContextCompat.getColor(v.getContext(), R.color.colorAccent);
-                    background.setColorFilter(color, PorterDuff.Mode.SRC_IN);
-                } else {
-                    searchEditText.setVisibility(View.GONE);
-                    currentSongTextView.setVisibility(View.VISIBLE);
-
-                    background.setColorFilter(null);
-                    metadataFragment.changeDisplayingPlaylist(playSpec_.playingPlaylist,
-                            playSpec_.returnFromSearchPlaylist);
-                    metadataFragment.updateMetadataView(FragmentType.PLAYLIST);
-
-                    playSpec_.returnFromSearchPlaylist = null;
-                }
-
-                v.setBackground(background);
-            }
+            public void onClick(View v) { handleMediaInput(Input.SEARCH, v); }
         });
 
         playBarItems.searchEditText.addTextChangedListener(new TextWatcher() {
@@ -681,9 +585,9 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
         playBarItems.seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                if (serviceBound && fromUser && audioService.activeAudio != null) {
+                if (serviceBound && fromUser && playSpec_.activeAudio != null) {
                     audioService.seekTo(progress);
-                    audioService.resumePosInMs = progress;
+                    playSpec_.resumePosInMs = progress;
                 }
             }
 
@@ -696,6 +600,142 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
 
             }
         });
+    }
+
+    enum Input {
+        PLAY,
+        PAUSE,
+        SKIP_TO_NEXT,
+        SKIP_TO_PREV,
+        SHUFFLE,
+        REPEAT,
+        SEARCH,
+    }
+
+    private void handleMediaInput (Input input, View v) {
+        switch (input) {
+            case PLAY: {
+                if (serviceBound) {
+                    if (playSpec_.state == PlayState.PLAYING) {
+                        // TODO(doyle): I don't like this. playMedia() will eventually call updatePlayBarUi on callback .. should we make pause media callback as well?
+                        audioService.pauseMedia();
+                        updatePlayBarUi(uiSpec_);
+                    } else if (playSpec_.state == PlayState.PAUSED
+                            || playSpec_.state == PlayState.STOPPED) {
+                        audioService.playMedia();
+                    }
+                }
+            } break;
+
+            case PAUSE: {
+                audioService.pauseMedia();
+                updatePlayBarUi(uiSpec_);
+            } break;
+
+            case SKIP_TO_PREV:
+            case SKIP_TO_NEXT: {
+                AudioService.PlaybackSkipDirection direction;
+                if (input == Input.SKIP_TO_NEXT)
+                    direction = AudioService.PlaybackSkipDirection.NEXT;
+                else
+                    direction = AudioService.PlaybackSkipDirection.PREVIOUS;
+
+                if (serviceBound) {
+                    audioService.skipToNextOrPrevious(direction);
+                    if (metadataFragment.playlistUiSpec.displayingPlaylist == playSpec_.playingPlaylist) {
+                        metadataFragment.playlistUiSpec.adapter_.notifyDataSetChanged();
+                    }
+                }
+            } break;
+
+            case SHUFFLE: {
+                playSpec_.flags ^= PlaySpecFlags.SHUFFLE;
+                if (v != null) {
+                    Drawable background = ContextCompat.getDrawable
+                            (v.getContext(), R.drawable.ic_shuffle);
+
+                    boolean isShuffle = flagIsSet(playSpec_.flags, PlaySpecFlags.SHUFFLE);
+                    if (isShuffle) {
+                        int color = ContextCompat.getColor(v.getContext(), R.color.colorAccent);
+                        background.setColorFilter(color, PorterDuff.Mode.SRC_IN);
+                    } else {
+                        background.setColorFilter(null);
+                    }
+
+                    v.setBackground(background);
+
+                    SharedPreferences sharedPref =
+                            PreferenceManager.getDefaultSharedPreferences(v.getContext());
+                    sharedPref.edit().putBoolean(getString(R.string.internal_pref_shuffle_mode),
+                            isShuffle).apply();
+                }
+            } break;
+
+            case REPEAT: {
+                playSpec_.flags ^= PlaySpecFlags.REPEAT;
+
+                if (v != null) {
+                    Drawable background = ContextCompat.getDrawable
+                            (v.getContext(), R.drawable.ic_repeat);
+
+                    boolean isRepeat = flagIsSet(playSpec_.flags, PlaySpecFlags.REPEAT);
+                    if (isRepeat) {
+                        int color = ContextCompat.getColor(v.getContext(), R.color.colorAccent);
+                        background.setColorFilter(color, PorterDuff.Mode.SRC_IN);
+                    } else {
+                        background.setColorFilter(null);
+                    }
+
+                    v.setBackground(background);
+
+                    SharedPreferences sharedPref =
+                            PreferenceManager.getDefaultSharedPreferences(v.getContext());
+                    sharedPref.edit().putBoolean(getString(R.string.internal_pref_repeat_mode),
+                            isRepeat).apply();
+                }
+            } break;
+
+            case SEARCH: {
+                playSpec_.searchMode = !playSpec_.searchMode;
+
+                PlayBarItems playBarItems = uiSpec_.playBarItems;
+                EditText searchEditText = playBarItems.searchEditText;
+                TextView currentSongTextView = playBarItems.currentSongTextView;
+
+                Drawable background = ContextCompat.getDrawable
+                        (v.getContext(), R.drawable.ic_magnify);
+
+                if (playSpec_.searchMode) {
+                    playSpec_.returnFromSearchPlaylist =
+                            metadataFragment.playlistUiSpec.displayingPlaylist;
+
+                    searchEditText.setVisibility(View.VISIBLE);
+                    currentSongTextView.setVisibility(View.GONE);
+
+                    searchEditText.setText("");
+                    searchEditText.requestFocus();
+
+                    int color = ContextCompat.getColor(v.getContext(), R.color.colorAccent);
+                    background.setColorFilter(color, PorterDuff.Mode.SRC_IN);
+                } else {
+                    searchEditText.setVisibility(View.GONE);
+                    currentSongTextView.setVisibility(View.VISIBLE);
+
+                    background.setColorFilter(null);
+                    metadataFragment.changeDisplayingPlaylist(playSpec_.playingPlaylist,
+                            playSpec_.returnFromSearchPlaylist);
+                    metadataFragment.updateMetadataView(FragmentType.PLAYLIST);
+
+                    playSpec_.returnFromSearchPlaylist = null;
+                }
+
+                v.setBackground(background);
+            } break;
+
+            default: {
+            } break;
+        }
+
     }
 
     /***********************************************************************************************
@@ -786,11 +826,23 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
 
     @Override
     public boolean onPrepareOptionsMenu(Menu menu) {
+        SharedPreferences sharedPref = PreferenceManager.getDefaultSharedPreferences(this);
+
         if (!Debug.DEBUG_MODE) {
             menu.removeItem(R.id.action_debug_overlay);
+        } else {
+            boolean debugOverlayEnabled
+                    = sharedPref.getBoolean(getString(R.string.internal_pref_show_debug)
+                    , false);
+
+            MenuItem debugOverlayCheckbox = menu.findItem(R.id.action_debug_overlay);
+            if (Debug.CAREFUL_ASSERT(debugOverlayCheckbox != null, this,
+                    "Could not find ui follows playback menu item")) {
+                debugOverlayCheckbox.setChecked(debugOverlayEnabled);
+            }
+
         }
 
-        SharedPreferences sharedPref = PreferenceManager.getDefaultSharedPreferences(this);
         boolean followPlaybackEnabled
                 = sharedPref.getBoolean(getString(R.string.internal_pref_ui_follows_playback)
                 , false);
@@ -924,6 +976,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
         playSpec_ = new PlaySpec();
         serviceBound = false;
         playlistQueued = false;
+        playSpec_.state = MainActivity.PlayState.STOPPED;
 
         // NOTE(doyle): Only ask for permissions if version >= Android M (API 23)
         int readPermissionCheck = ContextCompat.checkSelfPermission(this,
@@ -1538,9 +1591,9 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
         }
 
         final PlayBarItems playBarItems = uiSpec.playBarItems;
-        if (serviceBound && audioService.activeAudio != null) {
+        if (serviceBound && playSpec_.activeAudio != null) {
             int backgroundRes;
-            switch(audioService.playState) {
+            switch(playSpec_.state) {
                 case PLAYING: {
                     if (!playBarItems.seekBarIsRunning) {
                         runOnUiThread(playBarItems.seekBarUpdater);
@@ -1553,8 +1606,8 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                     playBarItems.seekBar.setMax(max);
                     playBarItems.seekBar.setProgress(position);
 
-                    String artist = audioService.activeAudio.artist;
-                    String title = audioService.activeAudio.title;
+                    String artist = playSpec_.activeAudio.artist;
+                    String title = playSpec_.activeAudio.title;
                     playBarItems.currentSongTextView.setText(artist + " - " + title);
 
                     backgroundRes = R.drawable.ic_pause;
@@ -1573,7 +1626,7 @@ public class MainActivity extends AppCompatActivity implements AudioFileClickLis
                 default: {
                     Debug.CAREFUL_ASSERT(false, this, "Audio service state not handled, " +
                             "playPauseButton forcible set to play icon: "
-                            + audioService.playState.toString());
+                            + playSpec_.state.toString());
 
                     // NOTE(doyle): On careful assert fall-through set icon to something sensible
                     backgroundRes = R.drawable.ic_play;

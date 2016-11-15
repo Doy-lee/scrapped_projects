@@ -19,6 +19,16 @@ class Util {
         return field;
     }
 
+    static boolean flagIsSet(int value, int flag) {
+        boolean result = false;
+        if ((value & flag) == flag) {
+            result = true;
+        }
+
+        return result;
+    }
+
+
     static AudioFile extractAudioMetadata(Context context, MediaMetadataRetriever mmr,
                                           Uri uri) {
 
