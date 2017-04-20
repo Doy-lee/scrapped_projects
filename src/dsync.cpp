@@ -156,19 +156,24 @@ FILE_SCOPE u32 win32_get_module_directory(wchar_t *directory, u32 len)
 	return copiedLen;
 }
 
+typedef struct WatchPath
+{
+	wchar_t *path;
+	f32 timeLastDetectedChange;
+	u32 numChanges;
+} WatchPath;
+
 typedef struct DsyncLocations
 {
 	wchar_t **backup;
 	u32 numBackup;
 
-	wchar_t **watch;
+	WatchPath *watch;
 	u32 numWatch;
 } DsyncLocations;
 
 typedef struct DsyncState {
 	DsyncLocations locations;
-
-	f32 lastNotificationTimestamp;
 } DsyncState;
 
 FILE_SCOPE wchar_t **config_extract_ini_section(DqnIni *ini,
@@ -276,8 +281,17 @@ FILE_SCOPE DsyncLocations dsync_config_load(DqnPushBuffer *pushBuffer)
 
 		locations.backup = config_extract_ini_section(
 		    ini, pushBuffer, "BackupToLocations", &locations.numBackup);
-		locations.watch = config_extract_ini_section(
+
+		wchar_t **watchLocations = config_extract_ini_section(
 		    ini, pushBuffer, "WatchLocations", &locations.numWatch);
+
+		locations.watch = (WatchPath *)dqn_push_buffer_allocate(
+		    pushBuffer, locations.numWatch * sizeof(WatchPath));
+		for (u32 i = 0; i < locations.numWatch; i++)
+		{
+			locations.watch[i].path = watchLocations[i];
+		}
+
 		dqn_ini_destroy(ini);
 	}
 	dqn_push_buffer_free(&transientBuffer);
@@ -307,8 +321,58 @@ u32 win32_create_unique_timestamp(char *buf, i32 bufSize)
 	return len;
 }
 
-void dsync_backup(wchar_t *path)
+FILE_SCOPE u32 win32_make_path_to_directory(const wchar_t *const in,
+                                            wchar_t *out, u32 outLen)
 {
+	if (!in || !out) return 0;
+
+	u32 copiedLen = 0;
+	i32 inLen     = dqn_wstrlen(in);
+	if (in[inLen - 1] != '\\')
+		copiedLen = swprintf_s(out, outLen, L"%s\\", in);
+	else
+		copiedLen = swprintf_s(out, outLen, L"%s", in);
+
+	return copiedLen;
+}
+
+FILE_SCOPE u32 dsync_make_archive_output_path(wchar_t *outputDirectory,
+                                              wchar_t *archiveName,
+                                              wchar_t *result, u32 resultLen)
+{
+	if (!outputDirectory || !archiveName || !result || !resultLen) return 0;
+	if (resultLen == 0) return 0;
+
+	// Make sure path has ending '\' to make it a directory
+	u32 usedLen =
+	    win32_make_path_to_directory(outputDirectory, result, resultLen);
+
+	// Append the archive name to the target directory to form the full path
+	usedLen +=
+	    swprintf_s(&result[usedLen], (resultLen - usedLen), L"%s", archiveName);
+
+	// If len is equal to the size of the given buffer then we're out of space
+	if (usedLen >= resultLen)
+	{
+		DQN_WIN32_ERROR_BOX(
+		    "swprintf_s() buffer maxed: Len of copied text is len "
+		    "of supplied buffer.",
+		    NULL);
+		DQN_ASSERT(DQN_INVALID_CODE_PATH);
+	}
+
+	return usedLen;
+}
+
+void dsync_backup(wchar_t *path, wchar_t **const backupLocations,
+                  u32 numBackupLocations)
+{
+	if (numBackupLocations == 0 || !backupLocations || !path) return;
+	for (u32 i = 0; i < numBackupLocations; i++)
+	{
+		if (!backupLocations[i]) return;
+	}
+
 	////////////////////////////////////////////////////////////////////////////
 	// Process supplied path
 	////////////////////////////////////////////////////////////////////////////
@@ -322,7 +386,6 @@ void dsync_backup(wchar_t *path)
 
 	// Generate the archive name based on the files given
 	wchar_t fullPath[1024] = {};
-	wchar_t *backupName    = NULL;
 	u32 fullPathLen =
 	    GetFullPathNameW(path, DQN_ARRAY_COUNT(fullPath), fullPath, NULL);
 	if (fullPathLen == 0)
@@ -331,7 +394,7 @@ void dsync_backup(wchar_t *path)
 		return;
 	}
 
-	// Remove backslash from end of string if exists
+	// Remove backslash from end of string if it's a directory
 	// TODO: Not reliable cleaning of trailing backslashes
 	bool backingUpDirectory = PathIsDirectoryW(fullPath);
 	if (backingUpDirectory)
@@ -347,6 +410,7 @@ void dsync_backup(wchar_t *path)
 	// Generate Archive Name
 	////////////////////////////////////////////////////////////////////////////
 	// Generate archive prefix name
+	wchar_t *backupName = NULL;
 	if (backingUpDirectory)
 	{
 		// Get directory name for archive name by iterating backwards from end
@@ -367,32 +431,51 @@ void dsync_backup(wchar_t *path)
 		DQN_ASSERT(backupName != fullPath);
 	}
 
-	// Generate timestamp string
-	char timestamp[WIN32_UNIQUE_TIMESTAMP_MAX_LEN] = {};
-	win32_create_unique_timestamp(timestamp, DQN_ARRAY_COUNT(timestamp));
-	wchar_t wideTimestamp[DQN_ARRAY_COUNT(timestamp)] = {};
-	dqn_win32_utf8_to_wchar(timestamp, wideTimestamp,
-	                        DQN_ARRAY_COUNT(wideTimestamp));
-
-
 	wchar_t archiveName[1024] = {};
-	swprintf_s(archiveName, DQN_ARRAY_COUNT(archiveName), L"%s_%s", backupName,
-	           wideTimestamp);
+	{
+		// Generate timestamp string
+		char timestamp[WIN32_UNIQUE_TIMESTAMP_MAX_LEN] = {};
+		win32_create_unique_timestamp(timestamp, DQN_ARRAY_COUNT(timestamp));
+		wchar_t wideTimestamp[DQN_ARRAY_COUNT(timestamp)] = {};
+		dqn_win32_utf8_to_wchar(timestamp, wideTimestamp,
+		                        DQN_ARRAY_COUNT(wideTimestamp));
+
+		swprintf_s(archiveName, DQN_ARRAY_COUNT(archiveName), L"%s_%s.7z",
+		           backupName, wideTimestamp);
+	}
 
 	////////////////////////////////////////////////////////////////////////////
-	// Zip Files to Archive
+	// Enum files to Archive and add to command line
 	////////////////////////////////////////////////////////////////////////////
+	// Get the first output directory, the first zip is stored there. Then
+	// copy that file to the other locations
+	wchar_t firstOutputFile[DQN_ARRAY_COUNT(fullPath)] = {};
+	u32 firstOutputFileLen = dsync_make_archive_output_path(
+	    backupLocations[0], archiveName, firstOutputFile,
+	    DQN_ARRAY_COUNT(firstOutputFile));
+
+	DQN_ASSERT(firstOutputFileLen != 0);
+
+	// Generate the command line string for 7z
+	const wchar_t *const ZIP_EXE_NAME = L"7za";
+	const wchar_t *const CMD_SWITCHES = L"a -mx9";
+	wchar_t cmd[2048]                 = {0};
+
+	wchar_t *cmdPtr = cmd;
+	cmdPtr += swprintf_s(cmdPtr, DQN_ARRAY_COUNT(cmd), L"%s %s %s",
+	                     ZIP_EXE_NAME, CMD_SWITCHES, firstOutputFile);
+
 	if (backingUpDirectory)
 	{
 		////////////////////////////////////////////////////////////////////////
 		// Convert path into a search string for enumerating files
 		////////////////////////////////////////////////////////////////////////
-		const i32 MAX_UTF8_SIZE = DQN_ARRAY_COUNT(fullPath * 4);
+		const i32 MAX_UTF8_SIZE          = DQN_ARRAY_COUNT(fullPath) * 4;
 		char fullPathUtf8[MAX_UTF8_SIZE] = {};
 		if (!dqn_win32_wchar_to_utf8(fullPath, fullPathUtf8,
 		                             DQN_ARRAY_COUNT(fullPathUtf8)))
 		{
-			DQN_ASSERT(DQN_INVALID_CODE_PATH)
+			DQN_ASSERT(DQN_INVALID_CODE_PATH);
 		}
 
 		char searchTerm[MAX_UTF8_SIZE] = {};
@@ -413,11 +496,11 @@ void dsync_backup(wchar_t *path)
 		char **fileList = dqn_dir_read(searchTerm, &numFiles);
 		for (u32 i = 0; i < numFiles; i++)
 		{
-			wchar_t inputFile[MAX_UTF8_SIZE] = {};
+			wchar_t inputFile[DQN_ARRAY_COUNT(fullPath)] = {};
 			if (!dqn_win32_utf8_to_wchar(fileList[i], inputFile,
 			                            DQN_ARRAY_COUNT(inputFile)))
 			{
-				DQN_ASSERT(DQN_INVALID_CODE_PATH)
+				DQN_ASSERT(DQN_INVALID_CODE_PATH);
 			}
 
 			// NOTE: Don't backup short-hand notated files for cwd and prev-cwd
@@ -427,138 +510,131 @@ void dsync_backup(wchar_t *path)
 				continue;
 			}
 
-			wchar_t output[MAX_UTF8_SIZE] = {};
-			i32 len = swprintf_s(output, DQN_ARRAY_COUNT(output), L"%s\\%s",
-			                     fullPath, inputFile);
-
-			if (len == DQN_ARRAY_COUNT(output))
+			wchar_t *extension = PathFindExtensionW(inputFile) + 1;
+			if (extension)
 			{
-				DQN_WIN32_ERROR_BOX(
-				    "dqn_sprintf() buffer maxed: Len of copied text is len "
-				    "of supplied buffer.",
-				    NULL);
-				DQN_ASSERT(DQN_INVALID_CODE_PATH);
+				// Skip vim swap files
+				if (dqn_wstrcmp(extension, L"swp") == 0)
+				{
+					continue;
+				}
 			}
+
+			i32 bufLen = DQN_ARRAY_COUNT(cmd) - (cmdPtr - cmd);
+			cmdPtr += swprintf_s(cmdPtr, bufLen, L" \"%s\\%s\"", fullPath, inputFile);
+			DQN_ASSERT((cmdPtr - cmd) < DQN_ARRAY_COUNT(cmd));
 		}
 		dqn_dir_read_free(fileList, numFiles);
 	}
 	else
 	{
 		// Just need to backup single file
+		cmdPtr += swprintf_s(cmdPtr, DQN_ARRAY_COUNT(cmd), L" \"%s\"", fullPath);
+		DQN_ASSERT((cmdPtr - cmd) < DQN_ARRAY_COUNT(cmd));
 	}
 
-#if 0
-	char *archiveName = NULL;
-	if (numFilesToBackup == 1) {
-		// Set archive name to the file, note that file can be a absolute path
-		// or relative or just the file name. Extract name if it is a path
-		char *filename = *filesToBackup;
-		size_t filenameSize = 0;
-		bool fileIsPath = false;
-		if (SUCCEEDED(StringCchLength(filename, MAX_PATH, &filenameSize))) {
-			for (i32 i = 0; i < (i32)filenameSize; i++) {
-				if (filename[i] == '\\') {
-					fileIsPath = true;
-					break;
-				}
-			}
-		} else {
-			// TODO: File name length failed
-			return false;
-		}
-
-		if (fileIsPath) {
-			archiveName = getDirectoryName(currDir);
-		} else {
-			archiveName = filename;
-		}
-	} else {
-		// If there is more than 1 file, then we want to use the current
-		// directory name that the file is in
-		archiveName = getDirectoryName(currDir);
-	}
-
-	// Generate the absolute path for the output zip
-	char *absOutputFormat = "%s%s_%s.7z";
-	char absOutput[MAX_PATH] = { 0 };
-
-	// Check if a backup location has been specified. If not then just store the
-	// zip in current directory, else use the first backup path
-	char *backupPath;
-	if (state.numBackupPaths == 0) {
-		backupPath = currDir;
-	} else {
-		backupPath = state.backupPaths[0];
-	}
-
-	StringCchPrintf(absOutput, MAX_PATH, absOutputFormat, backupPath,
-	                archiveName, timestamp);
-
-	// Generate the command line string
-	const char *zipExeName = "7za.exe";
-	char *switches = "a -mx9";
-	char cmd[MAX_PATH] = { 0 };
-	char *cmdFormat = "%s%s ";
-	StringCchPrintf(cmd, MAX_PATH, cmdFormat, programDir, zipExeName);
-
-	// Max switch is 32768 - MAX_PATH as derived from WINAPI
-	char cmdArgs[MAX_SWITCH_LENGTH] = { 0 };
-	char *cmdArgsFormat = "%s %s %s";
-	StringCchPrintf(cmdArgs, MAX_SWITCH_LENGTH, cmdArgsFormat, "7za", switches,
-	                absOutput);
-
-	// Append input files to command line
-	char *inputFileFormat = "%s \"%s\"";
-	for (i32 i = 0; i < numFilesToBackup; i++) {
-		StringCchPrintf(cmdArgs, MAX_PATH, inputFileFormat, cmdArgs,
-		                filesToBackup[i]);
-	}
-
-	// Execute the 7zip command
-	printf("%s\n", cmdArgs);
-	
-	STARTUPINFO startInfo = { 0 };
-	PROCESS_INFORMATION procInfo = { 0 };
-	if (CreateProcess(cmd, cmdArgs, NULL, NULL, false,
-				0, NULL, NULL, &startInfo, &procInfo)) {
+	STARTUPINFOW startInfo        = {0};
+	PROCESS_INFORMATION procInfo = {0};
+	if (CreateProcessW(NULL, cmd, NULL, NULL, false, 0, NULL, NULL,
+	                  &startInfo, &procInfo))
+	{
+		DWORD exitCode = 0;
 		WaitForSingleObject(procInfo.hProcess, INFINITE);
+		GetExitCodeProcess(procInfo.hProcess, &exitCode);
+
 		CloseHandle(procInfo.hProcess);
 		CloseHandle(procInfo.hThread);
 
-		if (state.numBackupPaths > 1) {
-
-			printf("\n\nDSYNC REDUNDANCY BACKUP\n");
-			printf("Now copying backup to alternate locations ..\n");
-			// TODO: Use hard-link where possible, otherwise copy file
-			// NOTE: We use the first backup path in the initial backup
-			// So start from the 2nd backup location and iterate
-			for (i32 i = 1; i < state.numBackupPaths; i++) {
-				char altAbsOutput[MAX_PATH] = { 0 };
-				StringCchPrintf(altAbsOutput, MAX_PATH, absOutputFormat,
-				                state.backupPaths[i], archiveName, timestamp);
-
-				// TODO: Let user choose between hard-link and non-hardlink
-				if (CreateHardLink(altAbsOutput, absOutput, NULL)) {
-					printf("- Hard-linked file to: %s\n", altAbsOutput);
-				} else {
-					printf("- Hard-link failed, maybe destination is on a different drive, try copying ..\n");
-					if (CopyFile(absOutput, altAbsOutput, true)) {
-						printf("- Copied file to: %s\n", altAbsOutput);
-					} else {
-						// TODO: Format error message using getLastError(),
-						// formatMessage()
-						printf("- Failed file copy to: %s\n", altAbsOutput);
-					}
-				}
+		if (exitCode == 0)
+		{
+			// No error
+		}
+		else if (exitCode == 1)
+		{
+			DQN_WIN32_ERROR_BOX("Zip failed: Warning (non-fatal errors).",
+			                    NULL);
+		}
+		else
+		{
+			if (exitCode == 2)
+			{
+				DQN_WIN32_ERROR_BOX("Zip failed: Fatal error.", NULL);
+			}
+			else if (exitCode == 7)
+			{
+				DQN_WIN32_ERROR_BOX("Zip failed: Command line error.", NULL);
+			}
+			else if (exitCode == 8)
+			{
+				DQN_WIN32_ERROR_BOX(
+				    "Zip failed: Not enough memory for operation.", NULL);
+			}
+			else if (exitCode == 255)
+			{
+				DQN_WIN32_ERROR_BOX(
+				    "Zip failed: User stopped the process.", NULL);
 			}
 
+			OutputDebugStringW(cmd);
+			return;
 		}
-	} else {
-		// TODO: CreateProcess failed
-	}
+
+		for (u32 i = 1; i < numBackupLocations; i++)
+		{
+			wchar_t outputFile[DQN_ARRAY_COUNT(fullPath)] = {};
+			u32 outputFileLen = dsync_make_archive_output_path(
+			    backupLocations[i], archiveName, outputFile,
+			    DQN_ARRAY_COUNT(outputFile));
+			DQN_ASSERT(outputFileLen != 0);
+
+			if (CopyFileW(firstOutputFile, outputFile, true))
+			{
+				// Success!
+			}
+			else
+			{
+				DQN_WIN32_ERROR_BOX("CopyFile() failed", NULL);
+			}
+
+            // TODO(doyle): If i ever want hardlinks back ..
+#if 0
+			if (CreateHardLink(altAbsOutput, absOutput, NULL))
+			{
+				printf("- Hard-linked file to: %s\n", altAbsOutput);
+			}
+			else
+			{
+				printf(
+					"- Hard-link failed, maybe destination is on a "
+					"different drive, try copying ..\n");
+				if (CopyFile(absOutput, altAbsOutput, true))
+				{
+					printf("- Copied file to: %s\n", altAbsOutput);
+				}
+				else
+				{
+					// TODO: Format error message using getLastError(),
+					// formatMessage()
+					printf("- Failed file copy to: %s\n", altAbsOutput);
+				}
+			}
 #endif
+
+		}
+	}
+	else
+	{
+		DQN_WIN32_ERROR_BOX("CreateProcess() failed: Unable to invoke 7za.exe",
+		                    NULL);
+	}
 }
 
+// BIG TODO(doyle): This program only works if, after it detects a change that
+// the user continues working and once it hits the threshold, then if it detects
+// another change will it backup.
+
+// Reason being is I had trouble getting multithreading to work so I'm taking
+// the easy road for now.
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
                    LPSTR lpCmdLine, int nShowCmd)
 {
@@ -595,8 +671,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 		return -1;
 	}
 
-	dsync_backup(L"F:\\fake");
-	dsync_backup(L"C:\\git\\dsync\\src\\");
 
 	DqnPushBuffer pushBuffer = {};
 	dqn_push_buffer_init(&pushBuffer, DQN_KILOBYTE(512), 4);
@@ -624,11 +698,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 	    &pushBuffer, state.locations.numWatch);
 	for (u32 i = 0; i < state.locations.numWatch; i++)
 	{
+		const u32 FLAGS = FILE_NOTIFY_CHANGE_DIR_NAME |
+		                  FILE_NOTIFY_CHANGE_LAST_WRITE |
+		                  FILE_NOTIFY_CHANGE_FILE_NAME;
 		const bool WATCH_ALL_SUBDIRECTORIES = true;
-		const u32 FLAGS =
-		    FILE_NOTIFY_CHANGE_DIR_NAME | FILE_NOTIFY_CHANGE_LAST_WRITE;
+
 		fileFindChangeArray[i] = FindFirstChangeNotificationW(
-		    state.locations.watch[i], WATCH_ALL_SUBDIRECTORIES, FLAGS);
+		    state.locations.watch[i].path, WATCH_ALL_SUBDIRECTORIES, FLAGS);
 
 		if (fileFindChangeArray[i] == INVALID_HANDLE_VALUE)
 		{
@@ -666,12 +742,21 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 			return 0;
 		}
 
+		WatchPath *watch = &state.locations.watch[signalIndex];
+		watch->numChanges++;
+
+		// NOTE: If first time detected change, don't backup until we change it
+		// again after the minimum time between backup
+		if (watch->timeLastDetectedChange == 0)
+			watch->timeLastDetectedChange = (f32)dqn_time_now_in_s();
+
+		const f32 MIN_TIME_BETWEEN_BACKUP_IN_S = (60.0f * 2.0f);
 		f32 secondsElapsed =
-		    (f32)dqn_time_now_in_s() - state.lastNotificationTimestamp;
-		const f32 MIN_TIME_BETWEEN_NOTIFICATIONS_IN_S = 5.0f;
-		if (secondsElapsed >= MIN_TIME_BETWEEN_NOTIFICATIONS_IN_S)
+		    (f32)dqn_time_now_in_s() - watch->timeLastDetectedChange;
+		if (secondsElapsed >= MIN_TIME_BETWEEN_BACKUP_IN_S)
 		{
-			state.lastNotificationTimestamp = (f32)dqn_time_now_in_s();
+			dsync_backup(watch->path, state.locations.backup,
+			             state.locations.numBackup);
 
 			NOTIFYICONDATAW notifyIconData = {};
 			notifyIconData.cbSize          = sizeof(notifyIconData);
@@ -682,8 +767,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 			notifyIconData.dwState         = NIS_SHAREDICON;
 			swprintf_s(notifyIconData.szInfo,
 			           DQN_ARRAY_COUNT(notifyIconData.szInfo),
-			           L"Detected file change in \"%s\"",
-			           state.locations.watch[signalIndex]);
+			           L"Backing up %d changes in \"%s\"", watch->numChanges,
+			           watch->path);
 
 			swprintf_s(notifyIconData.szInfoTitle,
 			           DQN_ARRAY_COUNT(notifyIconData.szInfoTitle), L"Dsync");
@@ -691,7 +776,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 			notifyIconData.dwInfoFlags =
 			    NIIF_INFO | NIIF_NOSOUND | NIIF_RESPECT_QUIET_TIME;
 			DQN_ASSERT(Shell_NotifyIconW(NIM_MODIFY, &notifyIconData));
+
+			watch->numChanges             = 0;
+			watch->timeLastDetectedChange = (f32)dqn_time_now_in_s();
 		}
+
 	}
 
 	return 0;
