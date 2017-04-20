@@ -20,7 +20,7 @@
 	TODO: Unit tests
 */
 
-inline i32 str_trim_around(char *src, i32 srcLen, const char charsToTrim[],
+inline i32 str_trim_around(char *src, i32 srcLen, const char *charsToTrim,
                            const i32 charsToTrimSize)
 {
 
@@ -35,37 +35,49 @@ inline i32 str_trim_around(char *src, i32 srcLen, const char charsToTrim[],
 
 	// Starting from EOL if any chars match for trimming, remove and update
 	// string length
-	for (i32 i = index; i > 0; i--) {
-		for (i32 j = 0; j < charsToTrimSize; j++) {
-			if (src[i] == charsToTrim[j]) {
-				src[i] = 0;
+	for (i32 i = index; i > 0; i--)
+	{
+		for (i32 j = 0; j < charsToTrimSize; j++)
+		{
+			if (src[i] == charsToTrim[j])
+			{
+				src[i]  = 0;
 				matched = true;
 				break;
 			}
 		}
 		newLen = i + 1;
-		if (!matched) break;
-		else matched = false;
+		if (!matched)
+			break;
+		else
+			matched = false;
 	}
 
 	matched = false;
 	// Count the number of leading characters to remove
 	i32 numLeading = 0;
-	for (i32 i = 0; i < newLen; i++) {
-		for (i32 j = 0; j < charsToTrimSize; j++) {
-			if (src[i] == charsToTrim[j]) {
+	for (i32 i = 0; i < newLen; i++)
+	{
+		for (i32 j = 0; j < charsToTrimSize; j++)
+		{
+			if (src[i] == charsToTrim[j])
+			{
 				numLeading++;
 				matched = true;
 				break;
 			}
 		}
-		if (!matched) break;
-		else matched = false;
+		if (!matched)
+			break;
+		else
+			matched = false;
 	}
 
-	if (numLeading > 0) {
+	if (numLeading > 0)
+	{
 		// Shift all chars back how many trash leading elements there are
-		for (i32 i = 0; i < newLen; i++) {
+		for (i32 i = 0; i < newLen; i++)
+		{
 			src[i] = src[i + numLeading];
 		}
 		newLen -= numLeading;
@@ -273,178 +285,169 @@ FILE_SCOPE DsyncLocations dsync_config_load(DqnPushBuffer *pushBuffer)
 	return locations;
 };
 
-
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
-                   LPSTR lpCmdLine, int nShowCmd)
+#define WIN32_UNIQUE_TIMESTAMP_MAX_LEN 18
+u32 win32_create_unique_timestamp(char *buf, i32 bufSize)
 {
-	WNDCLASSEXW wc = {
-	    sizeof(WNDCLASSEX),
-	    0,
-	    win32_main_callback,
-	    0, // int cbClsExtra
-	    0, // int cbWndExtra
-	    hInstance,
-	    LoadIcon(NULL, IDI_APPLICATION),
-	    LoadCursor(NULL, IDC_ARROW),
-	    NULL,
-	    L"", // LPCTSTR lpszMenuName
-	    L"DsyncWindowClass",
-	    NULL, // HICON hIconSm
-	};
+	SYSTEMTIME sysTime = {};
+	GetLocalTime(&sysTime);
 
-	if (!RegisterClassExW(&wc))
-	{
-		DQN_WIN32_ERROR_BOX("RegisterClassExW() failed.", NULL);
-		return -1;
-	}
+	u32 len = dqn_sprintf(buf, "%04d-%02d-%02d_%02d%02d%02d", sysTime.wYear,
+	                      sysTime.wMonth, sysTime.wDay, sysTime.wHour,
+	                      sysTime.wMinute, sysTime.wSecond);
 
-	HWND mainWindow =
-	    CreateWindowExW(0, wc.lpszClassName, NULL, 0, CW_USEDEFAULT,
-	                    CW_USEDEFAULT, 0, 0, NULL, NULL, hInstance, NULL);
-
-	if (!mainWindow)
-	{
-		DQN_WIN32_ERROR_BOX("CreateWindowExW() failed.", NULL);
-		return -1;
-	}
-
-	DqnPushBuffer pushBuffer = {};
-	dqn_push_buffer_init(&pushBuffer, DQN_KILOBYTE(512), 4);
-	DsyncState state = {};
-	state.locations  = dsync_config_load(&pushBuffer);
-
-	if (state.locations.numBackup <= 0 || state.locations.numWatch <= 0)
+	if (bufSize == len)
 	{
 		DQN_WIN32_ERROR_BOX(
-		    "dsync_config_load() returned empty: There are no backup locations "
-		    "and/or watch locations.",
+		    "dqn_sprintf() buffer maxed: Len of copied text is len "
+		    "of supplied buffer.",
 		    NULL);
-		return 0;
-	}
-	else if (!state.locations.watch || !state.locations.backup)
-	{
-		DQN_WIN32_ERROR_BOX(
-		    "dsync_config_load() returned empty: There are no strings defined "
-		    "in the backup and/or watch locations",
-		    NULL);
-		return 0;
+		DQN_ASSERT(DQN_INVALID_CODE_PATH);
 	}
 
-	HANDLE *fileFindChangeArray = (HANDLE *)dqn_push_buffer_allocate(
-	    &pushBuffer, state.locations.numWatch);
-	for (u32 i = 0; i < state.locations.numWatch; i++)
-	{
-		const bool WATCH_ALL_SUBDIRECTORIES = true;
-		const u32 FLAGS =
-		    FILE_NOTIFY_CHANGE_DIR_NAME | FILE_NOTIFY_CHANGE_LAST_WRITE;
-		fileFindChangeArray[i] = FindFirstChangeNotificationW(
-		    state.locations.watch[i], WATCH_ALL_SUBDIRECTORIES, FLAGS);
-
-		if (fileFindChangeArray[i] == INVALID_HANDLE_VALUE)
-		{
-			DQN_WIN32_ERROR_BOX("FindFirstChangeNotification() failed.", NULL);
-			return -1;
-		}
-	}
-
-	while (true)
-	{
-		MSG msg;
-		while (PeekMessageW(&msg, mainWindow, 0, 0, PM_REMOVE))
-		{
-			TranslateMessage(&msg);
-			DispatchMessageW(&msg);
-		}
-
-		const i32 NUM_HANDLES = state.locations.numWatch;
-		DWORD result = WaitForMultipleObjects(
-		    NUM_HANDLES, fileFindChangeArray, false, INFINITE);
-		DQN_ASSERT(result != WAIT_TIMEOUT);
-		if (result == WAIT_FAILED)
-		{
-			dqn_win32_display_last_error("WaitForMultipleObjects() failed");
-			return 0;
-		}
-
-		i32 signalIndex = result - WAIT_OBJECT_0;
-		DQN_ASSERT(signalIndex >= 0 && signalIndex < NUM_HANDLES);
-
-		// Do work on indexed handle
-		if (FindNextChangeNotification(fileFindChangeArray[signalIndex]) == 0)
-		{
-			dqn_win32_display_last_error("FindNextChangeNotification() failed");
-			return 0;
-		}
-
-		f32 secondsElapsed =
-		    (f32)dqn_time_now_in_s() - state.lastNotificationTimestamp;
-		const f32 MIN_TIME_BETWEEN_NOTIFICATIONS_IN_S = 5.0f;
-		if (secondsElapsed >= MIN_TIME_BETWEEN_NOTIFICATIONS_IN_S)
-		{
-			state.lastNotificationTimestamp = (f32)dqn_time_now_in_s();
-
-			NOTIFYICONDATAW notifyIconData = {};
-			notifyIconData.cbSize          = sizeof(notifyIconData);
-			notifyIconData.hWnd            = mainWindow;
-			notifyIconData.uID             = WIN32_TASKBAR_ICON_UID;
-			notifyIconData.uFlags          = NIF_INFO | NIF_REALTIME;
-			notifyIconData.hIcon           = LoadIcon(NULL, IDI_APPLICATION);
-			notifyIconData.dwState         = NIS_SHAREDICON;
-			swprintf_s(notifyIconData.szInfo,
-			           DQN_ARRAY_COUNT(notifyIconData.szInfo),
-			           L"Detected file change in \"%s\"",
-			           state.locations.watch[signalIndex]);
-
-			swprintf_s(notifyIconData.szInfoTitle,
-			           DQN_ARRAY_COUNT(notifyIconData.szInfoTitle), L"Dsync");
-
-			notifyIconData.dwInfoFlags =
-			    NIIF_INFO | NIIF_NOSOUND | NIIF_RESPECT_QUIET_TIME;
-			DQN_ASSERT(Shell_NotifyIconW(NIM_MODIFY, &notifyIconData));
-		}
-	}
-
-	return 0;
+	return len;
 }
 
-i32 main(i32 argc, char *argv[])
+void dsync_backup(wchar_t *path)
 {
-#if 0
-	dsync_unit_test();
+	////////////////////////////////////////////////////////////////////////////
+	// Process supplied path
+	////////////////////////////////////////////////////////////////////////////
+	if (!PathFileExistsW(path))
+	{
+		DQN_WIN32_ERROR_BOX(
+		    "PathFileExistsW() failed: Path does not point to valid file",
+		    NULL);
+		return;
+	}
 
-	ProgramState state = { 0 };
+	// Generate the archive name based on the files given
+	wchar_t fullPath[1024] = {};
+	wchar_t *backupName    = NULL;
+	u32 fullPathLen =
+	    GetFullPathNameW(path, DQN_ARRAY_COUNT(fullPath), fullPath, NULL);
+	if (fullPathLen == 0)
+	{
+		dqn_win32_display_last_error("GetFullPathNameW() failed");
+		return;
+	}
 
-	// Assume all args after module name are files to backup
-	char **filesToBackup = { 0 };
-	i32 numFilesToBackup = 1;
-	char currDir[MAX_PATH] = { 0 };
-	GetCurrentDirectory(MAX_PATH, currDir);
+	// Remove backslash from end of string if exists
+	// TODO: Not reliable cleaning of trailing backslashes
+	bool backingUpDirectory = PathIsDirectoryW(fullPath);
+	if (backingUpDirectory)
+	{
+		if (fullPath[fullPathLen - 1] == '\\')
+		{
+			fullPath[fullPathLen - 1] = 0;
+			fullPathLen--;
+		}
+	}
 
-	// NOTE: Flag to indicate if we need to free our filesToBackupList, ie. if
-	// files are giving on the cmd line we use ARGV as our list of files. We
-	// can't free the list(argv) in this case
-	bool memAllocForFilesToBackup = false;
-
-	// However if no args supplied after module then backup current directory
-	if (argc == 1) {
-		filesToBackup = (char **)calloc(1, sizeof(char*));
-		*filesToBackup = currDir;
-		memAllocForFilesToBackup = true;
-	} else {
-		filesToBackup = &argv[1];
-		numFilesToBackup = argc - 1;
+	////////////////////////////////////////////////////////////////////////////
+	// Generate Archive Name
+	////////////////////////////////////////////////////////////////////////////
+	// Generate archive prefix name
+	if (backingUpDirectory)
+	{
+		// Get directory name for archive name by iterating backwards from end
+		// of string to first occurence of '\'
+		backupName = fullPath;
+		for (i32 i = fullPathLen - 1; i >= 0; i--)
+		{
+			if (backupName[i] == '\\')
+			{
+				backupName = &backupName[i + 1];
+				break;
+			}
+		}
+	}
+	else
+	{
+		backupName = PathFindFileNameW(fullPath);
+		DQN_ASSERT(backupName != fullPath);
 	}
 
 	// Generate timestamp string
-	SYSTEMTIME sysTime = { 0 };
-	GetLocalTime(&sysTime);
-	char timestamp[MAX_PATH] = { 0 };
-	char *timestampFormat = "%d-%02d-%02d_%02d%02d%02d";
-	StringCchPrintf(timestamp, MAX_PATH, timestampFormat, sysTime.wYear,
-	                sysTime.wMonth, sysTime.wDay, sysTime.wHour,
-	                sysTime.wMinute, sysTime.wSecond);
+	char timestamp[WIN32_UNIQUE_TIMESTAMP_MAX_LEN] = {};
+	win32_create_unique_timestamp(timestamp, DQN_ARRAY_COUNT(timestamp));
+	wchar_t wideTimestamp[DQN_ARRAY_COUNT(timestamp)] = {};
+	dqn_win32_utf8_to_wchar(timestamp, wideTimestamp,
+	                        DQN_ARRAY_COUNT(wideTimestamp));
 
-	// Generate the archive name based on the files given
+
+	wchar_t archiveName[1024] = {};
+	swprintf_s(archiveName, DQN_ARRAY_COUNT(archiveName), L"%s_%s", backupName,
+	           wideTimestamp);
+
+	////////////////////////////////////////////////////////////////////////////
+	// Zip Files to Archive
+	////////////////////////////////////////////////////////////////////////////
+	if (backingUpDirectory)
+	{
+		////////////////////////////////////////////////////////////////////////
+		// Convert path into a search string for enumerating files
+		////////////////////////////////////////////////////////////////////////
+		const i32 MAX_UTF8_SIZE = DQN_ARRAY_COUNT(fullPath * 4);
+		char fullPathUtf8[MAX_UTF8_SIZE] = {};
+		if (!dqn_win32_wchar_to_utf8(fullPath, fullPathUtf8,
+		                             DQN_ARRAY_COUNT(fullPathUtf8)))
+		{
+			DQN_ASSERT(DQN_INVALID_CODE_PATH)
+		}
+
+		char searchTerm[MAX_UTF8_SIZE] = {};
+		if (dqn_sprintf(searchTerm, "%s\\*", fullPathUtf8) ==
+		    DQN_ARRAY_COUNT(searchTerm))
+		{
+			DQN_WIN32_ERROR_BOX(
+			    "dqn_sprintf() buffer maxed: Len of copied text is len "
+			    "of supplied buffer.",
+			    NULL);
+			DQN_ASSERT(DQN_INVALID_CODE_PATH);
+		}
+
+		////////////////////////////////////////////////////////////////////////
+		// Enumerate directory files
+		////////////////////////////////////////////////////////////////////////
+		u32 numFiles;
+		char **fileList = dqn_dir_read(searchTerm, &numFiles);
+		for (u32 i = 0; i < numFiles; i++)
+		{
+			wchar_t inputFile[MAX_UTF8_SIZE] = {};
+			if (!dqn_win32_utf8_to_wchar(fileList[i], inputFile,
+			                            DQN_ARRAY_COUNT(inputFile)))
+			{
+				DQN_ASSERT(DQN_INVALID_CODE_PATH)
+			}
+
+			// NOTE: Don't backup short-hand notated files for cwd and prev-cwd
+			if (dqn_wstrcmp(inputFile, L"..") == 0 ||
+			    dqn_wstrcmp(inputFile, L".") == 0)
+			{
+				continue;
+			}
+
+			wchar_t output[MAX_UTF8_SIZE] = {};
+			i32 len = swprintf_s(output, DQN_ARRAY_COUNT(output), L"%s\\%s",
+			                     fullPath, inputFile);
+
+			if (len == DQN_ARRAY_COUNT(output))
+			{
+				DQN_WIN32_ERROR_BOX(
+				    "dqn_sprintf() buffer maxed: Len of copied text is len "
+				    "of supplied buffer.",
+				    NULL);
+				DQN_ASSERT(DQN_INVALID_CODE_PATH);
+			}
+		}
+		dqn_dir_read_free(fileList, numFiles);
+	}
+	else
+	{
+		// Just need to backup single file
+	}
+
+#if 0
 	char *archiveName = NULL;
 	if (numFilesToBackup == 1) {
 		// Set archive name to the file, note that file can be a absolute path
@@ -553,16 +556,144 @@ i32 main(i32 argc, char *argv[])
 	} else {
 		// TODO: CreateProcess failed
 	}
-
-	for (i32 i = 0; i < state.numBackupPaths; i++) {
-		free(state.backupPaths[i]);
-	}
-	free(state.backupPaths);
-
-	if (memAllocForFilesToBackup) {
-		free(filesToBackup);
-	}
-
-	return true;
 #endif
 }
+
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
+                   LPSTR lpCmdLine, int nShowCmd)
+{
+	dsync_unit_test();
+
+	WNDCLASSEXW wc = {
+	    sizeof(WNDCLASSEX),
+	    0,
+	    win32_main_callback,
+	    0, // int cbClsExtra
+	    0, // int cbWndExtra
+	    hInstance,
+	    LoadIcon(NULL, IDI_APPLICATION),
+	    LoadCursor(NULL, IDC_ARROW),
+	    NULL,
+	    L"", // LPCTSTR lpszMenuName
+	    L"DsyncWindowClass",
+	    NULL, // HICON hIconSm
+	};
+
+	if (!RegisterClassExW(&wc))
+	{
+		DQN_WIN32_ERROR_BOX("RegisterClassExW() failed.", NULL);
+		return -1;
+	}
+
+	HWND mainWindow =
+	    CreateWindowExW(0, wc.lpszClassName, NULL, 0, CW_USEDEFAULT,
+	                    CW_USEDEFAULT, 0, 0, NULL, NULL, hInstance, NULL);
+
+	if (!mainWindow)
+	{
+		DQN_WIN32_ERROR_BOX("CreateWindowExW() failed.", NULL);
+		return -1;
+	}
+
+	dsync_backup(L"F:\\fake");
+	dsync_backup(L"C:\\git\\dsync\\src\\");
+
+	DqnPushBuffer pushBuffer = {};
+	dqn_push_buffer_init(&pushBuffer, DQN_KILOBYTE(512), 4);
+	DsyncState state = {};
+	state.locations  = dsync_config_load(&pushBuffer);
+
+	if (state.locations.numBackup <= 0 || state.locations.numWatch <= 0)
+	{
+		DQN_WIN32_ERROR_BOX(
+		    "dsync_config_load() returned empty: There are no backup locations "
+		    "and/or watch locations.",
+		    NULL);
+		return 0;
+	}
+	else if (!state.locations.watch || !state.locations.backup)
+	{
+		DQN_WIN32_ERROR_BOX(
+		    "dsync_config_load() returned empty: There are no strings defined "
+		    "in the backup and/or watch locations",
+		    NULL);
+		return 0;
+	}
+
+	HANDLE *fileFindChangeArray = (HANDLE *)dqn_push_buffer_allocate(
+	    &pushBuffer, state.locations.numWatch);
+	for (u32 i = 0; i < state.locations.numWatch; i++)
+	{
+		const bool WATCH_ALL_SUBDIRECTORIES = true;
+		const u32 FLAGS =
+		    FILE_NOTIFY_CHANGE_DIR_NAME | FILE_NOTIFY_CHANGE_LAST_WRITE;
+		fileFindChangeArray[i] = FindFirstChangeNotificationW(
+		    state.locations.watch[i], WATCH_ALL_SUBDIRECTORIES, FLAGS);
+
+		if (fileFindChangeArray[i] == INVALID_HANDLE_VALUE)
+		{
+			DQN_WIN32_ERROR_BOX("FindFirstChangeNotification() failed.", NULL);
+			return -1;
+		}
+	}
+
+	while (true)
+	{
+		MSG msg;
+		while (PeekMessageW(&msg, mainWindow, 0, 0, PM_REMOVE))
+		{
+			TranslateMessage(&msg);
+			DispatchMessageW(&msg);
+		}
+
+		const i32 NUM_HANDLES = state.locations.numWatch;
+		DWORD result = WaitForMultipleObjects(
+		    NUM_HANDLES, fileFindChangeArray, false, INFINITE);
+		DQN_ASSERT(result != WAIT_TIMEOUT);
+		if (result == WAIT_FAILED)
+		{
+			dqn_win32_display_last_error("WaitForMultipleObjects() failed");
+			return 0;
+		}
+
+		i32 signalIndex = result - WAIT_OBJECT_0;
+		DQN_ASSERT(signalIndex >= 0 && signalIndex < NUM_HANDLES);
+
+		// Do work on indexed handle
+		if (FindNextChangeNotification(fileFindChangeArray[signalIndex]) == 0)
+		{
+			dqn_win32_display_last_error("FindNextChangeNotification() failed");
+			return 0;
+		}
+
+		f32 secondsElapsed =
+		    (f32)dqn_time_now_in_s() - state.lastNotificationTimestamp;
+		const f32 MIN_TIME_BETWEEN_NOTIFICATIONS_IN_S = 5.0f;
+		if (secondsElapsed >= MIN_TIME_BETWEEN_NOTIFICATIONS_IN_S)
+		{
+			state.lastNotificationTimestamp = (f32)dqn_time_now_in_s();
+
+			NOTIFYICONDATAW notifyIconData = {};
+			notifyIconData.cbSize          = sizeof(notifyIconData);
+			notifyIconData.hWnd            = mainWindow;
+			notifyIconData.uID             = WIN32_TASKBAR_ICON_UID;
+			notifyIconData.uFlags          = NIF_INFO | NIF_REALTIME;
+			notifyIconData.hIcon           = LoadIcon(NULL, IDI_APPLICATION);
+			notifyIconData.dwState         = NIS_SHAREDICON;
+			swprintf_s(notifyIconData.szInfo,
+			           DQN_ARRAY_COUNT(notifyIconData.szInfo),
+			           L"Detected file change in \"%s\"",
+			           state.locations.watch[signalIndex]);
+
+			swprintf_s(notifyIconData.szInfoTitle,
+			           DQN_ARRAY_COUNT(notifyIconData.szInfoTitle), L"Dsync");
+
+			notifyIconData.dwInfoFlags =
+			    NIIF_INFO | NIIF_NOSOUND | NIIF_RESPECT_QUIET_TIME;
+			DQN_ASSERT(Shell_NotifyIconW(NIM_MODIFY, &notifyIconData));
+		}
+	}
+
+	return 0;
+}
+

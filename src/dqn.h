@@ -369,6 +369,9 @@ DQN_FILE_SCOPE i32   dqn_strlen             (const char *a);
 DQN_FILE_SCOPE i32   dqn_strlen_delimit_with(const char *a, const char delimiter);
 DQN_FILE_SCOPE char *dqn_strncpy            (char *dest, const char *src, i32 numChars);
 
+DQN_FILE_SCOPE i32   dqn_wstrlen(const wchar_t *a);
+DQN_FILE_SCOPE i32   dqn_wstrcmp(const wchar_t *a, const wchar_t *b);
+
 #define DQN_I32_TO_STR_MAX_BUF_SIZE 11
 DQN_FILE_SCOPE bool  dqn_str_reverse      (char *buf, const i32 bufSize);
 DQN_FILE_SCOPE bool  dqn_str_has_substring(const char *const a, const i32 lenA,
@@ -394,6 +397,7 @@ DQN_FILE_SCOPE bool dqn_win32_wchar_to_utf8 (const wchar_t *const in, char *cons
 DQN_FILE_SCOPE void dqn_win32_get_client_dim    (const HWND window, LONG *width, LONG *height);
 DQN_FILE_SCOPE void dqn_win32_get_rect_dim      (RECT rect, LONG *width, LONG *height);
 DQN_FILE_SCOPE void dqn_win32_display_last_error(const char *const errorPrefix);
+DQN_FILE_SCOPE void dqn_win32_display_error_code(const DWORD error, const char *const errorPrefix);
 #endif /* DQN_WIN32 */
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1675,6 +1679,30 @@ DQN_FILE_SCOPE char *dqn_strncpy(char *dest, const char *src, i32 numChars)
 	return dest;
 }
 
+DQN_FILE_SCOPE i32 dqn_wstrlen(const wchar_t *a)
+{
+	i32 result = 0;
+	while (a && a[result]) result++;
+	return result;
+}
+
+DQN_FILE_SCOPE i32 dqn_wstrcmp(const wchar_t *a, const wchar_t *b)
+{
+	if (!a && !b) return -1;
+	if (!a) return -1;
+	if (!b) return -1;
+
+	while ((*a) == (*b))
+	{
+		if (!(*a)) return 0;
+		a++;
+		b++;
+	}
+
+	return (((*a) < (*b)) ? -1 : 1);
+}
+
+
 DQN_FILE_SCOPE bool dqn_str_reverse(char *buf, const i32 bufSize)
 {
 	if (!buf) return false;
@@ -2046,6 +2074,17 @@ DQN_FILE_SCOPE void dqn_win32_display_last_error(const char *const errorPrefix)
 	dqn_sprintf(formattedError, "%s: %s", errorPrefix, errorMsg);
 	DQN_WIN32_ERROR_BOX(formattedError, NULL);
 }
+
+DQN_FILE_SCOPE void dqn_win32_display_error_code(const DWORD error, const char *const errorPrefix)
+{
+	char errorMsg[1024] = {};
+	FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+	               NULL, error, 0, errorMsg, DQN_ARRAY_COUNT(errorMsg), NULL);
+
+	char formattedError[2048] = {};
+	dqn_sprintf(formattedError, "%s: %s", errorPrefix, errorMsg);
+	DQN_WIN32_ERROR_BOX(formattedError, NULL);
+}
 #endif
 
 FILE_SCOPE bool dqn_file_open_internal(const wchar_t *const path,
@@ -2224,12 +2263,34 @@ DQN_FILE_SCOPE char **dqn_dir_read(char *dir, u32 *numFiles)
 			return NULL;
 		}
 
-		while (FindNextFileW(findHandle, &findData) != 0)
-			currNumFiles++;
+		bool stayInLoop = true;
+		while (stayInLoop)
+		{
+			BOOL result = FindNextFileW(findHandle, &findData);
+			if (result == 0)
+			{
+				DWORD error = GetLastError();
+				if (error != ERROR_NO_MORE_FILES)
+				{
+					dqn_win32_display_error_code(error,
+					                             "FindNextFileW() failed");
+				}
+
+				stayInLoop = false;
+			}
+			else
+			{
+				currNumFiles++;
+			}
+		}
 		FindClose(findHandle);
 	}
 
-	if (currNumFiles == 0) return NULL;
+	if (currNumFiles == 0)
+	{
+		*numFiles = 0;
+		return NULL;
+	}
 
 	{
 		WIN32_FIND_DATAW initFind = {};
