@@ -38,8 +38,10 @@ typedef struct DsyncLocations
 
 typedef struct DsyncState {
 	DsyncLocations locations;
+	HMENU popUpMenu;
 } DsyncState;
 
+FILE_SCOPE DsyncState globalState;
 FILE_SCOPE const char *const GLOBAL_INI_SECTION_WATCH_LOCATIONS     = "WatchLocations";
 FILE_SCOPE const char *const GLOBAL_INI_SECTION_BACKUP_TO_LOCATIONS = "BackupToLocations";
 FILE_SCOPE const char *const GLOBAL_INI_PROPERTY_LOCATION           = "location";
@@ -123,7 +125,13 @@ FILE_SCOPE void dsync_unit_test()
 	DQN_ASSERT(dqn_strcmp(brokenString_2, "C:\\") == 0);
 }
 
-#define WIN32_TASKBAR_ICON_UID 0x282ACD13;
+enum Win32Menu
+{
+	win32menu_exit
+};
+
+#define WIN32_TASKBAR_ICON_UID 0x282ACD13
+#define WIN32_TASKBAR_ICON_MSG 0x812BAC8E
 FILE_SCOPE LRESULT CALLBACK win32_main_callback(HWND window, UINT msg,
                                                 WPARAM wParam, LPARAM lParam)
 {
@@ -132,17 +140,57 @@ FILE_SCOPE LRESULT CALLBACK win32_main_callback(HWND window, UINT msg,
 	{
 		case WM_CREATE:
 		{
+			globalState.popUpMenu = CreatePopupMenu();
+			AppendMenu(globalState.popUpMenu, MF_STRING, win32menu_exit,
+			           "Exit");
 
 			// Create Taskbar Icon
-			NOTIFYICONDATAW notifyIconData  = {};
+			NOTIFYICONDATAW notifyIconData = {};
 			notifyIconData.cbSize           = sizeof(notifyIconData);
 			notifyIconData.hWnd             = window;
+			notifyIconData.uCallbackMessage = WIN32_TASKBAR_ICON_MSG;
 			notifyIconData.uID              = WIN32_TASKBAR_ICON_UID;
-			notifyIconData.uFlags           = NIF_TIP;
+			notifyIconData.uFlags           = NIF_TIP | NIF_MESSAGE;
 			notifyIconData.hIcon            = LoadIcon(NULL, IDI_APPLICATION);
 			swprintf_s(notifyIconData.szTip,
 			           DQN_ARRAY_COUNT(notifyIconData.szTip), L"Dsync");
 			DQN_ASSERT(Shell_NotifyIconW(NIM_ADD, &notifyIconData));
+		}
+		break;
+
+		case WM_COMMAND:
+		{
+			switch (LOWORD(wParam))
+			{
+				case win32menu_exit:
+				{
+					SendMessage(window, WM_CLOSE, 0, 0);
+				}
+				break;
+
+				default:
+				{
+					result = DefWindowProcW(window, msg, wParam, lParam);
+				}
+				break;
+			}
+		}
+		break;
+
+		case WIN32_TASKBAR_ICON_MSG:
+		{
+			if (lParam == WM_RBUTTONDOWN)
+			{
+				POINT p;
+				GetCursorPos(&p);
+
+				// A little Windows quirk.  You need to do this so the menu
+				// disappears if the user clicks off it
+				SetForegroundWindow(window);
+				TrackPopupMenu(globalState.popUpMenu,
+				               TPM_LEFTALIGN | TPM_BOTTOMALIGN, p.x, p.y, 0,
+				               window, 0);
+			}
 		}
 		break;
 
@@ -1104,10 +1152,10 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 	////////////////////////////////////////////////////////////////////////////
 	DqnPushBuffer pushBuffer = {};
 	dqn_push_buffer_init(&pushBuffer, DQN_KILOBYTE(512), 4);
-	DsyncState state = {};
-	state.locations  = dsync_config_load(&pushBuffer);
+	globalState.locations  = dsync_config_load(&pushBuffer);
 
-	if (state.locations.numBackup <= 0 || state.locations.numWatch <= 0)
+	if (globalState.locations.numBackup <= 0 ||
+	    globalState.locations.numWatch <= 0)
 	{
 		DQN_WIN32_ERROR_BOX(
 		    "dsync_config_load() returned empty: There are no backup locations "
@@ -1115,7 +1163,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 		    NULL);
 		return 0;
 	}
-	else if (!state.locations.watch || !state.locations.backup)
+	else if (!globalState.locations.watch || !globalState.locations.backup)
 	{
 		DQN_WIN32_ERROR_BOX(
 		    "dsync_config_load() returned empty: There are no strings defined "
@@ -1128,8 +1176,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 	// Setup win32 handles for monitoring changes
 	////////////////////////////////////////////////////////////////////////////
 	HANDLE *fileFindChangeArray = (HANDLE *)dqn_push_buffer_allocate(
-	    &pushBuffer, state.locations.numWatch);
-	for (u32 i = 0; i < state.locations.numWatch; i++)
+	    &pushBuffer, globalState.locations.numWatch);
+	for (u32 i = 0; i < globalState.locations.numWatch; i++)
 	{
 		const u32 FLAGS = FILE_NOTIFY_CHANGE_DIR_NAME |
 		                  FILE_NOTIFY_CHANGE_LAST_WRITE |
@@ -1137,7 +1185,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 		const bool WATCH_ALL_SUBDIRECTORIES = true;
 
 		fileFindChangeArray[i] = FindFirstChangeNotificationW(
-		    state.locations.watch[i].path, WATCH_ALL_SUBDIRECTORIES, FLAGS);
+		    globalState.locations.watch[i].path, WATCH_ALL_SUBDIRECTORIES, FLAGS);
 
 		if (fileFindChangeArray[i] == INVALID_HANDLE_VALUE)
 		{
@@ -1158,7 +1206,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 		////////////////////////////////////////////////////////////////////////
 		// Begin blocking call to watch files
 		////////////////////////////////////////////////////////////////////////
-		const i32 NUM_HANDLES = state.locations.numWatch;
+		const i32 NUM_HANDLES = globalState.locations.numWatch;
 		DWORD waitSignalled   = WaitForMultipleObjects(
 		    NUM_HANDLES, fileFindChangeArray, false, INFINITE);
 
@@ -1183,7 +1231,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 		////////////////////////////////////////////////////////////////////////
 		// Handle file change logic
 		////////////////////////////////////////////////////////////////////////
-		WatchPath *watch = &state.locations.watch[signalIndex];
+		WatchPath *watch = &globalState.locations.watch[signalIndex];
 		watch->numChanges++;
 
 		// NOTE: If first time detected change, don't backup until we change it
@@ -1196,8 +1244,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 		    (f32)dqn_time_now_in_s() - watch->timeLastDetectedChange;
 		if (secondsElapsed >= MIN_TIME_BETWEEN_BACKUP_IN_S)
 		{
-			dsync_backup(watch->path, state.locations.backup,
-			             state.locations.numBackup);
+			dsync_backup(watch->path, globalState.locations.backup,
+			             globalState.locations.numBackup);
 
 			NOTIFYICONDATAW notifyIconData = {};
 			notifyIconData.cbSize          = sizeof(notifyIconData);
