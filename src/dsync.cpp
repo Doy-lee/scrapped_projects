@@ -131,7 +131,7 @@ enum Win32Menu
 };
 
 #define WIN32_TASKBAR_ICON_UID 0x282ACD13
-#define WIN32_TASKBAR_ICON_MSG 0x812BAC8E
+#define WIN32_TASKBAR_ICON_MSG 0x83AD
 FILE_SCOPE LRESULT CALLBACK win32_main_callback(HWND window, UINT msg,
                                                 WPARAM wParam, LPARAM lParam)
 {
@@ -158,25 +158,6 @@ FILE_SCOPE LRESULT CALLBACK win32_main_callback(HWND window, UINT msg,
 		}
 		break;
 
-		case WM_COMMAND:
-		{
-			switch (LOWORD(wParam))
-			{
-				case win32menu_exit:
-				{
-					SendMessage(window, WM_CLOSE, 0, 0);
-				}
-				break;
-
-				default:
-				{
-					result = DefWindowProcW(window, msg, wParam, lParam);
-				}
-				break;
-			}
-		}
-		break;
-
 		case WIN32_TASKBAR_ICON_MSG:
 		{
 			if (lParam == WM_RBUTTONDOWN)
@@ -187,9 +168,13 @@ FILE_SCOPE LRESULT CALLBACK win32_main_callback(HWND window, UINT msg,
 				// A little Windows quirk.  You need to do this so the menu
 				// disappears if the user clicks off it
 				SetForegroundWindow(window);
-				TrackPopupMenu(globalState.popUpMenu,
-				               TPM_LEFTALIGN | TPM_BOTTOMALIGN, p.x, p.y, 0,
-				               window, 0);
+				u32 clickedCmd = TrackPopupMenu(
+				    globalState.popUpMenu, (TPM_RETURNCMD | TPM_LEFTALIGN |
+				                            TPM_BOTTOMALIGN | TPM_RIGHTBUTTON),
+				    p.x, p.y, 0, window, 0);
+
+				if (clickedCmd == win32menu_exit)
+					SendMessage(window, WM_CLOSE, 0, 0);
 			}
 		}
 		break;
@@ -1197,7 +1182,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 	while (true)
 	{
 		MSG msg;
-		while (PeekMessageW(&msg, mainWindow, 0, 0, PM_REMOVE))
+		while (PeekMessage(&msg, mainWindow, 0, 0, PM_REMOVE))
 		{
 			TranslateMessage(&msg);
 			DispatchMessageW(&msg);
