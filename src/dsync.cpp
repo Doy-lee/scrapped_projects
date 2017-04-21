@@ -20,6 +20,30 @@
 	TODO: Unit tests
 */
 
+typedef struct WatchPath
+{
+	wchar_t *path;
+	f32 timeLastDetectedChange;
+	u32 numChanges;
+} WatchPath;
+
+typedef struct DsyncLocations
+{
+	wchar_t **backup;
+	u32 numBackup;
+
+	WatchPath *watch;
+	u32 numWatch;
+} DsyncLocations;
+
+typedef struct DsyncState {
+	DsyncLocations locations;
+} DsyncState;
+
+FILE_SCOPE const char *const GLOBAL_INI_SECTION_WATCH_LOCATIONS     = "WatchLocations";
+FILE_SCOPE const char *const GLOBAL_INI_SECTION_BACKUP_TO_LOCATIONS = "BackupToLocations";
+FILE_SCOPE const char *const GLOBAL_INI_PROPERTY_LOCATION           = "location";
+
 inline i32 str_trim_around(char *src, i32 srcLen, const char *charsToTrim,
                            const i32 charsToTrimSize)
 {
@@ -85,7 +109,7 @@ inline i32 str_trim_around(char *src, i32 srcLen, const char *charsToTrim,
 	return newLen;
 }
 
-void dsync_unit_test()
+FILE_SCOPE void dsync_unit_test()
 {
 	//// DEBUG TEST ////
 	const char trim[] = {'"', ' '};
@@ -156,30 +180,10 @@ FILE_SCOPE u32 win32_get_module_directory(wchar_t *directory, u32 len)
 	return copiedLen;
 }
 
-typedef struct WatchPath
-{
-	wchar_t *path;
-	f32 timeLastDetectedChange;
-	u32 numChanges;
-} WatchPath;
-
-typedef struct DsyncLocations
-{
-	wchar_t **backup;
-	u32 numBackup;
-
-	WatchPath *watch;
-	u32 numWatch;
-} DsyncLocations;
-
-typedef struct DsyncState {
-	DsyncLocations locations;
-} DsyncState;
-
-FILE_SCOPE wchar_t **config_extract_ini_section(DqnIni *ini,
-                                                DqnPushBuffer *pushBuffer,
-                                                char *sectionName,
-                                                u32 *numProperties)
+FILE_SCOPE wchar_t **
+dsync_config_extract_ini_section(DqnIni *ini, DqnPushBuffer *pushBuffer,
+                                 const char *const sectionName,
+                                 u32 *numProperties)
 {
 	wchar_t **result = NULL;
 	if (!ini || !pushBuffer || !numProperties) return result;
@@ -207,19 +211,38 @@ FILE_SCOPE wchar_t **config_extract_ini_section(DqnIni *ini,
 			// pre-allocate the number of strings based on the count in the
 			// ini file. But thats fine since it's just the size of
 			// a pointer (negligible).
+			bool loadedPathIsValid = true;
 			if (PathFileExistsW(wideValue))
 			{
-				// NOTE: +1 since strlen doesn't include null terminator
-				u32 valueLen = dqn_strlen(value) + 1;
-				result[valueIndex] = (wchar_t *)dqn_push_buffer_allocate(
-				    pushBuffer, valueLen * sizeof(wchar_t));
+				for (u32 i = 0; i < propertyIndex; i++)
+				{
+					// NOTE: If there are duplicate strings, loaded from before,
+					// just reject them
+					if (dqn_wstrcmp(wideValue, result[i]) == 0)
+					{
+						loadedPathIsValid = false;
+						break;
+					}
+				}
 
-				swprintf_s(result[valueIndex++], valueLen, L"%s", wideValue);
+				if (loadedPathIsValid)
+				{
+					// NOTE: +1 since strlen doesn't include null terminator
+					u32 valueLen       = dqn_strlen(value) + 1;
+					result[valueIndex] = (wchar_t *)dqn_push_buffer_allocate(
+					    pushBuffer, valueLen * sizeof(wchar_t));
+
+					swprintf_s(result[valueIndex++], valueLen, L"%s",
+					           wideValue);
+				}
 			}
 			else
 			{
-				// NOTE: Not a valid property, in our case, not a valid file
-				// path
+				loadedPathIsValid = false;
+			}
+
+			if (!loadedPathIsValid)
+			{
 				(*numProperties)--;
 			}
 		}
@@ -228,29 +251,29 @@ FILE_SCOPE wchar_t **config_extract_ini_section(DqnIni *ini,
 	return result;
 }
 
-FILE_SCOPE DsyncLocations dsync_config_load(DqnPushBuffer *pushBuffer)
+// Returns the len of the actual path regardless of whether the input buffer is
+// large enough or not.
+FILE_SCOPE u32 dsync_config_get_path(wchar_t *outBuf, u32 outBufSize)
 {
-	DsyncLocations locations = {};
-
-	// Load CFG file
-	wchar_t programPath[512] = {};
-	u32 programPathLen = win32_get_module_directory(programPath, DQN_ARRAY_COUNT(programPath));
+	u32 len = 0;
+	wchar_t programPath[1024] = {};
+	u32 programPathLen =
+	    win32_get_module_directory(programPath, DQN_ARRAY_COUNT(programPath));
+	len += programPathLen;
 
 	const wchar_t *DSYNC_INI_FILE = L"dsync.ini";
-	wchar_t configPath[512]    = {};
-	u32 configPathLen          = 0;
 	if (programPath[programPathLen - 1] == '\\')
 	{
-		configPathLen = swprintf_s(configPath, DQN_ARRAY_COUNT(configPath),
-		                           L"%s%s", programPath, DSYNC_INI_FILE);
+		len += swprintf_s(outBuf, outBufSize, L"%s%s", programPath,
+		                  DSYNC_INI_FILE);
 	}
 	else
 	{
-		configPathLen = swprintf_s(configPath, DQN_ARRAY_COUNT(configPath),
-		                           L"%s\\%s", programPath, DSYNC_INI_FILE);
+		len += swprintf_s(outBuf, outBufSize, L"%s\\%s", programPath,
+		                  DSYNC_INI_FILE);
 	}
 
-	if (configPathLen == DQN_ARRAY_COUNT(configPath))
+	if (len == outBufSize)
 	{
 		DQN_WIN32_ERROR_BOX(
 		    "dqn_sprintf() buffer maxed: Len of copied text is len "
@@ -259,42 +282,92 @@ FILE_SCOPE DsyncLocations dsync_config_load(DqnPushBuffer *pushBuffer)
 		DQN_ASSERT(DQN_INVALID_CODE_PATH);
 	}
 
-	DqnPushBuffer transientBuffer = {};
-	dqn_push_buffer_init(&transientBuffer, DQN_KILOBYTE(512), 4);
+	return len;
+}
 
-	DqnFile configFile = {};
-	if (!dqn_file_open_wide(configPath, &configFile, dqnfilepermissionflag_read,
-	                        dqnfileaction_open_only))
+// Returns the ini structure and the fileHandle. Pass in an empty fileHandle for
+// it to fill out. It creates an ini file if it does not exist yet
+FILE_SCOPE DqnIni *dsync_config_load_to_ini(DqnPushBuffer *buffer,
+                                            bool needWritePermission,
+                                            DqnFile *fileHandle)
+{
+	if (!fileHandle) return NULL;
+
+	wchar_t configPath[1024] = {};
+	dsync_config_get_path(configPath, DQN_ARRAY_COUNT(configPath));
+
+	u32 permissions = 0;
+	if (needWritePermission)
 	{
-		// NOTE: File does not exist
+		permissions =
+		    (dqnfilepermissionflag_read | dqnfilepermissionflag_write);
 	}
 	else
 	{
-		u8 *configBuffer =
-		    (u8 *)dqn_push_buffer_allocate(&transientBuffer, configFile.size);
-		size_t bytesRead =
-		    dqn_file_read(configFile, configBuffer, configFile.size);
-		DQN_ASSERT(bytesRead == configFile.size);
-		dqn_file_close(&configFile);
+		permissions = dqnfilepermissionflag_read;
+	}
 
-		DqnIni *ini = dqn_ini_load((char *)configBuffer, NULL);
+	if (!dqn_file_openw(configPath, fileHandle,
+	                    permissions, dqnfileaction_open_only))
+	{
+		// NOTE: File does not exist, create it
+		if (!dqn_file_openw(configPath, fileHandle, permissions,
+		                    dqnfileaction_create_if_not_exist))
+		{
+			DQN_WIN32_ERROR_BOX(
+			    "dqn_file_openw() failed: Could not create config "
+			    "file", NULL);
+			return NULL;
+		}
+	}
 
-		locations.backup = config_extract_ini_section(
-		    ini, pushBuffer, "BackupToLocations", &locations.numBackup);
+	DqnTempBuffer tempBuffer = dqn_push_buffer_begin_temp_region(buffer);
+	u8 *configBuffer =
+	    (u8 *)dqn_push_buffer_allocate(tempBuffer.buffer, fileHandle->size);
+	size_t bytesRead =
+	    dqn_file_read(*fileHandle, configBuffer, fileHandle->size);
+	DQN_ASSERT(bytesRead == fileHandle->size);
+	DqnIni *ini = dqn_ini_load((char *)configBuffer, NULL);
+	dqn_push_buffer_end_temp_region(tempBuffer);
 
-		wchar_t **watchLocations = config_extract_ini_section(
-		    ini, pushBuffer, "WatchLocations", &locations.numWatch);
+	return ini;
+}
 
+FILE_SCOPE void dsync_config_load_to_ini_close(DqnIni *ini, DqnFile *fileHandle)
+{
+	if (ini) dqn_ini_destroy(ini);
+	if (fileHandle) dqn_file_close(fileHandle);
+}
+
+
+FILE_SCOPE DsyncLocations dsync_config_load(DqnPushBuffer *pushBuffer)
+{
+	DsyncLocations locations = {};
+
+	// Load CFG file
+	DqnFile configFile = {};
+	DqnIni *ini = dsync_config_load_to_ini(pushBuffer, false, &configFile);
+
+	// Fill out locations data
+	{
+		locations.backup = dsync_config_extract_ini_section(
+		    ini, pushBuffer, GLOBAL_INI_SECTION_BACKUP_TO_LOCATIONS,
+		    &locations.numBackup);
+		wchar_t **watchLocations = dsync_config_extract_ini_section(
+		    ini, pushBuffer, GLOBAL_INI_SECTION_WATCH_LOCATIONS,
+		    &locations.numWatch);
 		locations.watch = (WatchPath *)dqn_push_buffer_allocate(
 		    pushBuffer, locations.numWatch * sizeof(WatchPath));
 		for (u32 i = 0; i < locations.numWatch; i++)
 		{
-			locations.watch[i].path = watchLocations[i];
-		}
+			locations.watch[i].path                   = watchLocations[i];
 
-		dqn_ini_destroy(ini);
+			// TODO(doyle): Not being cleared to zero in the allocate.
+			locations.watch[i].timeLastDetectedChange = 0;
+			locations.watch[i].numChanges             = 0;
+		}
 	}
-	dqn_push_buffer_free(&transientBuffer);
+	dsync_config_load_to_ini_close(ini, &configFile);
 
 	return locations;
 };
@@ -376,14 +449,6 @@ void dsync_backup(wchar_t *path, wchar_t **const backupLocations,
 	////////////////////////////////////////////////////////////////////////////
 	// Process supplied path
 	////////////////////////////////////////////////////////////////////////////
-	if (!PathFileExistsW(path))
-	{
-		DQN_WIN32_ERROR_BOX(
-		    "PathFileExistsW() failed: Path does not point to valid file",
-		    NULL);
-		return;
-	}
-
 	// Generate the archive name based on the files given
 	wchar_t fullPath[1024] = {};
 	u32 fullPathLen =
@@ -406,6 +471,13 @@ void dsync_backup(wchar_t *path, wchar_t **const backupLocations,
 		}
 	}
 
+	if (!PathFileExistsW(fullPath))
+	{
+		DQN_WIN32_ERROR_BOX(
+		    "PathFileExistsW() failed: Path does not point to valid file",
+		    NULL);
+		return;
+	}
 	////////////////////////////////////////////////////////////////////////////
 	// Generate Archive Name
 	////////////////////////////////////////////////////////////////////////////
@@ -447,19 +519,18 @@ void dsync_backup(wchar_t *path, wchar_t **const backupLocations,
 	////////////////////////////////////////////////////////////////////////////
 	// Enum files to Archive and add to command line
 	////////////////////////////////////////////////////////////////////////////
-	// Get the first output directory, the first zip is stored there. Then
-	// copy that file to the other locations
+	// Get the first output directory, the first zip is stored there. Later we
+	// will copy that file to the other locations
 	wchar_t firstOutputFile[DQN_ARRAY_COUNT(fullPath)] = {};
 	u32 firstOutputFileLen = dsync_make_archive_output_path(
 	    backupLocations[0], archiveName, firstOutputFile,
 	    DQN_ARRAY_COUNT(firstOutputFile));
-
 	DQN_ASSERT(firstOutputFileLen != 0);
 
 	// Generate the command line string for 7z
 	const wchar_t *const ZIP_EXE_NAME = L"7za";
 	const wchar_t *const CMD_SWITCHES = L"a -mx9";
-	wchar_t cmd[2048]                 = {0};
+	wchar_t cmd[2048]                 = {};
 
 	wchar_t *cmdPtr = cmd;
 	cmdPtr += swprintf_s(cmdPtr, DQN_ARRAY_COUNT(cmd), L"%s %s %s",
@@ -533,6 +604,9 @@ void dsync_backup(wchar_t *path, wchar_t **const backupLocations,
 		DQN_ASSERT((cmdPtr - cmd) < DQN_ARRAY_COUNT(cmd));
 	}
 
+	////////////////////////////////////////////////////////////////////////////
+	// Execute ZIP command, then copy files to remainder backup locations
+	////////////////////////////////////////////////////////////////////////////
 	STARTUPINFOW startInfo        = {0};
 	PROCESS_INFORMATION procInfo = {0};
 	if (CreateProcessW(NULL, cmd, NULL, NULL, false, 0, NULL, NULL,
@@ -629,49 +703,312 @@ void dsync_backup(wchar_t *path, wchar_t **const backupLocations,
 	}
 }
 
+// NOTE: If len is -1, then strlen will be used to determine
+FILE_SCOPE bool win32_console_writew(HANDLE stdHandle, wchar_t *string,
+                                     DWORD len, DWORD *numWritten)
+{
+	if (len == -1) len = dqn_wstrlen(string);
+
+	if (WriteConsoleW(stdHandle, string, len, numWritten, NULL) == 0)
+	{
+		dqn_win32_display_last_error("WriteConsoleW() failed");
+		return false;
+	}
+
+	return true;
+}
+
+FILE_SCOPE void dsync_console_write_default_help()
+{
+	LOCAL_PERSIST HANDLE handle = NULL;
+	if (!handle)
+	{
+		handle = GetStdHandle(STD_OUTPUT_HANDLE);
+		if (handle == INVALID_HANDLE_VALUE)
+		{
+			dqn_win32_display_last_error("GetStdHandle() failed");
+			return;
+		}
+	}
+
+	win32_console_writew(
+	    handle,
+	    L"Dsync by Doyle at github.com/doy-lee/dsync\n"
+	    L"Usage: dsync {watch|backupto} <directory>\n"
+	    L"BEWARE: Setting a watch directory as a backup directory will cause an infinite backing up routine\n\n"
+
+	    L"Commands:\n"
+	    L"watch    <directory> - Add directory to, the watch list for backing up.\n"
+	    L"backupto <directory> - Add directory to, backup the watch directories to.\n\n",
+	    -1, NULL);
+}
+
+FILE_SCOPE void dsync_console_handle_args(LPWSTR lpCmdLine)
+{
+	// NOTE: This is for debugging in Visual Studios. Since there is no console
+	// when debugging. But in release, when using the executable on the command
+	// line it does have one so we don't need to allocate etc.
+#if 0
+	AllocConsole();
+#else
+	if (AttachConsole(ATTACH_PARENT_PROCESS) == 0)
+	{
+		dqn_win32_display_last_error("AttachConsole() failed");
+		return;
+	}
+#endif
+
+	HANDLE stdoutHandle = GetStdHandle(STD_OUTPUT_HANDLE);
+	i32 argc;
+	wchar_t **argv = CommandLineToArgvW(lpCmdLine, &argc);
+	if (argc < 3)
+	{
+		// Convert to lowercase
+		for (i32 i = 0; i < argc; i++)
+		{
+			i32 len = dqn_wstrlen(argv[i]);
+			for (i32 j     = 0; j < len; j++)
+				argv[i][j] = dqn_wchar_to_lower(argv[i][j]);
+		}
+	}
+	else
+	{
+		dsync_console_write_default_help();
+		return;
+	}
+
+	if (argc == 1)
+	{
+		if (dqn_wstrcmp(argv[0], L"list") == 0)
+		{
+			DqnPushBuffer buffer = {};
+			dqn_push_buffer_init(&buffer, DQN_KILOBYTE(512), 4);
+
+#if 0
+			DqnFile configFile = {};
+			DqnIni *ini = dsync_config_load_to_ini(&buffer, false, &configFile);
+			dqn_file_close(configFile);
+
+			i32 sectionIndex = dqn_ini_find_section(
+			    ini, GLOBAL_INI_SECTION_WATCH_LOCATIONS, 0);
+#endif
+
+			u32 index = 1;
+			for (u32 i = 0; i < locations.numBackup; i++)
+			{
+				wchar_t output[1024] = {};
+				i32 len = swprintf_s(output, DQN_ARRAY_COUNT(output),
+				                     L"Backup Locations[%03d]: %s\n", index++,
+				                     locations.backup[i]);
+				win32_console_writew(stdoutHandle, output, len, NULL);
+			}
+
+			index = 1;
+			for (u32 i = 0; i < locations.numWatch; i++)
+			{
+				wchar_t output[1024] = {};
+				i32 len = swprintf_s(output, DQN_ARRAY_COUNT(output),
+				                     L" Watch Locations[%03d]: %s\n", index++,
+				                     locations.watch[i].path);
+				win32_console_writew(stdoutHandle, output, len, NULL);
+			}
+		}
+	}
+	else if (argc == 2)
+	{
+		if (PathFileExistsW(argv[1]))
+		{
+			if (!PathIsDirectoryW(argv[1]))
+			{
+				win32_console_writew(
+				    stdoutHandle,
+				    L"Backup/Watch argument was not a "
+				    L"directory\n Sorry we don't support "
+				    L"individual watch on files at the moment.",
+				    -1, NULL);
+				return;
+			}
+
+			wchar_t destPathW[1024] = {};
+			GetFullPathNameW(argv[1], DQN_ARRAY_COUNT(destPathW), destPathW,
+			                 NULL);
+
+			enum UpdateMode
+			{
+				updatemode_invalid,
+				updatemode_watch,
+				updatemode_backup,
+			};
+
+			enum UpdateMode mode = updatemode_invalid;
+			if (dqn_wstrcmp(argv[0], L"watch") == 0)
+			{
+				mode = updatemode_watch;
+			}
+			else if (dqn_wstrcmp(argv[0], L"backupto") == 0)
+			{
+				mode = updatemode_backup;
+			}
+			else if (dqn_wstrcmp(argv[0], L"help") == 0)
+			{
+				dsync_console_write_default_help();
+				return;
+			}
+			else
+			{
+				dsync_console_write_default_help();
+				return;
+			}
+
+			if (mode == updatemode_watch || updatemode_backup)
+			{
+				DqnPushBuffer buffer = {};
+				dqn_push_buffer_init(&buffer, DQN_KILOBYTE(512), 4);
+				DqnFile configFile = {};
+				DqnIni *ini =
+				    dsync_config_load_to_ini(&buffer, true, &configFile);
+				dqn_file_close(&configFile);
+				DQN_ASSERT(ini);
+
+				const char *searchSectionString = NULL;
+				if (mode == updatemode_watch)
+				{
+					searchSectionString = GLOBAL_INI_SECTION_WATCH_LOCATIONS;
+				}
+				else if (mode == updatemode_backup)
+				{
+					searchSectionString =
+					    GLOBAL_INI_SECTION_BACKUP_TO_LOCATIONS;
+				}
+
+				i32 sectionIndex =
+				    dqn_ini_find_section(ini, searchSectionString, 0);
+				if (sectionIndex == DQN_INI_NOT_FOUND)
+				{
+					sectionIndex =
+					    dqn_ini_section_add(ini, searchSectionString, 0);
+				}
+				DQN_ASSERT(sectionIndex != DQN_INI_NOT_FOUND);
+
+				char destPath[DQN_ARRAY_COUNT(destPathW)] = {};
+				DQN_ASSERT(dqn_win32_wchar_to_utf8(destPathW, destPath,
+				                                   DQN_ARRAY_COUNT(destPath)));
+
+				dqn_ini_property_add(ini, sectionIndex,
+				                     GLOBAL_INI_PROPERTY_LOCATION, 0, destPath,
+				                     0);
+
+				////////////////////////////////////////////////////////////////
+				// Write ini to disk
+				////////////////////////////////////////////////////////////////
+				i32 requiredSize = dqn_ini_save(ini, NULL, 0);
+				u8 *dataToWriteOut =
+				    (u8 *)dqn_push_buffer_allocate(&buffer, requiredSize);
+				dqn_ini_save(ini, (char *)dataToWriteOut, requiredSize);
+
+				wchar_t configPath[1024] = {};
+				dsync_config_get_path(configPath, DQN_ARRAY_COUNT(configPath));
+				if (dqn_file_openw(configPath, &configFile,
+				                   (dqnfilepermissionflag_read |
+				                    dqnfilepermissionflag_write),
+				                   dqnfileaction_clear_if_exist))
+				{
+					dqn_file_write(&configFile, dataToWriteOut, requiredSize,
+					               0);
+				}
+				else
+				{
+					win32_console_writew(
+					    stdoutHandle,
+					    L"dqn_file_open() failed: Unable to write config file "
+					    L"to disk",
+					    -1, NULL);
+				}
+				dsync_config_load_to_ini_close(ini, &configFile);
+			}
+		}
+		else
+		{
+			win32_console_writew(
+			    stdoutHandle,
+			    L"Path to watch/backup was determined invalid by Windows\n", -1,
+			    NULL);
+		}
+	}
+	else
+	{
+		dsync_console_write_default_help();
+	}
+}
+
 // BIG TODO(doyle): This program only works if, after it detects a change that
 // the user continues working and once it hits the threshold, then if it detects
 // another change will it backup.
 
 // Reason being is I had trouble getting multithreading to work so I'm taking
 // the easy road for now.
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
-                   LPSTR lpCmdLine, int nShowCmd)
+int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
+                    LPWSTR lpCmdLine, int nShowCmd)
 {
 	dsync_unit_test();
 
-	WNDCLASSEXW wc = {
-	    sizeof(WNDCLASSEX),
-	    0,
-	    win32_main_callback,
-	    0, // int cbClsExtra
-	    0, // int cbWndExtra
-	    hInstance,
-	    LoadIcon(NULL, IDI_APPLICATION),
-	    LoadCursor(NULL, IDC_ARROW),
-	    NULL,
-	    L"", // LPCTSTR lpszMenuName
-	    L"DsyncWindowClass",
-	    NULL, // HICON hIconSm
-	};
-
-	if (!RegisterClassExW(&wc))
+	////////////////////////////////////////////////////////////////////////////
+	// Check Command Line
+	////////////////////////////////////////////////////////////////////////////
+	// NOTE: In win32 if there are no command line args, argc returns 1. If
+	// there is exactly 1 argument, argc also returns 1. Win32 treats the empty
+	// command line, the first argument the executable. But if there's an
+	// argument then the executable no longer counts in argc.
+	// So check the cmd line to see if there are any args in the fist place.
+	if (dqn_wstrlen(lpCmdLine) != 0)
 	{
-		DQN_WIN32_ERROR_BOX("RegisterClassExW() failed.", NULL);
-		return -1;
+		// If arguments supplied, treat the invocation of the program as a
+		// command line program
+		dsync_console_handle_args(lpCmdLine);
+		return 0;
 	}
 
-	HWND mainWindow =
-	    CreateWindowExW(0, wc.lpszClassName, NULL, 0, CW_USEDEFAULT,
-	                    CW_USEDEFAULT, 0, 0, NULL, NULL, hInstance, NULL);
-
-	if (!mainWindow)
+	////////////////////////////////////////////////////////////////////////////
+	// Initialise Win32 App
+	////////////////////////////////////////////////////////////////////////////
+	HWND mainWindow = NULL;
 	{
-		DQN_WIN32_ERROR_BOX("CreateWindowExW() failed.", NULL);
-		return -1;
+		WNDCLASSEXW wc = {
+		    sizeof(WNDCLASSEX),
+		    0,
+		    win32_main_callback,
+		    0, // int cbClsExtra
+		    0, // int cbWndExtra
+		    hInstance,
+		    LoadIcon(NULL, IDI_APPLICATION),
+		    LoadCursor(NULL, IDC_ARROW),
+		    NULL,
+		    L"", // LPCTSTR lpszMenuName
+		    L"DsyncWindowClass",
+		    NULL, // HICON hIconSm
+		};
+
+		if (!RegisterClassExW(&wc))
+		{
+			DQN_WIN32_ERROR_BOX("RegisterClassExW() failed.", NULL);
+			return -1;
+		}
+
+		mainWindow =
+		    CreateWindowExW(0, wc.lpszClassName, NULL, 0, CW_USEDEFAULT,
+		                    CW_USEDEFAULT, 0, 0, NULL, NULL, hInstance, NULL);
+
+		if (!mainWindow)
+		{
+			DQN_WIN32_ERROR_BOX("CreateWindowExW() failed.", NULL);
+			return -1;
+		}
 	}
+	DQN_ASSERT(mainWindow);
 
-
+	////////////////////////////////////////////////////////////////////////////
+	// Read User Data
+	////////////////////////////////////////////////////////////////////////////
 	DqnPushBuffer pushBuffer = {};
 	dqn_push_buffer_init(&pushBuffer, DQN_KILOBYTE(512), 4);
 	DsyncState state = {};
@@ -694,6 +1031,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 		return 0;
 	}
 
+	////////////////////////////////////////////////////////////////////////////
+	// Setup win32 handles for monitoring changes
+	////////////////////////////////////////////////////////////////////////////
 	HANDLE *fileFindChangeArray = (HANDLE *)dqn_push_buffer_allocate(
 	    &pushBuffer, state.locations.numWatch);
 	for (u32 i = 0; i < state.locations.numWatch; i++)
@@ -722,26 +1062,34 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 			DispatchMessageW(&msg);
 		}
 
+		////////////////////////////////////////////////////////////////////////
+		// Begin blocking call to watch files
+		////////////////////////////////////////////////////////////////////////
 		const i32 NUM_HANDLES = state.locations.numWatch;
-		DWORD result = WaitForMultipleObjects(
+		DWORD waitSignalled   = WaitForMultipleObjects(
 		    NUM_HANDLES, fileFindChangeArray, false, INFINITE);
-		DQN_ASSERT(result != WAIT_TIMEOUT);
-		if (result == WAIT_FAILED)
+
+		////////////////////////////////////////////////////////////////////////
+		// File Changes Detected
+		////////////////////////////////////////////////////////////////////////
+		DQN_ASSERT(waitSignalled != WAIT_TIMEOUT);
+		if (waitSignalled == WAIT_FAILED)
 		{
 			dqn_win32_display_last_error("WaitForMultipleObjects() failed");
 			return 0;
 		}
 
-		i32 signalIndex = result - WAIT_OBJECT_0;
+		i32 signalIndex = waitSignalled - WAIT_OBJECT_0;
 		DQN_ASSERT(signalIndex >= 0 && signalIndex < NUM_HANDLES);
-
-		// Do work on indexed handle
 		if (FindNextChangeNotification(fileFindChangeArray[signalIndex]) == 0)
 		{
 			dqn_win32_display_last_error("FindNextChangeNotification() failed");
 			return 0;
 		}
 
+		////////////////////////////////////////////////////////////////////////
+		// Handle file change logic
+		////////////////////////////////////////////////////////////////////////
 		WatchPath *watch = &state.locations.watch[signalIndex];
 		watch->numChanges++;
 
@@ -780,7 +1128,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 			watch->numChanges             = 0;
 			watch->timeLastDetectedChange = (f32)dqn_time_now_in_s();
 		}
-
 	}
 
 	return 0;

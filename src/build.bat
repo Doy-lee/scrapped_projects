@@ -22,13 +22,13 @@ REM W3 warning level 3
 REM WX treat warnings as errors
 REM Zi enables debug data, Z7 combines the debug files into one.
 
-set compileFlags=/MT /Z7 /W3 /Od /WX
+set compileFlags=-MT -Z7 -W3 -Od -WX
 
 REM Create a set entry point to main, run as console app
 set linkLibraries=user32.lib kernel32.lib gdi32.lib shlwapi.lib shell32.lib Pathcch.lib
-set linkerFlags=/SUBSYSTEM:WINDOWS,5.1
 
-cl %compileFlags% ..\src\dsync.cpp /link %linkLibraries% %linkerFlags% /nologo /out:"dsync.exe"
+cl %compileFlags% ..\src\dsync.cpp /link -subsystem:WINDOWS,5.1 %linkLibraries% /out:"dsync.exe"
 
+:end
 popd
 

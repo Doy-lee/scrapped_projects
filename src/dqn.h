@@ -355,7 +355,7 @@ DQN_FILE_SCOPE DqnRect dqn_rect_move       (DqnRect rect, DqnV2 shift);
 DQN_FILE_SCOPE bool    dqn_rect_contains_p (DqnRect rect, DqnV2 p);
 
 ////////////////////////////////////////////////////////////////////////////////
-// String Ops
+// char String Operations
 ////////////////////////////////////////////////////////////////////////////////
 DQN_FILE_SCOPE char  dqn_char_to_lower   (char c);
 DQN_FILE_SCOPE char  dqn_char_to_upper   (char c);
@@ -369,9 +369,6 @@ DQN_FILE_SCOPE i32   dqn_strlen             (const char *a);
 DQN_FILE_SCOPE i32   dqn_strlen_delimit_with(const char *a, const char delimiter);
 DQN_FILE_SCOPE char *dqn_strncpy            (char *dest, const char *src, i32 numChars);
 
-DQN_FILE_SCOPE i32   dqn_wstrlen(const wchar_t *a);
-DQN_FILE_SCOPE i32   dqn_wstrcmp(const wchar_t *a, const wchar_t *b);
-
 #define DQN_I32_TO_STR_MAX_BUF_SIZE 11
 DQN_FILE_SCOPE bool  dqn_str_reverse      (char *buf, const i32 bufSize);
 DQN_FILE_SCOPE bool  dqn_str_has_substring(const char *const a, const i32 lenA,
@@ -384,6 +381,13 @@ DQN_FILE_SCOPE i32   dqn_i32_to_str(i32 value, char *buf, i32 bufSize);
 // Both return the number of bytes read, return 0 if invalid codepoint or UTF8
 DQN_FILE_SCOPE u32 dqn_ucs_to_utf8(u32 *dest, u32 character);
 DQN_FILE_SCOPE u32 dqn_utf8_to_ucs(u32 *dest, u32 character);
+
+////////////////////////////////////////////////////////////////////////////////
+// wchar String Operations
+////////////////////////////////////////////////////////////////////////////////
+DQN_FILE_SCOPE wchar_t dqn_wchar_to_lower(wchar_t c);
+DQN_FILE_SCOPE i32     dqn_wstrlen       (const wchar_t *a);
+DQN_FILE_SCOPE i32     dqn_wstrcmp       (const wchar_t *a, const wchar_t *b);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Win32 Specific
@@ -437,7 +441,7 @@ typedef struct DqnFile
 DQN_FILE_SCOPE bool dqn_file_open(const char *const path, DqnFile *const file,
                                   const u32 permissionFlags,
                                   const enum DqnFileAction action);
-DQN_FILE_SCOPE bool dqn_file_open_wide(const wchar_t *const path, DqnFile *const file,
+DQN_FILE_SCOPE bool dqn_file_openw(const wchar_t *const path, DqnFile *const file,
                                        const u32 permissionFlags,
                                        const enum DqnFileAction action);
 
@@ -840,8 +844,7 @@ dqn_ini_property_add
     
     void dqn_ini_property_add( DqnIni* ini, int section, char const* name, int name_length, char const* value, int value_length )
 
-Adds a property with the specified name and value to the specified section, and
-returns the index it was added at. There is no check done to see if a property
+Adds a property with the specified name and value to the specified section, and returns the index it was added at. There is no check done to see if a property
 with the specified name already exists - multiple properties of the same name
 are allowed. `name_length` and `value_length` specifies the number of characters
 in `name` and `value`, which does not have to be zero-terminated. If
@@ -1594,7 +1597,7 @@ DQN_FILE_SCOPE bool dqn_rect_contains_p(DqnRect rect, DqnV2 p)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// String Operations
+// char String Operations
 ////////////////////////////////////////////////////////////////////////////////
 DQN_FILE_SCOPE char dqn_char_to_lower(char c)
 {
@@ -1678,30 +1681,6 @@ DQN_FILE_SCOPE char *dqn_strncpy(char *dest, const char *src, i32 numChars)
 
 	return dest;
 }
-
-DQN_FILE_SCOPE i32 dqn_wstrlen(const wchar_t *a)
-{
-	i32 result = 0;
-	while (a && a[result]) result++;
-	return result;
-}
-
-DQN_FILE_SCOPE i32 dqn_wstrcmp(const wchar_t *a, const wchar_t *b)
-{
-	if (!a && !b) return -1;
-	if (!a) return -1;
-	if (!b) return -1;
-
-	while ((*a) == (*b))
-	{
-		if (!(*a)) return 0;
-		a++;
-		b++;
-	}
-
-	return (((*a) < (*b)) ? -1 : 1);
-}
-
 
 DQN_FILE_SCOPE bool dqn_str_reverse(char *buf, const i32 bufSize)
 {
@@ -2014,6 +1993,43 @@ DQN_FILE_SCOPE u32 dqn_utf8_to_ucs(u32 *dest, u32 character)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+// wchar String Operations
+////////////////////////////////////////////////////////////////////////////////
+DQN_FILE_SCOPE wchar_t dqn_wchar_to_lower(wchar_t c)
+{
+	if (c >= L'A' && c <= L'Z')
+	{
+		i32 shiftOffset = L'a' - L'A';
+		return (c + (wchar_t)shiftOffset);
+	}
+
+	return c;
+}
+
+DQN_FILE_SCOPE i32 dqn_wstrlen(const wchar_t *a)
+{
+	i32 result = 0;
+	while (a && a[result]) result++;
+	return result;
+}
+
+DQN_FILE_SCOPE i32 dqn_wstrcmp(const wchar_t *a, const wchar_t *b)
+{
+	if (!a && !b) return -1;
+	if (!a) return -1;
+	if (!b) return -1;
+
+	while ((*a) == (*b))
+	{
+		if (!(*a)) return 0;
+		a++;
+		b++;
+	}
+
+	return (((*a) < (*b)) ? -1 : 1);
+}
+
+////////////////////////////////////////////////////////////////////////////////
 // File Operations
 ////////////////////////////////////////////////////////////////////////////////
 #ifdef DQN_WIN32
@@ -2144,9 +2160,8 @@ FILE_SCOPE bool dqn_file_open_internal(const wchar_t *const path,
 }
 
 DQN_FILE_SCOPE
-bool dqn_file_open_wide(const wchar_t *const path, DqnFile *const file,
-                        const u32 permissionFlags,
-                        const enum DqnFileAction action)
+bool dqn_file_openw(const wchar_t *const path, DqnFile *const file,
+                    const u32 permissionFlags, const enum DqnFileAction action)
 {
 	if (!file || !path) return false;
 #ifdef DQN_WIN32
