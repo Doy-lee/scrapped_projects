@@ -385,9 +385,16 @@ DQN_FILE_SCOPE u32 dqn_utf8_to_ucs(u32 *dest, u32 character);
 ////////////////////////////////////////////////////////////////////////////////
 // wchar String Operations
 ////////////////////////////////////////////////////////////////////////////////
-DQN_FILE_SCOPE wchar_t dqn_wchar_to_lower(wchar_t c);
+DQN_FILE_SCOPE bool    dqn_wchar_is_digit(const wchar_t c);
+DQN_FILE_SCOPE wchar_t dqn_wchar_to_lower(const wchar_t c);
+
 DQN_FILE_SCOPE i32     dqn_wstrlen       (const wchar_t *a);
 DQN_FILE_SCOPE i32     dqn_wstrcmp       (const wchar_t *a, const wchar_t *b);
+
+DQN_FILE_SCOPE bool    dqn_wstr_reverse  (wchar_t *buf, const i32 bufSize);
+
+DQN_FILE_SCOPE i32     dqn_wstr_to_i32   (const wchar_t *const buf, const i32 bufSize);
+DQN_FILE_SCOPE i32     dqn_i32_to_wstr   (i32 value, wchar_t *buf, i32 bufSize);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Win32 Specific
@@ -1995,7 +2002,13 @@ DQN_FILE_SCOPE u32 dqn_utf8_to_ucs(u32 *dest, u32 character)
 ////////////////////////////////////////////////////////////////////////////////
 // wchar String Operations
 ////////////////////////////////////////////////////////////////////////////////
-DQN_FILE_SCOPE wchar_t dqn_wchar_to_lower(wchar_t c)
+DQN_FILE_SCOPE bool dqn_wchar_is_digit(const wchar_t c)
+{
+	if (c >= L'0' && c <= L'9') return true;
+	return false;
+}
+
+DQN_FILE_SCOPE wchar_t dqn_wchar_to_lower(const wchar_t c)
 {
 	if (c >= L'A' && c <= L'Z')
 	{
@@ -2029,6 +2042,94 @@ DQN_FILE_SCOPE i32 dqn_wstrcmp(const wchar_t *a, const wchar_t *b)
 	return (((*a) < (*b)) ? -1 : 1);
 }
 
+DQN_FILE_SCOPE bool dqn_wstr_reverse(wchar_t *buf, const i32 bufSize)
+{
+	if (!buf) return false;
+	i32 mid = bufSize / 2;
+
+	for (i32 i = 0; i < mid; i++)
+	{
+		wchar_t tmp            = buf[i];
+		buf[i]                 = buf[(bufSize - 1) - i];
+		buf[(bufSize - 1) - i] = tmp;
+	}
+
+	return true;
+}
+
+DQN_FILE_SCOPE i32 dqn_wstr_to_i32(const wchar_t *const buf, const i32 bufSize)
+{
+	if (!buf || bufSize == 0) return 0;
+
+	i32 index       = 0;
+	bool isNegative = false;
+	if (buf[index] == L'-' || buf[index] == L'+')
+	{
+		if (buf[index] == L'-') isNegative = true;
+		index++;
+	}
+	else if (!dqn_wchar_is_digit(buf[index]))
+	{
+		return 0;
+	}
+
+	i32 result = 0;
+	for (i32 i = index; i < bufSize; i++)
+	{
+		if (dqn_wchar_is_digit(buf[i]))
+		{
+			result *= 10;
+			result += (buf[i] - L'0');
+		}
+		else
+		{
+			break;
+		}
+	}
+
+	if (isNegative) result *= -1;
+
+	return result;
+}
+
+DQN_FILE_SCOPE i32 dqn_i32_to_wstr(i32 value, wchar_t *buf, i32 bufSize)
+{
+	if (!buf || bufSize == 0) return 0;
+
+	if (value == 0)
+	{
+		buf[0] = L'0';
+		return 0;
+	}
+	
+	// NOTE(doyle): Max 32bit integer (+-)2147483647
+	i32 charIndex = 0;
+	bool negative           = false;
+	if (value < 0) negative = true;
+
+	if (negative) buf[charIndex++] = L'-';
+
+	i32 val = DQN_ABS(value);
+	while (val != 0 && charIndex < bufSize)
+	{
+		i32 rem          = val % 10;
+		buf[charIndex++] = (u8)rem + '0';
+		val /= 10;
+	}
+
+	// NOTE(doyle): If string is negative, we only want to reverse starting
+	// from the second character, so we don't put the negative sign at the end
+	if (negative)
+	{
+		dqn_wstr_reverse(buf + 1, charIndex - 1);
+	}
+	else
+	{
+		dqn_wstr_reverse(buf, charIndex);
+	}
+
+	return charIndex;
+}
 ////////////////////////////////////////////////////////////////////////////////
 // File Operations
 ////////////////////////////////////////////////////////////////////////////////
@@ -2165,12 +2266,10 @@ bool dqn_file_openw(const wchar_t *const path, DqnFile *const file,
 {
 	if (!file || !path) return false;
 #ifdef DQN_WIN32
-	dqn_file_open_internal(path, file, permissionFlags, action);
+	return dqn_file_open_internal(path, file, permissionFlags, action);
 #else
 	return false;
 #endif
-
-	return true;
 }
 
 DQN_FILE_SCOPE
