@@ -127,7 +127,7 @@ FILE_SCOPE void dsync_unit_test()
 
 enum Win32Menu
 {
-	win32menu_exit
+	win32menu_exit = 82,
 };
 
 #define WIN32_TASKBAR_ICON_UID 0x282ACD13
@@ -150,11 +150,30 @@ FILE_SCOPE LRESULT CALLBACK win32_main_callback(HWND window, UINT msg,
 			notifyIconData.hWnd             = window;
 			notifyIconData.uCallbackMessage = WIN32_TASKBAR_ICON_MSG;
 			notifyIconData.uID              = WIN32_TASKBAR_ICON_UID;
-			notifyIconData.uFlags           = NIF_TIP | NIF_MESSAGE;
+			notifyIconData.uFlags           = NIF_ICON | NIF_TIP | NIF_MESSAGE;
 			notifyIconData.hIcon            = LoadIcon(NULL, IDI_APPLICATION);
 			swprintf_s(notifyIconData.szTip,
 			           DQN_ARRAY_COUNT(notifyIconData.szTip), L"Dsync");
 			DQN_ASSERT(Shell_NotifyIconW(NIM_ADD, &notifyIconData));
+		}
+		break;
+
+		case WM_COMMAND:
+		{
+			switch (LOWORD(wParam))
+			{
+				case win32menu_exit:
+				{
+					PostQuitMessage(0);
+				}
+				break;
+
+				default:
+				{
+					result = DefWindowProcW(window, msg, wParam, lParam);
+				}
+				break;
+			}
 		}
 		break;
 
@@ -165,16 +184,19 @@ FILE_SCOPE LRESULT CALLBACK win32_main_callback(HWND window, UINT msg,
 				POINT p;
 				GetCursorPos(&p);
 
-				// A little Windows quirk.  You need to do this so the menu
+				// A little Windows quirk. You need to do this so the menu
 				// disappears if the user clicks off it
 				SetForegroundWindow(window);
 				u32 clickedCmd = TrackPopupMenu(
-				    globalState.popUpMenu, (TPM_RETURNCMD | TPM_LEFTALIGN |
-				                            TPM_BOTTOMALIGN | TPM_RIGHTBUTTON),
+				    globalState.popUpMenu, (TPM_LEFTALIGN | TPM_BOTTOMALIGN),
 				    p.x, p.y, 0, window, 0);
 
-				if (clickedCmd == win32menu_exit)
-					SendMessage(window, WM_CLOSE, 0, 0);
+				// NOTE: win32 documented bug needs this.
+				PostMessage(window, WM_NULL, 0, 0);
+			}
+			else
+			{
+				result = DefWindowProcW(window, msg, wParam, lParam);
 			}
 		}
 		break;
@@ -1193,66 +1215,76 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 		////////////////////////////////////////////////////////////////////////
 		const i32 NUM_HANDLES = globalState.locations.numWatch;
 		DWORD waitSignalled   = WaitForMultipleObjects(
-		    NUM_HANDLES, fileFindChangeArray, false, INFINITE);
+		    NUM_HANDLES, fileFindChangeArray, false, 500);
 
 		////////////////////////////////////////////////////////////////////////
 		// File Changes Detected
 		////////////////////////////////////////////////////////////////////////
-		DQN_ASSERT(waitSignalled != WAIT_TIMEOUT);
-		if (waitSignalled == WAIT_FAILED)
+		if (waitSignalled == WAIT_TIMEOUT)
 		{
-			dqn_win32_display_last_error("WaitForMultipleObjects() failed");
-			return 0;
+			// Do nothing
 		}
-
-		i32 signalIndex = waitSignalled - WAIT_OBJECT_0;
-		DQN_ASSERT(signalIndex >= 0 && signalIndex < NUM_HANDLES);
-		if (FindNextChangeNotification(fileFindChangeArray[signalIndex]) == 0)
+		else
 		{
-			dqn_win32_display_last_error("FindNextChangeNotification() failed");
-			return 0;
-		}
+			if (waitSignalled == WAIT_FAILED)
+			{
+				dqn_win32_display_last_error("WaitForMultipleObjects() failed");
+				return 0;
+			}
 
-		////////////////////////////////////////////////////////////////////////
-		// Handle file change logic
-		////////////////////////////////////////////////////////////////////////
-		WatchPath *watch = &globalState.locations.watch[signalIndex];
-		watch->numChanges++;
+			i32 signalIndex = waitSignalled - WAIT_OBJECT_0;
+			DQN_ASSERT(signalIndex >= 0 && signalIndex < NUM_HANDLES);
+			if (FindNextChangeNotification(fileFindChangeArray[signalIndex]) ==
+			    0)
+			{
+				dqn_win32_display_last_error(
+				    "FindNextChangeNotification() failed");
+				return 0;
+			}
 
-		// NOTE: If first time detected change, don't backup until we change it
-		// again after the minimum time between backup
-		if (watch->timeLastDetectedChange == 0)
-			watch->timeLastDetectedChange = (f32)dqn_time_now_in_s();
+			////////////////////////////////////////////////////////////////////////
+			// Handle file change logic
+			////////////////////////////////////////////////////////////////////////
+			WatchPath *watch = &globalState.locations.watch[signalIndex];
+			watch->numChanges++;
 
-		const f32 MIN_TIME_BETWEEN_BACKUP_IN_S = (60.0f * 2.0f);
-		f32 secondsElapsed =
-		    (f32)dqn_time_now_in_s() - watch->timeLastDetectedChange;
-		if (secondsElapsed >= MIN_TIME_BETWEEN_BACKUP_IN_S)
-		{
-			dsync_backup(watch->path, globalState.locations.backup,
-			             globalState.locations.numBackup);
+			// NOTE: If first time detected change, don't backup until we change
+			// it
+			// again after the minimum time between backup
+			if (watch->timeLastDetectedChange == 0)
+				watch->timeLastDetectedChange = (f32)dqn_time_now_in_s();
 
-			NOTIFYICONDATAW notifyIconData = {};
-			notifyIconData.cbSize          = sizeof(notifyIconData);
-			notifyIconData.hWnd            = mainWindow;
-			notifyIconData.uID             = WIN32_TASKBAR_ICON_UID;
-			notifyIconData.uFlags          = NIF_INFO | NIF_REALTIME;
-			notifyIconData.hIcon           = LoadIcon(NULL, IDI_APPLICATION);
-			notifyIconData.dwState         = NIS_SHAREDICON;
-			swprintf_s(notifyIconData.szInfo,
-			           DQN_ARRAY_COUNT(notifyIconData.szInfo),
-			           L"Backing up %d changes in \"%s\"", watch->numChanges,
-			           watch->path);
+			const f32 MIN_TIME_BETWEEN_BACKUP_IN_S = (60.0f * 2.0f);
+			f32 secondsElapsed =
+			    (f32)dqn_time_now_in_s() - watch->timeLastDetectedChange;
+			if (secondsElapsed >= MIN_TIME_BETWEEN_BACKUP_IN_S)
+			{
+				dsync_backup(watch->path, globalState.locations.backup,
+				             globalState.locations.numBackup);
 
-			swprintf_s(notifyIconData.szInfoTitle,
-			           DQN_ARRAY_COUNT(notifyIconData.szInfoTitle), L"Dsync");
+				NOTIFYICONDATAW notifyIconData = {};
+				notifyIconData.cbSize          = sizeof(notifyIconData);
+				notifyIconData.hWnd            = mainWindow;
+				notifyIconData.uID             = WIN32_TASKBAR_ICON_UID;
+				notifyIconData.uFlags          = NIF_INFO | NIF_REALTIME;
+				notifyIconData.hIcon   = LoadIcon(NULL, IDI_APPLICATION);
+				notifyIconData.dwState = NIS_SHAREDICON;
+				swprintf_s(notifyIconData.szInfo,
+				           DQN_ARRAY_COUNT(notifyIconData.szInfo),
+				           L"Backing up %d changes in \"%s\"",
+				           watch->numChanges, watch->path);
 
-			notifyIconData.dwInfoFlags =
-			    NIIF_INFO | NIIF_NOSOUND | NIIF_RESPECT_QUIET_TIME;
-			DQN_ASSERT(Shell_NotifyIconW(NIM_MODIFY, &notifyIconData));
+				swprintf_s(notifyIconData.szInfoTitle,
+				           DQN_ARRAY_COUNT(notifyIconData.szInfoTitle),
+				           L"Dsync");
 
-			watch->numChanges             = 0;
-			watch->timeLastDetectedChange = (f32)dqn_time_now_in_s();
+				notifyIconData.dwInfoFlags =
+				    NIIF_INFO | NIIF_NOSOUND | NIIF_RESPECT_QUIET_TIME;
+				DQN_ASSERT(Shell_NotifyIconW(NIM_MODIFY, &notifyIconData));
+
+				watch->numChanges             = 0;
+				watch->timeLastDetectedChange = (f32)dqn_time_now_in_s();
+			}
 		}
 	}
 
