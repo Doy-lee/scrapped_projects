@@ -43,6 +43,8 @@ typedef struct DsyncState {
 } DsyncState;
 
 FILE_SCOPE DsyncState globalState;
+FILE_SCOPE bool       globalRunning;
+
 FILE_SCOPE const char *const GLOBAL_INI_SECTION_WATCH_LOCATIONS     = "WatchLocations";
 FILE_SCOPE const char *const GLOBAL_INI_SECTION_BACKUP_TO_LOCATIONS = "BackupToLocations";
 FILE_SCOPE const char *const GLOBAL_INI_PROPERTY_LOCATION           = "location";
@@ -166,6 +168,7 @@ FILE_SCOPE LRESULT CALLBACK win32_main_callback(HWND window, UINT msg,
 				case win32menu_exit:
 				{
 					PostQuitMessage(0);
+					globalRunning = false;
 				}
 				break;
 
@@ -866,7 +869,7 @@ FILE_SCOPE void dsync_console_handle_args(LPWSTR lpCmdLine)
 // NOTE: This is for debugging in Visual Studios. Since there is no console
 // when debugging. But in release, when using the executable on the command
 // line it does have one so we don't need to allocate etc.
-#if 0
+#if 1
 	AllocConsole();
 #else
 	if (AttachConsole(ATTACH_PARENT_PROCESS) == 0)
@@ -1231,7 +1234,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 #endif
 	}
 
-	while (true)
+	globalRunning = true;
+	while (globalRunning)
 	{
 		MSG msg;
 #if 1
