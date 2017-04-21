@@ -6,8 +6,6 @@
 #include <Pathcch.h>  // PathCchRemoveFileSpec
 #include <Shellapi.h> // Shell_NotifyIconW
 
-#include "dsync.h"
-
 #define DQN_IMPLEMENTATION
 #include "dqn.h"
 
