@@ -22,8 +22,11 @@
 
 typedef struct WatchPath
 {
+	HANDLE monitorHandle;
+	HANDLE waitHandle;
+
 	wchar_t *path;
-	f32 timeLastDetectedChange;
+	f32 changeTimestamp;
 	u32 numChanges;
 } WatchPath;
 
@@ -418,8 +421,8 @@ FILE_SCOPE DsyncLocations dsync_config_load(DqnPushBuffer *pushBuffer)
 			locations.watch[i].path                   = watchLocations[i];
 
 			// TODO(doyle): Not being cleared to zero in the allocate.
-			locations.watch[i].timeLastDetectedChange = 0;
-			locations.watch[i].numChanges             = 0;
+			locations.watch[i].changeTimestamp = 0;
+			locations.watch[i].numChanges      = 0;
 		}
 	}
 	dsync_config_load_to_ini_close(ini, &configFile);
@@ -664,8 +667,8 @@ void dsync_backup(wchar_t *path, wchar_t **const backupLocations,
 	////////////////////////////////////////////////////////////////////////////
 	STARTUPINFOW startInfo        = {0};
 	PROCESS_INFORMATION procInfo = {0};
-	if (CreateProcessW(NULL, cmd, NULL, NULL, false, 0, NULL, NULL,
-	                  &startInfo, &procInfo))
+	if (CreateProcessW(NULL, cmd, NULL, NULL, false, CREATE_NO_WINDOW, NULL,
+	                   NULL, &startInfo, &procInfo))
 	{
 		DWORD exitCode = 0;
 		WaitForSingleObject(procInfo.hProcess, INFINITE);
@@ -1089,6 +1092,18 @@ FILE_SCOPE void dsync_console_handle_args(LPWSTR lpCmdLine)
 	}
 }
 
+VOID CALLBACK win32_monitor_files_callback(PVOID lpParameter,
+                                           BOOLEAN TimerOrWaitFired)
+{
+	WatchPath *watch = (WatchPath *)lpParameter;
+	OutputDebugString("Monitor file callback\n");
+
+	if (FindNextChangeNotification(watch->monitorHandle) == 0)
+	{
+		dqn_win32_display_last_error("FindNextChangeNotification() failed");
+	}
+}
+
 // BIG TODO(doyle): This program only works if, after it detects a change that
 // the user continues working and once it hits the threshold, then if it detects
 // another change will it backup.
@@ -1186,24 +1201,42 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 	    &pushBuffer, globalState.locations.numWatch);
 	for (u32 i = 0; i < globalState.locations.numWatch; i++)
 	{
-		const u32 FLAGS = FILE_NOTIFY_CHANGE_DIR_NAME |
+		WatchPath *watch = &globalState.locations.watch[i];
+		const u32 FLAGS  = FILE_NOTIFY_CHANGE_DIR_NAME |
 		                  FILE_NOTIFY_CHANGE_LAST_WRITE |
 		                  FILE_NOTIFY_CHANGE_FILE_NAME;
 		const bool WATCH_ALL_SUBDIRECTORIES = true;
 
+#if 1
 		fileFindChangeArray[i] = FindFirstChangeNotificationW(
-		    globalState.locations.watch[i].path, WATCH_ALL_SUBDIRECTORIES, FLAGS);
+		    watch->path, WATCH_ALL_SUBDIRECTORIES, FLAGS);
 
 		if (fileFindChangeArray[i] == INVALID_HANDLE_VALUE)
 		{
 			DQN_WIN32_ERROR_BOX("FindFirstChangeNotification() failed.", NULL);
 			return -1;
 		}
+#else
+		watch->monitorHandle = FindFirstChangeNotificationW(
+		    watch->path, WATCH_ALL_SUBDIRECTORIES, FLAGS);
+		if (watch->monitorHandle == INVALID_HANDLE_VALUE)
+		{
+			DQN_WIN32_ERROR_BOX("FindFirstChangeNotification() failed.", NULL);
+			return -1;
+		}
+
+		RegisterWaitForSingleObject(&watch->waitHandle, watch->monitorHandle,
+		                            win32_monitor_files_callback, (PVOID)watch,
+		                            INFINITE,
+		                            WT_EXECUTEDEFAULT | WT_EXECUTEONLYONCE);
+
+#endif
 	}
 
 	while (true)
 	{
 		MSG msg;
+#if 1
 		while (PeekMessage(&msg, mainWindow, 0, 0, PM_REMOVE))
 		{
 			TranslateMessage(&msg);
@@ -1222,7 +1255,50 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 		////////////////////////////////////////////////////////////////////////
 		if (waitSignalled == WAIT_TIMEOUT)
 		{
-			// Do nothing
+			for (u32 i = 0; i < globalState.locations.numWatch; i++)
+			{
+				WatchPath *watch = &globalState.locations.watch[i];
+				if (watch->numChanges > 0)
+				{
+					const f32 MIN_TIME_BETWEEN_BACKUP_IN_S = (60.0f * 2.0f);
+
+					f32 elapsedSec =
+					    (f32)dqn_time_now_in_s() - watch->changeTimestamp;
+					DQN_ASSERT(watch->changeTimestamp > 0);
+					DQN_ASSERT(elapsedSec >= 0);
+
+					if (elapsedSec >= MIN_TIME_BETWEEN_BACKUP_IN_S)
+					{
+						dsync_backup(watch->path, globalState.locations.backup,
+						             globalState.locations.numBackup);
+
+						NOTIFYICONDATAW notifyIconData = {};
+						notifyIconData.cbSize          = sizeof(notifyIconData);
+						notifyIconData.hWnd            = mainWindow;
+						notifyIconData.uID             = WIN32_TASKBAR_ICON_UID;
+						notifyIconData.uFlags = NIF_INFO | NIF_REALTIME;
+						notifyIconData.hIcon  = LoadIcon(NULL, IDI_APPLICATION);
+						notifyIconData.dwState = NIS_SHAREDICON;
+						swprintf_s(notifyIconData.szInfo,
+						           DQN_ARRAY_COUNT(notifyIconData.szInfo),
+						           L"Backing up %d changes in \"%s\"",
+						           watch->numChanges, watch->path);
+
+						swprintf_s(notifyIconData.szInfoTitle,
+						           DQN_ARRAY_COUNT(notifyIconData.szInfoTitle),
+						           L"Dsync");
+
+						notifyIconData.dwInfoFlags =
+						    NIIF_INFO | NIIF_NOSOUND | NIIF_RESPECT_QUIET_TIME;
+						DQN_ASSERT(
+						    Shell_NotifyIconW(NIM_MODIFY, &notifyIconData));
+
+						watch->numChanges      = 0;
+						watch->changeTimestamp = 0;
+
+					}
+				}
+			}
 		}
 		else
 		{
@@ -1243,49 +1319,29 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 			}
 
 			////////////////////////////////////////////////////////////////////////
-			// Handle file change logic
+			// Mark on the watched path that a change has been registered
 			////////////////////////////////////////////////////////////////////////
 			WatchPath *watch = &globalState.locations.watch[signalIndex];
 			watch->numChanges++;
 
 			// NOTE: If first time detected change, don't backup until we change
-			// it
-			// again after the minimum time between backup
-			if (watch->timeLastDetectedChange == 0)
-				watch->timeLastDetectedChange = (f32)dqn_time_now_in_s();
+			// it again after the minimum time between backup
+			if (watch->changeTimestamp == 0)
+				watch->changeTimestamp = (f32)dqn_time_now_in_s();
 
-			const f32 MIN_TIME_BETWEEN_BACKUP_IN_S = (60.0f * 2.0f);
-			f32 secondsElapsed =
-			    (f32)dqn_time_now_in_s() - watch->timeLastDetectedChange;
-			if (secondsElapsed >= MIN_TIME_BETWEEN_BACKUP_IN_S)
-			{
-				dsync_backup(watch->path, globalState.locations.backup,
-				             globalState.locations.numBackup);
-
-				NOTIFYICONDATAW notifyIconData = {};
-				notifyIconData.cbSize          = sizeof(notifyIconData);
-				notifyIconData.hWnd            = mainWindow;
-				notifyIconData.uID             = WIN32_TASKBAR_ICON_UID;
-				notifyIconData.uFlags          = NIF_INFO | NIF_REALTIME;
-				notifyIconData.hIcon   = LoadIcon(NULL, IDI_APPLICATION);
-				notifyIconData.dwState = NIS_SHAREDICON;
-				swprintf_s(notifyIconData.szInfo,
-				           DQN_ARRAY_COUNT(notifyIconData.szInfo),
-				           L"Backing up %d changes in \"%s\"",
-				           watch->numChanges, watch->path);
-
-				swprintf_s(notifyIconData.szInfoTitle,
-				           DQN_ARRAY_COUNT(notifyIconData.szInfoTitle),
-				           L"Dsync");
-
-				notifyIconData.dwInfoFlags =
-				    NIIF_INFO | NIIF_NOSOUND | NIIF_RESPECT_QUIET_TIME;
-				DQN_ASSERT(Shell_NotifyIconW(NIM_MODIFY, &notifyIconData));
-
-				watch->numChanges             = 0;
-				watch->timeLastDetectedChange = (f32)dqn_time_now_in_s();
-			}
+			// TODO(doyle): This triggers multiple times for one change. Why?
+			// Finding out why might solve our multithreading problem and let us
+			// use that method .. which would be much better.
+			OutputDebugString("Detected file change in watch list\n");
 		}
+
+#else
+		while (GetMessage(&msg, mainWindow, 0, 0) > 0)
+		{
+			TranslateMessage(&msg);
+			DispatchMessageW(&msg);
+		}
+#endif
 	}
 
 	return 0;
