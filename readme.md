@@ -9,8 +9,8 @@ Dsync is built using the WIN32API and leverages 7zip executable, 7za.exe to back
 Currently when the utility detects a change in the folder, every 2 minutes (non-configurable at the moment) it will 7zip the directory to the backup directories. It ONLY supports watching directories at the moment.
 
 # Usage
-1. Use "dsync watch <directory>" in the command line to add directories to the list.
-2. Use "dsync backupto <directory>" in the command line to add backup destinations.
+1. Use "dsync watch \<directory>" in the command line to add directories to the list.
+2. Use "dsync backupto \<directory>" in the command line to add backup destinations.
 3. Execute dsync on its own to with no arguments to launch as an app in the tray-icon.
 
 Done! When it detects changes, after 2 minutes Windows will give you a notification that the directory is being backed up to your locations. The app will NOT run if you do not specify atleast 1 watch and backup directory.
