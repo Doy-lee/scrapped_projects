@@ -27,7 +27,7 @@ set compileFlags=-MT -Z7 -W3 -Od -WX
 REM Create a set entry point to main, run as console app
 set linkLibraries=user32.lib kernel32.lib gdi32.lib shlwapi.lib shell32.lib Pathcch.lib
 
-cl %compileFlags% ..\src\dsync.cpp /link -subsystem:WINDOWS,5.1 %linkLibraries% /out:"dsync.exe"
+cl %compileFlags% ..\src\UnityBuild\UnityBuild.cpp /link -subsystem:WINDOWS,5.1 %linkLibraries% /out:"dsync.exe"
 
 :end
 popd

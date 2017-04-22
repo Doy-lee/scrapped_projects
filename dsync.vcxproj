@@ -19,7 +19,17 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="src\dsync.cpp" />
+    <ClCompile Include="src\Dsync.cpp" />
+    <ClCompile Include="src\DsyncConfig.cpp" />
+    <ClCompile Include="src\DsyncConsole.cpp" />
+    <ClCompile Include="src\Win32Dsync.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\dqn.h" />
+    <ClInclude Include="src\Dsync.h" />
+    <ClInclude Include="src\DsyncConfig.h" />
+    <ClInclude Include="src\DsyncConsole.h" />
+    <ClInclude Include="src\Win32Dsync.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{28E24D4F-D6DE-428B-B61E-64DAC0B05E74}</ProjectGuid>
@@ -74,16 +84,18 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <OutDir>.\bin\</OutDir>
     <IntDir>.\bin\</IntDir>
+    <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <SDLCheck>true</SDLCheck>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
     </ClCompile>
     <Link />
     <Link>
-      <AdditionalDependencies>Shlwapi.lib;Pathcch.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>shlwapi.lib;Pathcch.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <GenerateDebugInformation>Debug</GenerateDebugInformation>
       <SubSystem>Windows</SubSystem>
     </Link>
