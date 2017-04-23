@@ -1,8 +1,8 @@
-#include "Win32Dsync.h"
+#include "Win32Dwcopy.h"
 
-#include "Dsync.h"
-#include "DsyncConfig.h"
-#include "DsyncConsole.h"
+#include "Dwcopy.h"
+#include "DwcopyConfig.h"
+#include "DwcopyConsole.h"
 #include "dqn.h"
 
 #include <Pathcch.h>  // PathCchRemoveFileSpec
@@ -46,7 +46,7 @@ FILE_SCOPE LRESULT CALLBACK win32_main_callback(HWND window, UINT msg,
 			notifyIconData.uFlags           = NIF_ICON | NIF_TIP | NIF_MESSAGE;
 			notifyIconData.hIcon            = LoadIcon(NULL, IDI_APPLICATION);
 			swprintf_s(notifyIconData.szTip,
-			           DQN_ARRAY_COUNT(notifyIconData.szTip), L"Dsync");
+			           DQN_ARRAY_COUNT(notifyIconData.szTip), L"Dwcopy");
 			DQN_ASSERT(Shell_NotifyIconW(NIM_ADD, &notifyIconData));
 		}
 		break;
@@ -171,7 +171,7 @@ u32 win32_make_path_to_directory(const wchar_t *const path,
 VOID CALLBACK win32_monitor_files_callback(PVOID lpParameter,
                                            BOOLEAN TimerOrWaitFired)
 {
-	DsyncWatchPath *watch = (DsyncWatchPath *)lpParameter;
+	DwcopyWatchPath *watch = (DwcopyWatchPath *)lpParameter;
 	OutputDebugString("Monitor file callback\n");
 
 	if (FindNextChangeNotification(watch->monitorHandle) == 0)
@@ -324,7 +324,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
 		i32 argc;
 		wchar_t **argv = CommandLineToArgvW(lpCmdLine, &argc);
-		dsync_console_handle_args(argc, argv);
+		dwcopy_console_handle_args(argc, argv);
 		return 0;
 	}
 
@@ -344,7 +344,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 		    LoadCursor(NULL, IDC_ARROW),
 		    NULL,
 		    L"", // LPCTSTR lpszMenuName
-		    L"DsyncWindowClass",
+		    L"DwcopyWindowClass",
 		    NULL, // HICON hIconSm
 		};
 
@@ -371,13 +371,13 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 	////////////////////////////////////////////////////////////////////////////
 	DqnPushBuffer pushBuffer = {};
 	dqn_push_buffer_init(&pushBuffer, DQN_KILOBYTE(512), 4);
-	DsyncLocations locations = dsync_config_load(&pushBuffer);
+	DwcopyLocations locations = dwcopy_config_load(&pushBuffer);
 
 	if (locations.numBackup <= 0 ||
 	    locations.numWatch <= 0)
 	{
 		DQN_WIN32_ERROR_BOX(
-		    "dsync_config_load() returned empty: There are no backup locations "
+		    "dwcopy_config_load() returned empty: There are no backup locations "
 		    "and/or watch locations.",
 		    NULL);
 		return 0;
@@ -385,7 +385,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 	else if (!locations.watch || !locations.backup)
 	{
 		DQN_WIN32_ERROR_BOX(
-		    "dsync_config_load() returned empty: There are no strings defined "
+		    "dwcopy_config_load() returned empty: There are no strings defined "
 		    "in the backup and/or watch locations",
 		    NULL);
 		return 0;
@@ -398,7 +398,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 	    &pushBuffer, locations.numWatch);
 	for (u32 i = 0; i < locations.numWatch; i++)
 	{
-		DsyncWatchPath *watch = &locations.watch[i];
+		DwcopyWatchPath *watch = &locations.watch[i];
 		const u32 FLAGS  = FILE_NOTIFY_CHANGE_DIR_NAME |
 		                  FILE_NOTIFY_CHANGE_LAST_WRITE |
 		                  FILE_NOTIFY_CHANGE_FILE_NAME;
@@ -455,7 +455,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 		{
 			for (u32 i = 0; i < locations.numWatch; i++)
 			{
-				DsyncWatchPath *watch = &locations.watch[i];
+				DwcopyWatchPath *watch = &locations.watch[i];
 				if (watch->numChanges > 0)
 				{
 					const f32 MIN_TIME_BETWEEN_BACKUP_IN_S = (60.0f * 2.0f);
@@ -467,7 +467,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
 					if (elapsedSec >= MIN_TIME_BETWEEN_BACKUP_IN_S)
 					{
-						dsync_backup(watch->path, locations.backup,
+						dwcopy_backup(watch->path, locations.backup,
 						             locations.numBackup);
 
 						NOTIFYICONDATAW notifyIconData = {};
@@ -484,7 +484,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
 						swprintf_s(notifyIconData.szInfoTitle,
 						           DQN_ARRAY_COUNT(notifyIconData.szInfoTitle),
-						           L"Dsync");
+						           L"Dwcopy");
 
 						notifyIconData.dwInfoFlags =
 						    NIIF_INFO | NIIF_NOSOUND | NIIF_RESPECT_QUIET_TIME;
@@ -519,7 +519,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 			////////////////////////////////////////////////////////////////////////
 			// Mark on the watched path that a change has been registered
 			////////////////////////////////////////////////////////////////////////
-			DsyncWatchPath *watch = &locations.watch[signalIndex];
+			DwcopyWatchPath *watch = &locations.watch[signalIndex];
 			watch->numChanges++;
 
 			// NOTE: If first time detected change, don't backup until we change

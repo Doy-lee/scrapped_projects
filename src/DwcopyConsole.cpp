@@ -1,13 +1,13 @@
-#include "DsyncConsole.h"
+#include "DwcopyConsole.h"
 
-#include "Dsync.h"
-#include "DsyncConfig.h"
-#include "Win32Dsync.h"
+#include "Dwcopy.h"
+#include "DwcopyConfig.h"
+#include "Win32Dwcopy.h"
 
 #include <Shlwapi.h> // PathFileExists, PathIsDirectory
 #include <stdio.h>
 
-void dsync_console_write(const wchar_t *const string, i32 len)
+void dwcopy_console_write(const wchar_t *const string, i32 len)
 {
 	DWORD numWritten = 0;
 	if (len == -1)
@@ -20,11 +20,11 @@ void dsync_console_write(const wchar_t *const string, i32 len)
 	}
 }
 
-FILE_SCOPE void dsync_console_write_default_help()
+FILE_SCOPE void dwcopy_console_write_default_help()
 {
-	dsync_console_write(
-	    L"Dsync by Doyle at github.com/doy-lee/dsync\n\n"
-	    L"Usage: dsync {watch|backupto} <directory>\n\n"
+	dwcopy_console_write(
+	    L"Dwcopy by Doyle at github.com/doy-lee/dwcopy\n\n"
+	    L"Usage: dwcopy {watch|backupto} <directory>\n\n"
 	    L"BEWARE: Setting a watch directory as a backup directory will cause an infinite backing up routine\n\n"
 
 	    L"Commands:\n"
@@ -32,13 +32,13 @@ FILE_SCOPE void dsync_console_write_default_help()
 	    L"help                                - Show this help dialog\n"
 	    L"list                                - List the sync configuration\n"
 	    L"remove {watch|backupto} <index>     - Remove the entry index from sync configuration.\n"
-	    L"                                      Use 'dsync list' to view the indexes\n"
+	    L"                                      Use 'dwcopy list' to view the indexes\n"
 	    L"watch                   <directory> - Add directory to, the watch list for backing up.\n\n"
 	    );
 }
 
 FILE_SCOPE void
-dsync_console_print_out_section_internal(const DqnIni *const ini,
+dwcopy_console_print_out_section_internal(const DqnIni *const ini,
                                         const char *const sectionName,
                                         const wchar_t *const linePrefix)
 {
@@ -61,12 +61,12 @@ dsync_console_print_out_section_internal(const DqnIni *const ini,
 			i32 len =
 			    swprintf_s(output, DQN_ARRAY_COUNT(output), L"%s[%03d]: %s\n",
 			               linePrefix, propertyIndex, valW);
-			dsync_console_write(output, len);
+			dwcopy_console_write(output, len);
 		}
 	}
 }
 
-void dsync_console_handle_args(const i32 argc, wchar_t **const argv)
+void dwcopy_console_handle_args(const i32 argc, wchar_t **const argv)
 {
 	if (argc < 4)
 	{
@@ -80,7 +80,7 @@ void dsync_console_handle_args(const i32 argc, wchar_t **const argv)
 	}
 	else
 	{
-		dsync_console_write_default_help();
+		dwcopy_console_write_default_help();
 		return;
 	}
 
@@ -99,17 +99,17 @@ void dsync_console_handle_args(const i32 argc, wchar_t **const argv)
 			dqn_push_buffer_init(&buffer, DQN_KILOBYTE(512), 4);
 
 			DqnFile configFile = {};
-			DqnIni *ini = dsync_config_load_to_ini(&buffer, false, &configFile);
+			DqnIni *ini = dwcopy_config_load_to_ini(&buffer, false, &configFile);
 			dqn_file_close(&configFile);
 
-			dsync_console_print_out_section_internal(
+			dwcopy_console_print_out_section_internal(
 			    ini, GLOBAL_INI_SECTION_BACKUP_TO_LOCATIONS, L"Backup Locations");
-			dsync_console_print_out_section_internal(
+			dwcopy_console_print_out_section_internal(
 			    ini, GLOBAL_INI_SECTION_WATCH_LOCATIONS, L" Watch Locations");
 		}
 		else
 		{
-			dsync_console_write_default_help();
+			dwcopy_console_write_default_help();
 		}
 	}
 	else if (argc == 2)
@@ -118,7 +118,7 @@ void dsync_console_handle_args(const i32 argc, wchar_t **const argv)
 		{
 			if (!PathIsDirectoryW(argv[1]))
 			{
-				dsync_console_write(
+				dwcopy_console_write(
 				    L"Backup/Watch argument was not a "
 				    L"directory\n Sorry we don't support "
 				    L"individual watch on files at the moment.");
@@ -140,12 +140,12 @@ void dsync_console_handle_args(const i32 argc, wchar_t **const argv)
 			}
 			else if (dqn_wstrcmp(argv[0], L"help") == 0)
 			{
-				dsync_console_write_default_help();
+				dwcopy_console_write_default_help();
 				return;
 			}
 			else
 			{
-				dsync_console_write_default_help();
+				dwcopy_console_write_default_help();
 				return;
 			}
 
@@ -155,7 +155,7 @@ void dsync_console_handle_args(const i32 argc, wchar_t **const argv)
 				dqn_push_buffer_init(&buffer, DQN_KILOBYTE(512), 4);
 				DqnFile configFile = {};
 				DqnIni *ini =
-				    dsync_config_load_to_ini(&buffer, true, &configFile);
+				    dwcopy_config_load_to_ini(&buffer, true, &configFile);
 				dqn_file_close(&configFile);
 				DQN_ASSERT(ini);
 
@@ -187,13 +187,13 @@ void dsync_console_handle_args(const i32 argc, wchar_t **const argv)
 				                     GLOBAL_INI_PROPERTY_LOCATION, 0, destPath,
 				                     0);
 
-				dsync_config_write_to_disk(ini, &buffer);
-				dsync_config_load_to_ini_close(ini, &configFile);
+				dwcopy_config_write_to_disk(ini, &buffer);
+				dwcopy_config_load_to_ini_close(ini, &configFile);
 			}
 		}
 		else
 		{
-			dsync_console_write(
+			dwcopy_console_write(
 			    L"Path to watch/backup was determined invalid by Windows\n");
 		}
 	}
@@ -213,7 +213,7 @@ void dsync_console_handle_args(const i32 argc, wchar_t **const argv)
 			}
 			else
 			{
-				dsync_console_write_default_help();
+				dwcopy_console_write_default_help();
 				return;
 			}
 
@@ -221,7 +221,7 @@ void dsync_console_handle_args(const i32 argc, wchar_t **const argv)
 			dqn_push_buffer_init(&buffer, DQN_KILOBYTE(512), 4);
 
 			DqnFile configFile = {};
-			DqnIni *ini = dsync_config_load_to_ini(&buffer, true, &configFile);
+			DqnIni *ini = dwcopy_config_load_to_ini(&buffer, true, &configFile);
 			dqn_file_close(&configFile);
 			DQN_ASSERT(ini);
 
@@ -246,7 +246,7 @@ void dsync_console_handle_args(const i32 argc, wchar_t **const argv)
 				wchar_t output[1024] = {};
 				i32 len = swprintf_s(output, DQN_ARRAY_COUNT(output),
 				           L"No sections found in ini file for: %s", argv[1]);
-				dsync_console_write(output, len);
+				dwcopy_console_write(output, len);
 				return;
 			}
 
@@ -257,22 +257,22 @@ void dsync_console_handle_args(const i32 argc, wchar_t **const argv)
 				wchar_t output[1024] = {};
 				i32 len = swprintf_s(output, DQN_ARRAY_COUNT(output),
 				           L"Supplied index is invalid: %s", argv[1]);
-				dsync_console_write(output, len);
+				dwcopy_console_write(output, len);
 				return;
 			}
 			dqn_ini_property_remove(ini, sectionIndex, indexToRemove);
 
-			dsync_config_write_to_disk(ini, &buffer);
-			dsync_config_load_to_ini_close(ini, &configFile);
+			dwcopy_config_write_to_disk(ini, &buffer);
+			dwcopy_config_load_to_ini_close(ini, &configFile);
 		}
 		else
 		{
-			dsync_console_write_default_help();
+			dwcopy_console_write_default_help();
 			return;
 		}
 	}
 	else
 	{
-		dsync_console_write_default_help();
+		dwcopy_console_write_default_help();
 	}
 }

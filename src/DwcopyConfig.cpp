@@ -1,7 +1,7 @@
-#include "DsyncConfig.h"
+#include "DwcopyConfig.h"
 
-#include "DsyncConsole.h"
-#include "Win32Dsync.h"
+#include "DwcopyConsole.h"
+#include "Win32Dwcopy.h"
 #include "dqn.h"
 
 #define WIN32_LEAN_AND_MEAN
@@ -23,7 +23,7 @@ FILE_SCOPE u32 config_get_path_internal(wchar_t *outBuf, u32 outBufSize)
 	    win32_get_module_directory(programPath, DQN_ARRAY_COUNT(programPath));
 	len += programPathLen;
 
-	const wchar_t *DSYNC_INI_FILE = L"dsync.ini";
+	const wchar_t *DSYNC_INI_FILE = L"dwcopy.ini";
 	if (programPath[programPathLen - 1] == '\\')
 	{
 		len += swprintf_s(outBuf, outBufSize, L"%s%s", programPath,
@@ -39,7 +39,7 @@ FILE_SCOPE u32 config_get_path_internal(wchar_t *outBuf, u32 outBufSize)
 	{
 		DQN_WIN32_ERROR_BOX(
 		    "dqn_sprintf() buffer maxed: Len of copied text is len "
-		    "of supplied buffer. Dsync ini path is not well defined.",
+		    "of supplied buffer. Dwcopy ini path is not well defined.",
 		    NULL);
 		DQN_ASSERT(DQN_INVALID_CODE_PATH);
 	}
@@ -47,7 +47,7 @@ FILE_SCOPE u32 config_get_path_internal(wchar_t *outBuf, u32 outBufSize)
 	return len;
 }
 
-void dsync_config_write_to_disk(const DqnIni *const ini,
+void dwcopy_config_write_to_disk(const DqnIni *const ini,
                                 DqnPushBuffer *const buffer)
 {
 	DqnTempBuffer tempBuffer = dqn_push_buffer_begin_temp_region(buffer);
@@ -145,7 +145,7 @@ FILE_SCOPE wchar_t **extract_ini_section_internal(const DqnIni *const ini,
 
 // Returns the ini structure and the fileHandle. Pass in an empty fileHandle for
 // it to fill out. It creates an ini file if it does not exist yet
-DqnIni *const dsync_config_load_to_ini(DqnPushBuffer *const buffer,
+DqnIni *const dwcopy_config_load_to_ini(DqnPushBuffer *const buffer,
                                        bool needWritePermission,
                                        DqnFile *const fileHandle)
 {
@@ -191,20 +191,20 @@ DqnIni *const dsync_config_load_to_ini(DqnPushBuffer *const buffer,
 	return ini;
 }
 
-void dsync_config_load_to_ini_close(DqnIni *const ini,
+void dwcopy_config_load_to_ini_close(DqnIni *const ini,
                                     DqnFile *const fileHandle)
 {
 	if (ini) dqn_ini_destroy(ini);
 	if (fileHandle) dqn_file_close(fileHandle);
 }
 
-DsyncLocations dsync_config_load(DqnPushBuffer *const buffer)
+DwcopyLocations dwcopy_config_load(DqnPushBuffer *const buffer)
 {
-	DsyncLocations locations = {};
+	DwcopyLocations locations = {};
 
 	// Load CFG file
 	DqnFile configFile = {};
-	DqnIni *ini = dsync_config_load_to_ini(buffer, false, &configFile);
+	DqnIni *ini = dwcopy_config_load_to_ini(buffer, false, &configFile);
 
 	// Fill out locations data
 	{
@@ -214,8 +214,8 @@ DsyncLocations dsync_config_load(DqnPushBuffer *const buffer)
 		wchar_t **watchLocations = extract_ini_section_internal(
 		    ini, buffer, GLOBAL_INI_SECTION_WATCH_LOCATIONS,
 		    &locations.numWatch);
-		locations.watch = (DsyncWatchPath *)dqn_push_buffer_allocate(
-		    buffer, locations.numWatch * sizeof(DsyncWatchPath));
+		locations.watch = (DwcopyWatchPath *)dqn_push_buffer_allocate(
+		    buffer, locations.numWatch * sizeof(DwcopyWatchPath));
 		for (u32 i = 0; i < locations.numWatch; i++)
 		{
 			locations.watch[i].path                   = watchLocations[i];
@@ -225,7 +225,7 @@ DsyncLocations dsync_config_load(DqnPushBuffer *const buffer)
 			locations.watch[i].numChanges      = 0;
 		}
 	}
-	dsync_config_load_to_ini_close(ini, &configFile);
+	dwcopy_config_load_to_ini_close(ini, &configFile);
 
 	return locations;
 };

@@ -18,7 +18,7 @@ u32 win32_create_unique_timestamp(char *const buf, const i32 bufLen);
 u32 win32_make_path_to_directory(const wchar_t *const path, wchar_t *const buf,
                                  const u32 bufLen);
 
-// Get the directory which Dsync is running in.
+// Get the directory which Dwcopy is running in.
 // Pass in an empty "buffer" with length "bufferLen".
 // Returns the number of characters put into the buffer or "0" if invalid args.
 u32 win32_get_module_directory(wchar_t *const buf, const u32 bufLen);

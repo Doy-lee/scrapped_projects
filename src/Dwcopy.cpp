@@ -1,8 +1,8 @@
-#include "Dsync.h"
+#include "Dwcopy.h"
 
-#include "DsyncConfig.h"
-#include "DsyncConsole.h"
-#include "Win32Dsync.h"
+#include "DwcopyConfig.h"
+#include "DwcopyConsole.h"
+#include "Win32Dwcopy.h"
 
 #include <Pathcch.h> // PathCchRemoveFileSpec
 #include <Shlwapi.h> // PathFileExistsW
@@ -11,9 +11,9 @@
 #define DQN_IMPLEMENTATION
 #include "dqn.h"
 
-#define DSYNC_DEBUG true
+#define DWCOPY_DEBUG true
 
-FILE_SCOPE u32 dsync_make_archive_output_path(wchar_t *const outputDirectory,
+FILE_SCOPE u32 dwcopy_make_archive_output_path(wchar_t *const outputDirectory,
                                               wchar_t *const archiveName,
                                               wchar_t *const result,
                                               const u32 resultLen)
@@ -42,7 +42,7 @@ FILE_SCOPE u32 dsync_make_archive_output_path(wchar_t *const outputDirectory,
 	return usedLen;
 }
 
-void dsync_backup(wchar_t *const path, wchar_t **const backupLocations,
+void dwcopy_backup(wchar_t *const path, wchar_t **const backupLocations,
                   const u32 numBackupLocations)
 {
 	if (numBackupLocations == 0 || !backupLocations || !path) return;
@@ -127,7 +127,7 @@ void dsync_backup(wchar_t *const path, wchar_t **const backupLocations,
 	// Get the first output directory, the first zip is stored there. Later we
 	// will copy that file to the other locations
 	wchar_t firstOutputFile[DQN_ARRAY_COUNT(fullPath)] = {};
-	u32 firstOutputFileLen = dsync_make_archive_output_path(
+	u32 firstOutputFileLen = dwcopy_make_archive_output_path(
 	    backupLocations[0], archiveName, firstOutputFile,
 	    DQN_ARRAY_COUNT(firstOutputFile));
 	DQN_ASSERT(firstOutputFileLen != 0);
@@ -261,7 +261,7 @@ void dsync_backup(wchar_t *const path, wchar_t **const backupLocations,
 		for (u32 i = 1; i < numBackupLocations; i++)
 		{
 			wchar_t outputFile[DQN_ARRAY_COUNT(fullPath)] = {};
-			u32 outputFileLen = dsync_make_archive_output_path(
+			u32 outputFileLen = dwcopy_make_archive_output_path(
 			    backupLocations[i], archiveName, outputFile,
 			    DQN_ARRAY_COUNT(outputFile));
 			DQN_ASSERT(outputFileLen != 0);

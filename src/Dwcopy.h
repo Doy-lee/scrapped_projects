@@ -3,7 +3,7 @@
 
 #include "dqn.h"
 
-typedef struct DsyncWatchPath
+typedef struct DwcopyWatchPath
 {
 	// TODO(doyle): For multi-threaded file monitoring, not implemented yet.
 	HANDLE monitorHandle;
@@ -16,20 +16,20 @@ typedef struct DsyncWatchPath
 	// "numChanges" tracks the number of file changes between backups
 	f32 changeTimestamp;
 	u32 numChanges;
-} DsyncWatchPath;
+} DwcopyWatchPath;
 
-typedef struct DsyncLocations
+typedef struct DwcopyLocations
 {
 	wchar_t **backup;
 	u32 numBackup;
 
-	DsyncWatchPath *watch;
+	DwcopyWatchPath *watch;
 	u32 numWatch;
-} DsyncLocations;
+} DwcopyLocations;
 
 // Backup the files to the backup locations
 // Pass in "path" and "backupLocations" strings consisting of "numBackupLocations"
 // Returns without action if invalid args
-void dsync_backup(wchar_t *const path, wchar_t **const backupLocations, const u32 numBackupLocations);
+void dwcopy_backup(wchar_t *const path, wchar_t **const backupLocations, const u32 numBackupLocations);
 
 #endif
