@@ -1,0 +1,33 @@
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:context="com.dqnt.amberMainActivity">
+    <item
+        android:id="@+id/action_settings"
+        android:title="@string/action_settings"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_rescan_music"
+        android:title="@string/action_rescan_music"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_debug_overlay"
+        android:checkable="true"
+        android:title="@string/action_debug_overlay"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_ui_follow_playback"
+        android:title="@string/action_ui_follows_playback"
+        android:checkable="true"
+        android:icon="@android:drawable/ic_menu_preferences"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_exit"
+        android:title="@string/action_exit"
+        app:showAsAction="never" />
+
+</menu>

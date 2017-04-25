@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <group
+        android:checkableBehavior="single">
+        <item
+            android:id="@+id/menu_main_drawer_library"
+            android:icon="@drawable/ic_play"
+            android:checked="true"
+            android:title="@string/menu_main_drawer_library" />
+
+        <item
+            android:id="@+id/menu_main_drawer_album"
+            android:icon="@drawable/ic_play"
+            android:title="@string/menu_main_drawer_album" />
+
+        <item
+            android:id="@+id/menu_main_drawer_artist"
+            android:icon="@drawable/ic_play"
+            android:title="@string/menu_main_drawer_artist" />
+
+        <item
+            android:id="@+id/menu_main_drawer_album_artist"
+            android:icon="@drawable/ic_play"
+            android:title="@string/menu_main_drawer_album_artist" />
+
+        <item
+            android:id="@+id/menu_main_drawer_genre"
+            android:icon="@drawable/ic_play"
+            android:title="@string/menu_main_drawer_genre" />
+    </group>
+</menu>
