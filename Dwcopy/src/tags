@@ -1,0 +1,441 @@
+!_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
+!_TAG_FILE_SORTED	1	/0=unsorted, 1=sorted, 2=foldcase/
+!_TAG_PROGRAM_AUTHOR	Universal Ctags Team	//
+!_TAG_PROGRAM_NAME	Universal Ctags	/Derived from Exuberant Ctags/
+!_TAG_PROGRAM_URL	https://ctags.io/	/official site/
+!_TAG_PROGRAM_VERSION	Development	//
+DQN_ABS	.\\dqn.h	/^#define DQN_ABS(/;"	d
+DQN_ARRAY_COUNT	.\\dqn.h	/^#define DQN_ARRAY_COUNT(/;"	d
+DQN_ASSERT	.\\dqn.h	/^#define DQN_ASSERT(/;"	d
+DQN_DEGREES_TO_RADIANS	.\\dqn.h	/^#define DQN_DEGREES_TO_RADIANS(/;"	d
+DQN_FILE_SCOPE	.\\dqn.h	/^	#define DQN_FILE_SCOPE /;"	d
+DQN_FILE_SCOPE	.\\dqn.h	/^	#define DQN_FILE_SCOPE$/;"	d
+DQN_GIGABYTE	.\\dqn.h	/^#define DQN_GIGABYTE(/;"	d
+DQN_H	.\\dqn.h	/^#define DQN_H$/;"	d
+DQN_I32_TO_STR_MAX_BUF_SIZE	.\\dqn.h	/^#define DQN_I32_TO_STR_MAX_BUF_SIZE /;"	d
+DQN_IMPLEMENTATION	.\\Dwcopy.cpp	/^#define DQN_IMPLEMENTATION$/;"	d	file:
+DQN_INI_FREE	.\\dqn.h	/^	#define DQN_INI_FREE(/;"	d
+DQN_INI_GLOBAL_SECTION	.\\dqn.h	/^#define DQN_INI_GLOBAL_SECTION /;"	d
+DQN_INI_H	.\\dqn.h	/^#define DQN_INI_H$/;"	d
+DQN_INI_MALLOC	.\\dqn.h	/^	#define DQN_INI_MALLOC(/;"	d
+DQN_INI_MEMCPY	.\\dqn.h	/^	#define DQN_INI_MEMCPY(/;"	d
+DQN_INI_NOT_FOUND	.\\dqn.h	/^#define DQN_INI_NOT_FOUND /;"	d
+DQN_INI_STRICMP	.\\dqn.h	/^		#define DQN_INI_STRICMP(/;"	d
+DQN_INI_STRLEN	.\\dqn.h	/^	#define DQN_INI_STRLEN(/;"	d
+DQN_INI_STRLEN	.\\dqn.h	/^#define DQN_INI_STRLEN(/;"	d
+DQN_INVALID_CODE_PATH	.\\dqn.h	/^#define DQN_INVALID_CODE_PATH /;"	d
+DQN_KILOBYTE	.\\dqn.h	/^#define DQN_KILOBYTE(/;"	d
+DQN_MAX	.\\dqn.h	/^#define DQN_MAX(/;"	d
+DQN_MEGABYTE	.\\dqn.h	/^#define DQN_MEGABYTE(/;"	d
+DQN_MIN	.\\dqn.h	/^#define DQN_MIN(/;"	d
+DQN_PI	.\\dqn.h	/^#define DQN_PI /;"	d
+DQN_RADIANS_TO_DEGREES	.\\dqn.h	/^#define DQN_RADIANS_TO_DEGREES(/;"	d
+DQN_SQUARED	.\\dqn.h	/^#define DQN_SQUARED(/;"	d
+DQN_TERABYTE	.\\dqn.h	/^#define DQN_TERABYTE(/;"	d
+DQN_WIN32	.\\dqn.h	/^	#define DQN_WIN32$/;"	d
+DQN_WIN32_ERROR_BOX	.\\dqn.h	/^	#define DQN_WIN32_ERROR_BOX(/;"	d
+DSYNC_CONFIG_H	.\\DwcopyConfig.h	/^#define DSYNC_CONFIG_H$/;"	d
+DSYNC_CONSOLE_H	.\\DwcopyConsole.h	/^#define DSYNC_CONSOLE_H$/;"	d
+DSYNC_H	.\\Dwcopy.h	/^#define DSYNC_H$/;"	d
+DWCOPY_DEBUG	.\\Dwcopy.cpp	/^#define DWCOPY_DEBUG /;"	d	file:
+DqnArray	.\\dqn.h	/^struct DqnArray$/;"	s
+DqnFile	.\\DwcopyConfig.h	/^typedef struct DqnFile DqnFile;$/;"	t	typeref:struct:DqnFile
+DqnFile	.\\dqn.h	/^typedef struct DqnFile$/;"	s
+DqnFile	.\\dqn.h	/^} DqnFile;$/;"	t	typeref:struct:DqnFile
+DqnFileAction	.\\dqn.h	/^enum DqnFileAction$/;"	g
+DqnFilePermissionFlag	.\\dqn.h	/^enum DqnFilePermissionFlag$/;"	g
+DqnIni	.\\DwcopyConfig.h	/^typedef struct DqnIni  DqnIni;$/;"	t	typeref:struct:DqnIni
+DqnIni	.\\dqn.h	/^struct DqnIni$/;"	s
+DqnIni	.\\dqn.h	/^typedef struct DqnIni DqnIni;$/;"	t	typeref:struct:DqnIni
+DqnMat4	.\\dqn.h	/^typedef union DqnMat4$/;"	u
+DqnMat4	.\\dqn.h	/^} DqnMat4;$/;"	t	typeref:union:DqnMat4
+DqnPushBuffer	.\\DwcopyConfig.h	/^typedef struct DqnPushBuffer DqnPushBuffer;$/;"	t	typeref:struct:DqnPushBuffer
+DqnPushBuffer	.\\dqn.h	/^typedef struct DqnPushBuffer$/;"	s
+DqnPushBuffer	.\\dqn.h	/^} DqnPushBuffer;$/;"	t	typeref:struct:DqnPushBuffer
+DqnPushBufferBlock	.\\dqn.h	/^typedef struct DqnPushBufferBlock$/;"	s
+DqnPushBufferBlock	.\\dqn.h	/^} DqnPushBufferBlock;$/;"	t	typeref:struct:DqnPushBufferBlock
+DqnRandPCGState	.\\dqn.h	/^typedef struct DqnRandPCGState$/;"	s
+DqnRandPCGState	.\\dqn.h	/^} DqnRandPCGState;$/;"	t	typeref:struct:DqnRandPCGState
+DqnRect	.\\dqn.h	/^typedef struct DqnRect$/;"	s
+DqnRect	.\\dqn.h	/^} DqnRect;$/;"	t	typeref:struct:DqnRect
+DqnTempBuffer	.\\dqn.h	/^typedef struct DqnTempBuffer$/;"	s
+DqnTempBuffer	.\\dqn.h	/^} DqnTempBuffer;$/;"	t	typeref:struct:DqnTempBuffer
+DqnV2	.\\dqn.h	/^typedef union DqnV2 {$/;"	u
+DqnV2	.\\dqn.h	/^} DqnV2;$/;"	t	typeref:union:DqnV2
+DqnV3	.\\dqn.h	/^typedef union DqnV3$/;"	u
+DqnV3	.\\dqn.h	/^} DqnV3;$/;"	t	typeref:union:DqnV3
+DqnV4	.\\dqn.h	/^typedef union DqnV4$/;"	u
+DqnV4	.\\dqn.h	/^} DqnV4;$/;"	t	typeref:union:DqnV4
+DwcopyLocations	.\\Dwcopy.h	/^typedef struct DwcopyLocations$/;"	s
+DwcopyLocations	.\\Dwcopy.h	/^} DwcopyLocations;$/;"	t	typeref:struct:DwcopyLocations
+DwcopyWatchPath	.\\Dwcopy.h	/^typedef struct DwcopyWatchPath$/;"	s
+DwcopyWatchPath	.\\Dwcopy.h	/^} DwcopyWatchPath;$/;"	t	typeref:struct:DwcopyWatchPath
+FILE_SCOPE	.\\dqn.h	/^#define FILE_SCOPE /;"	d
+GLOBAL_INI_PROPERTY_LOCATION	.\\DwcopyConfig.cpp	/^const char *const GLOBAL_INI_PROPERTY_LOCATION           = "location";$/;"	v
+GLOBAL_INI_SECTION_BACKUP_TO_LOCATIONS	.\\DwcopyConfig.cpp	/^const char *const GLOBAL_INI_SECTION_BACKUP_TO_LOCATIONS = "BackupToLocations";$/;"	v
+GLOBAL_INI_SECTION_WATCH_LOCATIONS	.\\DwcopyConfig.cpp	/^const char *const GLOBAL_INI_SECTION_WATCH_LOCATIONS     = "WatchLocations";$/;"	v
+INITIAL_CAPACITY	.\\dqn.h	/^#define INITIAL_CAPACITY /;"	d
+LOCAL_PERSIST	.\\dqn.h	/^#define LOCAL_PERSIST /;"	d
+STBI__ASAN	.\\dqn.h	/^		#define STBI__ASAN /;"	d
+STBI__ASAN	.\\dqn.h	/^	#define STBI__ASAN$/;"	d
+STBSP_SPRINTFCB	.\\dqn.h	/^typedef char *STBSP_SPRINTFCB(char *buf, void *user, int len);$/;"	t
+STBSP__COPYFP	.\\dqn.h	/^#define STBSP__COPYFP(/;"	d
+STBSP__COPYFP	.\\dqn.h	/^#undef STBSP__COPYFP$/;"	d
+STBSP__HALFWIDTH	.\\dqn.h	/^#define STBSP__HALFWIDTH /;"	d
+STBSP__INTMAX	.\\dqn.h	/^#define STBSP__INTMAX /;"	d
+STBSP__INTMAX	.\\dqn.h	/^#undef STBSP__INTMAX$/;"	d
+STBSP__LEADINGPLUS	.\\dqn.h	/^#define STBSP__LEADINGPLUS /;"	d
+STBSP__LEADINGPLUS	.\\dqn.h	/^#undef STBSP__LEADINGPLUS$/;"	d
+STBSP__LEADINGSPACE	.\\dqn.h	/^#define STBSP__LEADINGSPACE /;"	d
+STBSP__LEADINGSPACE	.\\dqn.h	/^#undef STBSP__LEADINGSPACE$/;"	d
+STBSP__LEADINGZERO	.\\dqn.h	/^#define STBSP__LEADINGZERO /;"	d
+STBSP__LEADINGZERO	.\\dqn.h	/^#undef STBSP__LEADINGZERO$/;"	d
+STBSP__LEADING_0X	.\\dqn.h	/^#define STBSP__LEADING_0X /;"	d
+STBSP__LEADING_0X	.\\dqn.h	/^#undef STBSP__LEADING_0X$/;"	d
+STBSP__LEFTJUST	.\\dqn.h	/^#define STBSP__LEFTJUST /;"	d
+STBSP__LEFTJUST	.\\dqn.h	/^#undef STBSP__LEFTJUST$/;"	d
+STBSP__METRIC_1024	.\\dqn.h	/^#define STBSP__METRIC_1024 /;"	d
+STBSP__METRIC_JEDEC	.\\dqn.h	/^#define STBSP__METRIC_JEDEC /;"	d
+STBSP__METRIC_NOSPACE	.\\dqn.h	/^#define STBSP__METRIC_NOSPACE /;"	d
+STBSP__METRIC_SUFFIX	.\\dqn.h	/^#define STBSP__METRIC_SUFFIX /;"	d
+STBSP__METRIC_SUFFIX	.\\dqn.h	/^#undef STBSP__METRIC_SUFFIX$/;"	d
+STBSP__NEGATIVE	.\\dqn.h	/^#define STBSP__NEGATIVE /;"	d
+STBSP__NEGATIVE	.\\dqn.h	/^#undef STBSP__NEGATIVE$/;"	d
+STBSP__NUMSZ	.\\dqn.h	/^      #define STBSP__NUMSZ /;"	d
+STBSP__NUMSZ	.\\dqn.h	/^#undef STBSP__NUMSZ$/;"	d
+STBSP__PUBLICDEC	.\\dqn.h	/^		#define STBSP__PUBLICDEC /;"	d
+STBSP__PUBLICDEC	.\\dqn.h	/^	#define STBSP__PUBLICDEC /;"	d
+STBSP__PUBLICDEF	.\\dqn.h	/^		#define STBSP__PUBLICDEF /;"	d
+STBSP__PUBLICDEF	.\\dqn.h	/^	#define STBSP__PUBLICDEF /;"	d
+STBSP__SPECIAL	.\\dqn.h	/^#define STBSP__SPECIAL /;"	d
+STBSP__SPECIAL	.\\dqn.h	/^#undef STBSP__SPECIAL$/;"	d
+STBSP__TRIPLET_COMMA	.\\dqn.h	/^#define STBSP__TRIPLET_COMMA /;"	d
+STBSP__TRIPLET_COMMA	.\\dqn.h	/^#undef STBSP__TRIPLET_COMMA$/;"	d
+STBSP__UNALIGNED	.\\dqn.h	/^#define STBSP__UNALIGNED(/;"	d
+STBSP__UNALIGNED	.\\dqn.h	/^#undef STBSP__UNALIGNED$/;"	d
+STB_SPRINTF_DECORATE	.\\dqn.h	/^	#define STB_SPRINTF_DECORATE(/;"	d
+STB_SPRINTF_DECORATE	.\\dqn.h	/^#define STB_SPRINTF_DECORATE(/;"	d
+STB_SPRINTF_H_INCLUDE	.\\dqn.h	/^#define STB_SPRINTF_H_INCLUDE$/;"	d
+STB_SPRINTF_MIN	.\\dqn.h	/^	#define STB_SPRINTF_MIN /;"	d
+STB_SPRINTF_MSVC_MODE	.\\dqn.h	/^#define STB_SPRINTF_MSVC_MODE$/;"	d
+WIN32_DSYNC_H	.\\Win32Dwcopy.h	/^#define WIN32_DSYNC_H$/;"	d
+WIN32_LEAN_AND_MEAN	.\\DwcopyConfig.cpp	/^#define WIN32_LEAN_AND_MEAN$/;"	d	file:
+WIN32_LEAN_AND_MEAN	.\\Win32Dwcopy.h	/^#define WIN32_LEAN_AND_MEAN$/;"	d
+WIN32_LEAN_AND_MEAN	.\\dqn.h	/^	#define WIN32_LEAN_AND_MEAN$/;"	d
+WIN32_TASKBAR_ICON_MSG	.\\Win32Dwcopy.cpp	/^#define WIN32_TASKBAR_ICON_MSG /;"	d	file:
+WIN32_TASKBAR_ICON_UID	.\\Win32Dwcopy.cpp	/^#define WIN32_TASKBAR_ICON_UID /;"	d	file:
+WIN32_UNIQUE_TIMESTAMP_MAX_LEN	.\\Win32Dwcopy.h	/^#define WIN32_UNIQUE_TIMESTAMP_MAX_LEN /;"	d
+Win32Menu	.\\Win32Dwcopy.cpp	/^enum Win32Menu$/;"	g	file:
+Win32State	.\\Win32Dwcopy.cpp	/^typedef struct Win32State$/;"	s	file:
+Win32State	.\\Win32Dwcopy.cpp	/^} Win32State;$/;"	t	typeref:struct:Win32State	file:
+_CRT_NONSTDC_NO_DEPRECATE	.\\dqn.h	/^		#define _CRT_NONSTDC_NO_DEPRECATE$/;"	d
+_CRT_NONSTDC_NO_DEPRECATE	.\\dqn.h	/^	#define _CRT_NONSTDC_NO_DEPRECATE$/;"	d
+_CRT_NONSTDC_NO_DEPRECATE	.\\dqn.h	/^#define _CRT_NONSTDC_NO_DEPRECATE$/;"	d
+_CRT_SECURE_NO_WARNINGS	.\\dqn.h	/^		#define _CRT_SECURE_NO_WARNINGS$/;"	d
+_CRT_SECURE_NO_WARNINGS	.\\dqn.h	/^	#define _CRT_SECURE_NO_WARNINGS$/;"	d
+_CRT_SECURE_NO_WARNINGS	.\\dqn.h	/^#define _CRT_SECURE_NO_WARNINGS$/;"	d
+a	.\\dqn.h	/^	struct { f32 r, g, b, a; };$/;"	m	struct:DqnV4::__anon7
+alignment	.\\dqn.h	/^	u32 alignment;$/;"	m	struct:DqnPushBuffer
+b	.\\dqn.h	/^	struct { f32 r, g, b, a; };$/;"	m	struct:DqnV4::__anon7
+b	.\\dqn.h	/^    struct { f32 r, g, b; };$/;"	m	struct:DqnV3::__anon5
+backup	.\\Dwcopy.h	/^	wchar_t **backup;$/;"	m	struct:DwcopyLocations
+block	.\\dqn.h	/^	DqnPushBufferBlock *block;$/;"	m	struct:DqnPushBuffer
+buf	.\\dqn.h	/^  char * buf;$/;"	m	struct:stbsp__context
+buffer	.\\dqn.h	/^	DqnPushBuffer      *buffer;$/;"	m	struct:DqnTempBuffer
+capacity	.\\dqn.h	/^	u64 capacity;$/;"	m	struct:DqnArray
+changeTimestamp	.\\Dwcopy.h	/^	f32 changeTimestamp;$/;"	m	struct:DwcopyWatchPath
+col	.\\dqn.h	/^	DqnV4 col[4];$/;"	m	union:DqnMat4
+compileFlags	.\\BuildReleaseAndInstall.bat	/^set compileFlags=-MT -Z7 -W3 -O2 -WX$/;"	v
+compileFlags	.\\build.bat	/^set compileFlags=-MT -Z7 -W3 -Od -WX$/;"	v
+config_get_path_internal	.\\DwcopyConfig.cpp	/^FILE_SCOPE u32 config_get_path_internal(wchar_t *outBuf, u32 outBufSize)$/;"	f
+count	.\\dqn.h	/^	u64 count;$/;"	m	struct:DqnArray
+count	.\\dqn.h	/^  int count;$/;"	m	struct:stbsp__context
+data	.\\dqn.h	/^	T *data;$/;"	m	struct:DqnArray
+dqn_array_clear	.\\dqn.h	/^bool dqn_array_clear(DqnArray<T> *array)$/;"	f
+dqn_array_free	.\\dqn.h	/^bool dqn_array_free(DqnArray<T> *array)$/;"	f
+dqn_array_get	.\\dqn.h	/^T *dqn_array_get(DqnArray<T> *array, u64 index)$/;"	f
+dqn_array_grow	.\\dqn.h	/^bool dqn_array_grow(DqnArray<T> *array)$/;"	f
+dqn_array_init	.\\dqn.h	/^bool dqn_array_init(DqnArray<T> *array, size_t capacity)$/;"	f
+dqn_array_pop	.\\dqn.h	/^T *dqn_array_pop(DqnArray<T> *array)$/;"	f
+dqn_array_push	.\\dqn.h	/^T *dqn_array_push(DqnArray<T> *array, T item)$/;"	f
+dqn_array_remove	.\\dqn.h	/^bool dqn_array_remove(DqnArray<T> *array, u64 index)$/;"	f
+dqn_array_remove_stable	.\\dqn.h	/^bool dqn_array_remove_stable(DqnArray<T> *array, u64 index)$/;"	f
+dqn_char_is_alpha	.\\dqn.h	/^DQN_FILE_SCOPE bool dqn_char_is_alpha(char c)$/;"	f
+dqn_char_is_alphanum	.\\dqn.h	/^DQN_FILE_SCOPE bool dqn_char_is_alphanum(char c)$/;"	f
+dqn_char_is_digit	.\\dqn.h	/^DQN_FILE_SCOPE bool dqn_char_is_digit(char c)$/;"	f
+dqn_char_to_lower	.\\dqn.h	/^DQN_FILE_SCOPE char dqn_char_to_lower(char c)$/;"	f
+dqn_char_to_upper	.\\dqn.h	/^DQN_FILE_SCOPE char dqn_char_to_upper(char c)$/;"	f
+dqn_dir_read	.\\dqn.h	/^DQN_FILE_SCOPE char **dqn_dir_read(char *dir, u32 *numFiles)$/;"	f
+dqn_dir_read_free	.\\dqn.h	/^DQN_FILE_SCOPE void dqn_dir_read_free(char **fileList, u32 numFiles)$/;"	f
+dqn_file_close	.\\dqn.h	/^DQN_FILE_SCOPE void dqn_file_close(DqnFile *const file)$/;"	f
+dqn_file_open	.\\dqn.h	/^bool dqn_file_open(const char *const path, DqnFile *const file,$/;"	f
+dqn_file_open_internal	.\\dqn.h	/^FILE_SCOPE bool dqn_file_open_internal(const wchar_t *const path,$/;"	f
+dqn_file_openw	.\\dqn.h	/^bool dqn_file_openw(const wchar_t *const path, DqnFile *const file,$/;"	f
+dqn_file_read	.\\dqn.h	/^DQN_FILE_SCOPE size_t dqn_file_read(const DqnFile file, const u8 *const buffer,$/;"	f
+dqn_file_write	.\\dqn.h	/^DQN_FILE_SCOPE size_t dqn_file_write(const DqnFile *const file,$/;"	f
+dqn_i32_to_str	.\\dqn.h	/^DQN_FILE_SCOPE i32 dqn_i32_to_str(i32 value, char *buf, i32 bufSize)$/;"	f
+dqn_i32_to_wstr	.\\dqn.h	/^DQN_FILE_SCOPE i32 dqn_i32_to_wstr(i32 value, wchar_t *buf, i32 bufSize)$/;"	f
+dqn_ini_create	.\\dqn.h	/^DqnIni *dqn_ini_create(void *memctx)$/;"	f
+dqn_ini_destroy	.\\dqn.h	/^void dqn_ini_destroy(DqnIni *ini)$/;"	f
+dqn_ini_find_property	.\\dqn.h	/^int dqn_ini_find_property(DqnIni const *ini, int section, char const *name,$/;"	f
+dqn_ini_find_section	.\\dqn.h	/^int dqn_ini_find_section(DqnIni const *ini, char const *name, int name_length)$/;"	f
+dqn_ini_internal_property_index	.\\dqn.h	/^static int dqn_ini_internal_property_index(DqnIni const *ini, int section,$/;"	f
+dqn_ini_internal_property_t	.\\dqn.h	/^struct dqn_ini_internal_property_t$/;"	s
+dqn_ini_internal_section_t	.\\dqn.h	/^struct dqn_ini_internal_section_t$/;"	s
+dqn_ini_load	.\\dqn.h	/^DqnIni *dqn_ini_load(char const *data, void *memctx)$/;"	f
+dqn_ini_property_add	.\\dqn.h	/^void dqn_ini_property_add(DqnIni *ini, int section, char const *name,$/;"	f
+dqn_ini_property_count	.\\dqn.h	/^int dqn_ini_property_count(DqnIni const *ini, int section)$/;"	f
+dqn_ini_property_name	.\\dqn.h	/^char const *dqn_ini_property_name(DqnIni const *ini, int section, int property)$/;"	f
+dqn_ini_property_name_set	.\\dqn.h	/^void dqn_ini_property_name_set(DqnIni *ini, int section, int property,$/;"	f
+dqn_ini_property_remove	.\\dqn.h	/^void dqn_ini_property_remove(DqnIni *ini, int section, int property)$/;"	f
+dqn_ini_property_value	.\\dqn.h	/^char const *dqn_ini_property_value(DqnIni const *ini, int section, int property)$/;"	f
+dqn_ini_property_value_set	.\\dqn.h	/^void dqn_ini_property_value_set(DqnIni *ini, int section, int property,$/;"	f
+dqn_ini_save	.\\dqn.h	/^int dqn_ini_save(DqnIni const *ini, char *data, int size)$/;"	f
+dqn_ini_section_add	.\\dqn.h	/^int dqn_ini_section_add(DqnIni *ini, char const *name, int length)$/;"	f
+dqn_ini_section_count	.\\dqn.h	/^int dqn_ini_section_count(DqnIni const *ini)$/;"	f
+dqn_ini_section_name	.\\dqn.h	/^char const *dqn_ini_section_name(DqnIni const *ini, int section)$/;"	f
+dqn_ini_section_name_set	.\\dqn.h	/^void dqn_ini_section_name_set(DqnIni *ini, int section, char const *name,$/;"	f
+dqn_ini_section_remove	.\\dqn.h	/^void dqn_ini_section_remove(DqnIni *ini, int section)$/;"	f
+dqn_mat4_identity	.\\dqn.h	/^DQN_FILE_SCOPE DqnMat4 dqn_mat4_identity()$/;"	f
+dqn_mat4_mul	.\\dqn.h	/^DQN_FILE_SCOPE DqnMat4 dqn_mat4_mul(DqnMat4 a, DqnMat4 b)$/;"	f
+dqn_mat4_mul_vec4	.\\dqn.h	/^DQN_FILE_SCOPE DqnV4 dqn_mat4_mul_vec4(DqnMat4 a, DqnV4 b)$/;"	f
+dqn_mat4_ortho	.\\dqn.h	/^dqn_mat4_ortho(f32 left, f32 right, f32 bottom, f32 top, f32 zNear, f32 zFar)$/;"	f
+dqn_mat4_rotate	.\\dqn.h	/^DQN_FILE_SCOPE DqnMat4 dqn_mat4_rotate(f32 radians, f32 x, f32 y, f32 z)$/;"	f
+dqn_mat4_scale	.\\dqn.h	/^DQN_FILE_SCOPE DqnMat4 dqn_mat4_scale(f32 x, f32 y, f32 z)$/;"	f
+dqn_mat4_translate	.\\dqn.h	/^DQN_FILE_SCOPE DqnMat4 dqn_mat4_translate(f32 x, f32 y, f32 z)$/;"	f
+dqn_math_lerp	.\\dqn.h	/^DQN_FILE_SCOPE f32 dqn_math_lerp(f32 a, f32 t, f32 b)$/;"	f
+dqn_math_sqrtf	.\\dqn.h	/^DQN_FILE_SCOPE f32 dqn_math_sqrtf(f32 a)$/;"	f
+dqn_mem_alloc_internal	.\\dqn.h	/^FILE_SCOPE void *dqn_mem_alloc_internal(size_t size, bool zeroClear)$/;"	f
+dqn_mem_free_internal	.\\dqn.h	/^FILE_SCOPE void dqn_mem_free_internal(void *memory)$/;"	f
+dqn_mem_realloc_internal	.\\dqn.h	/^FILE_SCOPE void *dqn_mem_realloc_internal(void *memory, size_t newSize)$/;"	f
+dqn_push_buffer_alloc_block_internal	.\\dqn.h	/^dqn_push_buffer_alloc_block_internal(u32 alignment, size_t size)$/;"	f
+dqn_push_buffer_allocate	.\\dqn.h	/^DQN_FILE_SCOPE void *dqn_push_buffer_allocate(DqnPushBuffer *buffer, size_t size)$/;"	f
+dqn_push_buffer_begin_temp_region	.\\dqn.h	/^DQN_FILE_SCOPE DqnTempBuffer dqn_push_buffer_begin_temp_region(DqnPushBuffer *buffer)$/;"	f
+dqn_push_buffer_end_temp_region	.\\dqn.h	/^DQN_FILE_SCOPE void dqn_push_buffer_end_temp_region(DqnTempBuffer tempBuffer)$/;"	f
+dqn_push_buffer_free	.\\dqn.h	/^DQN_FILE_SCOPE void dqn_push_buffer_free(DqnPushBuffer *buffer)$/;"	f
+dqn_push_buffer_free_last_buffer	.\\dqn.h	/^DQN_FILE_SCOPE void dqn_push_buffer_free_last_buffer(DqnPushBuffer *buffer)$/;"	f
+dqn_push_buffer_init	.\\dqn.h	/^DQN_FILE_SCOPE bool dqn_push_buffer_init(DqnPushBuffer *buffer, size_t size, u32 alignment)$/;"	f
+dqn_rect	.\\dqn.h	/^DQN_FILE_SCOPE DqnRect dqn_rect(DqnV2 origin, DqnV2 size)$/;"	f
+dqn_rect_contains_p	.\\dqn.h	/^DQN_FILE_SCOPE bool dqn_rect_contains_p(DqnRect rect, DqnV2 p)$/;"	f
+dqn_rect_get_centre	.\\dqn.h	/^DQN_FILE_SCOPE DqnV2 dqn_rect_get_centre(DqnRect rect)$/;"	f
+dqn_rect_get_size_2f	.\\dqn.h	/^DQN_FILE_SCOPE void dqn_rect_get_size_2f(DqnRect rect, f32 *width, f32 *height)$/;"	f
+dqn_rect_get_size_v2	.\\dqn.h	/^DQN_FILE_SCOPE DqnV2 dqn_rect_get_size_v2(DqnRect rect)$/;"	f
+dqn_rect_move	.\\dqn.h	/^DQN_FILE_SCOPE DqnRect dqn_rect_move(DqnRect rect, DqnV2 shift)$/;"	f
+dqn_rnd_f32_normalized_from_u32_internal	.\\dqn.h	/^FILE_SCOPE f32 dqn_rnd_f32_normalized_from_u32_internal(u32 value)$/;"	f
+dqn_rnd_make_seed_internal	.\\dqn.h	/^FILE_SCOPE u32 dqn_rnd_make_seed_internal()$/;"	f
+dqn_rnd_murmur3_avalanche64_internal	.\\dqn.h	/^FILE_SCOPE u64 dqn_rnd_murmur3_avalanche64_internal(u64 h)$/;"	f
+dqn_rnd_pcg_init	.\\dqn.h	/^DQN_FILE_SCOPE void dqn_rnd_pcg_init(DqnRandPCGState *pcg)$/;"	f
+dqn_rnd_pcg_init_with_seed	.\\dqn.h	/^DQN_FILE_SCOPE void dqn_rnd_pcg_init_with_seed(DqnRandPCGState *pcg, u32 seed)$/;"	f
+dqn_rnd_pcg_next	.\\dqn.h	/^DQN_FILE_SCOPE u32 dqn_rnd_pcg_next(DqnRandPCGState *pcg)$/;"	f
+dqn_rnd_pcg_nextf	.\\dqn.h	/^DQN_FILE_SCOPE f32 dqn_rnd_pcg_nextf(DqnRandPCGState *pcg)$/;"	f
+dqn_rnd_pcg_range	.\\dqn.h	/^DQN_FILE_SCOPE i32 dqn_rnd_pcg_range(DqnRandPCGState *pcg, i32 min, i32 max)$/;"	f
+dqn_size_alignment_internal	.\\dqn.h	/^FILE_SCOPE size_t dqn_size_alignment_internal(u32 alignment, size_t size)$/;"	f
+dqn_str_has_substring	.\\dqn.h	/^DQN_FILE_SCOPE bool dqn_str_has_substring(const char *const a, const i32 lenA,$/;"	f
+dqn_str_reverse	.\\dqn.h	/^DQN_FILE_SCOPE bool dqn_str_reverse(char *buf, const i32 bufSize)$/;"	f
+dqn_str_to_i32	.\\dqn.h	/^DQN_FILE_SCOPE i32 dqn_str_to_i32(const char *const buf, const i32 bufSize)$/;"	f
+dqn_strcmp	.\\dqn.h	/^DQN_FILE_SCOPE i32 dqn_strcmp(const char *a, const char *b)$/;"	f
+dqn_strlen	.\\dqn.h	/^DQN_FILE_SCOPE i32 dqn_strlen(const char *a)$/;"	f
+dqn_strlen_delimit_with	.\\dqn.h	/^DQN_FILE_SCOPE i32 dqn_strlen_delimit_with(const char *a, const char delimiter)$/;"	f
+dqn_strncpy	.\\dqn.h	/^DQN_FILE_SCOPE char *dqn_strncpy(char *dest, const char *src, i32 numChars)$/;"	f
+dqn_time_now_in_ms	.\\dqn.h	/^f64 dqn_time_now_in_ms()$/;"	f
+dqn_time_now_in_s	.\\dqn.h	/^f64 dqn_time_now_in_s()$/;"	f
+dqn_ucs_to_utf8	.\\dqn.h	/^DQN_FILE_SCOPE u32 dqn_ucs_to_utf8(u32 *dest, u32 character)$/;"	f
+dqn_utf8_to_ucs	.\\dqn.h	/^DQN_FILE_SCOPE u32 dqn_utf8_to_ucs(u32 *dest, u32 character)$/;"	f
+dqn_v2	.\\dqn.h	/^DQN_FILE_SCOPE DqnV2 dqn_v2(f32 x, f32 y)$/;"	f
+dqn_v2_add	.\\dqn.h	/^DQN_FILE_SCOPE DqnV2 dqn_v2_add(DqnV2 a, DqnV2 b)$/;"	f
+dqn_v2_constrain_to_ratio	.\\dqn.h	/^DQN_FILE_SCOPE DqnV2 dqn_v2_constrain_to_ratio(DqnV2 dim, DqnV2 ratio)$/;"	f
+dqn_v2_dot	.\\dqn.h	/^DQN_FILE_SCOPE f32 dqn_v2_dot(DqnV2 a, DqnV2 b)$/;"	f
+dqn_v2_equals	.\\dqn.h	/^DQN_FILE_SCOPE bool dqn_v2_equals(DqnV2 a, DqnV2 b)$/;"	f
+dqn_v2_hadamard	.\\dqn.h	/^DQN_FILE_SCOPE DqnV2 dqn_v2_hadamard(DqnV2 a, DqnV2 b)$/;"	f
+dqn_v2_length	.\\dqn.h	/^DQN_FILE_SCOPE f32 dqn_v2_length(DqnV2 a, DqnV2 b)$/;"	f
+dqn_v2_length_squared	.\\dqn.h	/^DQN_FILE_SCOPE f32 dqn_v2_length_squared(DqnV2 a, DqnV2 b)$/;"	f
+dqn_v2_normalise	.\\dqn.h	/^DQN_FILE_SCOPE DqnV2 dqn_v2_normalise(DqnV2 a)$/;"	f
+dqn_v2_overlaps	.\\dqn.h	/^DQN_FILE_SCOPE bool dqn_v2_overlaps(DqnV2 a, DqnV2 b)$/;"	f
+dqn_v2_perpendicular	.\\dqn.h	/^DQN_FILE_SCOPE DqnV2 dqn_v2_perpendicular(DqnV2 a)$/;"	f
+dqn_v2_scale	.\\dqn.h	/^DQN_FILE_SCOPE DqnV2 dqn_v2_scale(DqnV2 a, f32 b)$/;"	f
+dqn_v2_sub	.\\dqn.h	/^DQN_FILE_SCOPE DqnV2 dqn_v2_sub(DqnV2 a, DqnV2 b)$/;"	f
+dqn_v2i	.\\dqn.h	/^DQN_FILE_SCOPE DqnV2 dqn_v2i(i32 x, i32 y)$/;"	f
+dqn_v3	.\\dqn.h	/^DQN_FILE_SCOPE DqnV3 dqn_v3(f32 x, f32 y, f32 z)$/;"	f
+dqn_v3_add	.\\dqn.h	/^DQN_FILE_SCOPE DqnV3 dqn_v3_add(DqnV3 a, DqnV3 b)$/;"	f
+dqn_v3_cross	.\\dqn.h	/^DQN_FILE_SCOPE DqnV3 dqn_v3_cross(DqnV3 a, DqnV3 b)$/;"	f
+dqn_v3_dot	.\\dqn.h	/^DQN_FILE_SCOPE f32 dqn_v3_dot(DqnV3 a, DqnV3 b)$/;"	f
+dqn_v3_equals	.\\dqn.h	/^DQN_FILE_SCOPE bool dqn_v3_equals(DqnV3 a, DqnV3 b)$/;"	f
+dqn_v3_hadamard	.\\dqn.h	/^DQN_FILE_SCOPE DqnV3 dqn_v3_hadamard(DqnV3 a, DqnV3 b)$/;"	f
+dqn_v3_scale	.\\dqn.h	/^DQN_FILE_SCOPE DqnV3 dqn_v3_scale(DqnV3 a, f32 b)$/;"	f
+dqn_v3_sub	.\\dqn.h	/^DQN_FILE_SCOPE DqnV3 dqn_v3_sub(DqnV3 a, DqnV3 b)$/;"	f
+dqn_v3i	.\\dqn.h	/^DQN_FILE_SCOPE DqnV3 dqn_v3i(i32 x, i32 y, i32 z)$/;"	f
+dqn_v4	.\\dqn.h	/^DQN_FILE_SCOPE DqnV4 dqn_v4(f32 x, f32 y, f32 z, f32 w)$/;"	f
+dqn_v4_add	.\\dqn.h	/^DQN_FILE_SCOPE DqnV4 dqn_v4_add(DqnV4 a, DqnV4 b)$/;"	f
+dqn_v4_dot	.\\dqn.h	/^DQN_FILE_SCOPE f32 dqn_v4_dot(DqnV4 a, DqnV4 b)$/;"	f
+dqn_v4_equals	.\\dqn.h	/^DQN_FILE_SCOPE bool dqn_v4_equals(DqnV4 a, DqnV4 b)$/;"	f
+dqn_v4_hadamard	.\\dqn.h	/^DQN_FILE_SCOPE DqnV4 dqn_v4_hadamard(DqnV4 a, DqnV4 b)$/;"	f
+dqn_v4_scale	.\\dqn.h	/^DQN_FILE_SCOPE DqnV4 dqn_v4_scale(DqnV4 a, f32 b)$/;"	f
+dqn_v4_sub	.\\dqn.h	/^DQN_FILE_SCOPE DqnV4 dqn_v4_sub(DqnV4 a, DqnV4 b)$/;"	f
+dqn_v4i	.\\dqn.h	/^DQN_FILE_SCOPE DqnV4 dqn_v4i(i32 x, i32 y, i32 z, i32 w) {$/;"	f
+dqn_wchar_is_digit	.\\dqn.h	/^DQN_FILE_SCOPE bool dqn_wchar_is_digit(const wchar_t c)$/;"	f
+dqn_wchar_to_lower	.\\dqn.h	/^DQN_FILE_SCOPE wchar_t dqn_wchar_to_lower(const wchar_t c)$/;"	f
+dqn_win32_display_error_code	.\\dqn.h	/^DQN_FILE_SCOPE void dqn_win32_display_error_code(const DWORD error, const char *const errorPrefi/;"	f
+dqn_win32_display_last_error	.\\dqn.h	/^DQN_FILE_SCOPE void dqn_win32_display_last_error(const char *const errorPrefix)$/;"	f
+dqn_win32_get_client_dim	.\\dqn.h	/^DQN_FILE_SCOPE void dqn_win32_get_client_dim(const HWND window, LONG *width,$/;"	f
+dqn_win32_get_rect_dim	.\\dqn.h	/^DQN_FILE_SCOPE void dqn_win32_get_rect_dim(RECT rect, LONG *width, LONG *height)$/;"	f
+dqn_win32_query_perf_counter_time_in_s_internal	.\\dqn.h	/^FILE_SCOPE f64 dqn_win32_query_perf_counter_time_in_s_internal()$/;"	f
+dqn_win32_utf8_to_wchar	.\\dqn.h	/^DQN_FILE_SCOPE bool dqn_win32_utf8_to_wchar(const char *const in,$/;"	f
+dqn_win32_wchar_to_utf8	.\\dqn.h	/^DQN_FILE_SCOPE bool dqn_win32_wchar_to_utf8(const wchar_t *const in,$/;"	f
+dqn_wstr_reverse	.\\dqn.h	/^DQN_FILE_SCOPE bool dqn_wstr_reverse(wchar_t *buf, const i32 bufSize)$/;"	f
+dqn_wstr_to_i32	.\\dqn.h	/^DQN_FILE_SCOPE i32 dqn_wstr_to_i32(const wchar_t *const buf, const i32 bufSize)$/;"	f
+dqn_wstrcmp	.\\dqn.h	/^DQN_FILE_SCOPE i32 dqn_wstrcmp(const wchar_t *a, const wchar_t *b)$/;"	f
+dqn_wstrlen	.\\dqn.h	/^DQN_FILE_SCOPE i32 dqn_wstrlen(const wchar_t *a)$/;"	f
+dqnfileaction_clear_if_exist	.\\dqn.h	/^	dqnfileaction_clear_if_exist,$/;"	e	enum:DqnFileAction
+dqnfileaction_create_if_not_exist	.\\dqn.h	/^	dqnfileaction_create_if_not_exist,$/;"	e	enum:DqnFileAction
+dqnfileaction_open_only	.\\dqn.h	/^	dqnfileaction_open_only,$/;"	e	enum:DqnFileAction
+dqnfilepermissionflag_all	.\\dqn.h	/^	dqnfilepermissionflag_all     = (1 << 3)$/;"	e	enum:DqnFilePermissionFlag
+dqnfilepermissionflag_execute	.\\dqn.h	/^	dqnfilepermissionflag_execute = (1 << 2),$/;"	e	enum:DqnFilePermissionFlag
+dqnfilepermissionflag_read	.\\dqn.h	/^	dqnfilepermissionflag_read    = (1 << 0),$/;"	e	enum:DqnFilePermissionFlag
+dqnfilepermissionflag_write	.\\dqn.h	/^	dqnfilepermissionflag_write   = (1 << 1),$/;"	e	enum:DqnFilePermissionFlag
+dwcopy_backup	.\\Dwcopy.cpp	/^void dwcopy_backup(wchar_t *const path, wchar_t **const backupLocations,$/;"	f
+dwcopy_config_load	.\\DwcopyConfig.cpp	/^DwcopyLocations dwcopy_config_load(DqnPushBuffer *const buffer)$/;"	f
+dwcopy_config_load_to_ini	.\\DwcopyConfig.cpp	/^DqnIni *const dwcopy_config_load_to_ini(DqnPushBuffer *const buffer,$/;"	f
+dwcopy_config_load_to_ini_close	.\\DwcopyConfig.cpp	/^void dwcopy_config_load_to_ini_close(DqnIni *const ini,$/;"	f
+dwcopy_config_write_to_disk	.\\DwcopyConfig.cpp	/^void dwcopy_config_write_to_disk(const DqnIni *const ini,$/;"	f
+dwcopy_console_handle_args	.\\DwcopyConsole.cpp	/^void dwcopy_console_handle_args(const i32 argc, wchar_t **const argv)$/;"	f
+dwcopy_console_print_out_section_internal	.\\DwcopyConsole.cpp	/^dwcopy_console_print_out_section_internal(const DqnIni *const ini,$/;"	f
+dwcopy_console_write	.\\DwcopyConsole.cpp	/^void dwcopy_console_write(const wchar_t *const string, i32 len)$/;"	f
+dwcopy_console_write_default_help	.\\DwcopyConsole.cpp	/^FILE_SCOPE void dwcopy_console_write_default_help()$/;"	f
+dwcopy_make_archive_output_path	.\\Dwcopy.cpp	/^FILE_SCOPE u32 dwcopy_make_archive_output_path(wchar_t *const outputDirectory,$/;"	f
+e	.\\dqn.h	/^	f32 e[2];$/;"	m	union:DqnV2
+e	.\\dqn.h	/^	f32 e[3];$/;"	m	union:DqnV3
+e	.\\dqn.h	/^	f32 e[4];$/;"	m	union:DqnV4
+e	.\\dqn.h	/^	f32 e[4][4];$/;"	m	union:DqnMat4
+end	.\\BuildReleaseAndInstall.bat	/^:end$/;"	l
+end	.\\build.bat	/^:end$/;"	l
+extract_ini_section_internal	.\\DwcopyConfig.cpp	/^FILE_SCOPE wchar_t **extract_ini_section_internal(const DqnIni *const ini,$/;"	f
+f32	.\\dqn.h	/^typedef float  f32;$/;"	t
+f64	.\\dqn.h	/^typedef double f64;$/;"	t
+g	.\\dqn.h	/^	struct { f32 r, g, b, a; };$/;"	m	struct:DqnV4::__anon7
+g	.\\dqn.h	/^    struct { f32 r, g, b; };$/;"	m	struct:DqnV3::__anon5
+globalRunning	.\\Win32Dwcopy.cpp	/^FILE_SCOPE bool       globalRunning;$/;"	v
+globalWin32State	.\\Win32Dwcopy.cpp	/^FILE_SCOPE Win32State globalWin32State;$/;"	v
+h	.\\dqn.h	/^	struct { f32 w, h; };$/;"	m	struct:DqnV2::__anon2
+handle	.\\dqn.h	/^	void   *handle;$/;"	m	struct:DqnFile
+i16	.\\dqn.h	/^typedef int64_t i16;$/;"	t
+i32	.\\dqn.h	/^typedef int32_t i32;$/;"	t
+i64	.\\dqn.h	/^typedef int32_t i64;$/;"	t
+linkLibraries	.\\BuildReleaseAndInstall.bat	/^set linkLibraries=user32.lib kernel32.lib gdi32.lib shlwapi.lib shell32.lib Pathcch.lib$/;"	v
+linkLibraries	.\\build.bat	/^set linkLibraries=user32.lib kernel32.lib gdi32.lib shlwapi.lib shell32.lib Pathcch.lib$/;"	v
+max	.\\dqn.h	/^	DqnV2 max;$/;"	m	struct:DqnRect
+max	.\\dqn.h	/^	struct { f32 min, max; };$/;"	m	struct:DqnV2::__anon3
+memctx	.\\dqn.h	/^	void *memctx;$/;"	m	struct:DqnIni
+memory	.\\dqn.h	/^	u8     *memory;$/;"	m	struct:DqnPushBufferBlock
+min	.\\dqn.h	/^	DqnV2 min;$/;"	m	struct:DqnRect
+min	.\\dqn.h	/^	struct { f32 min, max; };$/;"	m	struct:DqnV2::__anon3
+monitorHandle	.\\Dwcopy.h	/^	HANDLE monitorHandle;$/;"	m	struct:DwcopyWatchPath
+name	.\\dqn.h	/^	char name[32];$/;"	m	struct:dqn_ini_internal_property_t
+name	.\\dqn.h	/^	char name[32];$/;"	m	struct:dqn_ini_internal_section_t
+name_large	.\\dqn.h	/^	char *name_large;$/;"	m	struct:dqn_ini_internal_property_t
+name_large	.\\dqn.h	/^	char *name_large;$/;"	m	struct:dqn_ini_internal_section_t
+numBackup	.\\Dwcopy.h	/^	u32 numBackup;$/;"	m	struct:DwcopyLocations
+numChanges	.\\Dwcopy.h	/^	u32 numChanges;$/;"	m	struct:DwcopyWatchPath
+numWatch	.\\Dwcopy.h	/^	u32 numWatch;$/;"	m	struct:DwcopyLocations
+path	.\\Dwcopy.h	/^	wchar_t *path;$/;"	m	struct:DwcopyWatchPath
+permissionFlags	.\\dqn.h	/^	u32     permissionFlags;$/;"	m	struct:DqnFile
+popUpMenu	.\\Win32Dwcopy.cpp	/^	HMENU popUpMenu;$/;"	m	struct:Win32State	file:
+prevBlock	.\\dqn.h	/^	DqnPushBufferBlock *prevBlock;$/;"	m	struct:DqnPushBufferBlock
+properties	.\\dqn.h	/^	struct dqn_ini_internal_property_t *properties;$/;"	m	struct:DqnIni	typeref:struct:DqnIni::dqn_ini_internal_property_t
+property_capacity	.\\dqn.h	/^	int property_capacity;$/;"	m	struct:DqnIni
+property_count	.\\dqn.h	/^	int property_count;$/;"	m	struct:DqnIni
+r	.\\dqn.h	/^	struct { f32 r, g, b, a; };$/;"	m	struct:DqnV4::__anon7
+r	.\\dqn.h	/^    struct { f32 r, g, b; };$/;"	m	struct:DqnV3::__anon5
+section	.\\dqn.h	/^	int section;$/;"	m	struct:dqn_ini_internal_property_t
+section_capacity	.\\dqn.h	/^	int section_capacity;$/;"	m	struct:DqnIni
+section_count	.\\dqn.h	/^	int section_count;$/;"	m	struct:DqnIni
+sections	.\\dqn.h	/^	struct dqn_ini_internal_section_t *sections;$/;"	m	struct:DqnIni	typeref:struct:DqnIni::dqn_ini_internal_section_t
+set_separators	.\\dqn.h	/^STBSP__PUBLICDEF void STB_SPRINTF_DECORATE( set_separators )( char pcomma, char pperiod )$/;"	f
+size	.\\dqn.h	/^	size_t  size;$/;"	m	struct:DqnFile
+size	.\\dqn.h	/^	size_t  size;$/;"	m	struct:DqnPushBufferBlock
+snprintf	.\\dqn.h	/^STBSP__PUBLICDEF int STB_SPRINTF_DECORATE( snprintf )( char * buf, int count, char const * fmt, /;"	f
+sprintf	.\\dqn.h	/^STBSP__PUBLICDEF int STB_SPRINTF_DECORATE( sprintf )( char * buf, char const * fmt, ... )$/;"	f
+startingBlock	.\\dqn.h	/^	DqnPushBufferBlock *startingBlock;$/;"	m	struct:DqnTempBuffer
+state	.\\dqn.h	/^	u64 state[2];$/;"	m	struct:DqnRandPCGState
+stbsp__bot	.\\dqn.h	/^static double const stbsp__bot[23]={1e+000,1e+001,1e+002,1e+003,1e+004,1e+005,1e+006,1e+007,1e+0/;"	v
+stbsp__cb_buf_clamp	.\\dqn.h	/^    #define stbsp__cb_buf_clamp(/;"	d
+stbsp__cb_buf_clamp	.\\dqn.h	/^#undef stbsp__cb_buf_clamp$/;"	d
+stbsp__chk_cb_buf	.\\dqn.h	/^    #define stbsp__chk_cb_buf(/;"	d
+stbsp__chk_cb_buf	.\\dqn.h	/^#undef stbsp__chk_cb_buf$/;"	d
+stbsp__chk_cb_bufL	.\\dqn.h	/^    #define stbsp__chk_cb_bufL(/;"	d
+stbsp__chk_cb_bufL	.\\dqn.h	/^#undef stbsp__chk_cb_bufL$/;"	d
+stbsp__clamp_callback	.\\dqn.h	/^static char * stbsp__clamp_callback( char * buf, void * user, int len )$/;"	f
+stbsp__comma	.\\dqn.h	/^static char stbsp__comma=',';$/;"	v
+stbsp__context	.\\dqn.h	/^typedef struct stbsp__context$/;"	s
+stbsp__context	.\\dqn.h	/^} stbsp__context;$/;"	t	typeref:struct:stbsp__context
+stbsp__ddmulthi	.\\dqn.h	/^#define stbsp__ddmulthi(/;"	d
+stbsp__ddmulthi	.\\dqn.h	/^#undef stbsp__ddmulthi$/;"	d
+stbsp__ddmultlo	.\\dqn.h	/^#define stbsp__ddmultlo(/;"	d
+stbsp__ddmultlo	.\\dqn.h	/^#undef stbsp__ddmultlo$/;"	d
+stbsp__ddmultlos	.\\dqn.h	/^#define stbsp__ddmultlos(/;"	d
+stbsp__ddmultlos	.\\dqn.h	/^#undef stbsp__ddmultlos$/;"	d
+stbsp__ddrenorm	.\\dqn.h	/^#define stbsp__ddrenorm(/;"	d
+stbsp__ddrenorm	.\\dqn.h	/^#undef stbsp__ddrenorm$/;"	d
+stbsp__ddtoS64	.\\dqn.h	/^#define stbsp__ddtoS64(/;"	d
+stbsp__digitpair	.\\dqn.h	/^static char stbsp__digitpair[201]="0001020304050607080910111213141516171819202122232425262728293/;"	v
+stbsp__flush_cb	.\\dqn.h	/^    #define stbsp__flush_cb(/;"	d
+stbsp__flush_cb	.\\dqn.h	/^#undef stbsp__flush_cb$/;"	d
+stbsp__int32	.\\dqn.h	/^#define stbsp__int32 /;"	d
+stbsp__int32	.\\dqn.h	/^#undef stbsp__int32$/;"	d
+stbsp__int64	.\\dqn.h	/^#define stbsp__int64 /;"	d
+stbsp__int64	.\\dqn.h	/^#undef stbsp__int64$/;"	d
+stbsp__lead_sign	.\\dqn.h	/^static void stbsp__lead_sign(stbsp__uint32 fl, char *sign)$/;"	f
+stbsp__negbot	.\\dqn.h	/^static double const stbsp__negbot[22]={1e-001,1e-002,1e-003,1e-004,1e-005,1e-006,1e-007,1e-008,1/;"	v
+stbsp__negboterr	.\\dqn.h	/^static double const stbsp__negboterr[22]={-5.551115123125783e-018,-2.0816681711721684e-019,-2.08/;"	v
+stbsp__negtop	.\\dqn.h	/^static double const stbsp__negtop[13]={1e-023,1e-046,1e-069,1e-092,1e-115,1e-138,1e-161,1e-184,1/;"	v
+stbsp__negtoperr	.\\dqn.h	/^static double const stbsp__negtoperr[13]={3.9565301985100693e-040,-2.299904345391321e-063,3.6506/;"	v
+stbsp__period	.\\dqn.h	/^static char stbsp__period='.';$/;"	v
+stbsp__powten	.\\dqn.h	/^static stbsp__uint64 const stbsp__powten[20]={1,10,100,1000, 10000,100000,1000000,10000000, 1000/;"	v
+stbsp__raise_to_power10	.\\dqn.h	/^static void stbsp__raise_to_power10( double *ohi, double *olo, double d, stbsp__int32 power )  \//;"	f
+stbsp__real_to_parts	.\\dqn.h	/^static stbsp__int32 stbsp__real_to_parts( stbsp__int64 * bits, stbsp__int32 * expo, double value/;"	f
+stbsp__real_to_str	.\\dqn.h	/^static stbsp__int32 stbsp__real_to_str( char const * * start, stbsp__uint32 * len, char *out, st/;"	f
+stbsp__tento19th	.\\dqn.h	/^#define stbsp__tento19th /;"	d
+stbsp__top	.\\dqn.h	/^static double const stbsp__top[13]={1e+023,1e+046,1e+069,1e+092,1e+115,1e+138,1e+161,1e+184,1e+2/;"	v
+stbsp__toperr	.\\dqn.h	/^static double const stbsp__toperr[13]={8388608,6.8601809640529717e+028,-7.253143638152921e+052,-/;"	v
+stbsp__uint16	.\\dqn.h	/^#define stbsp__uint16 /;"	d
+stbsp__uint16	.\\dqn.h	/^#undef stbsp__uint16$/;"	d
+stbsp__uint32	.\\dqn.h	/^#define stbsp__uint32 /;"	d
+stbsp__uint32	.\\dqn.h	/^#undef stbsp__uint32$/;"	d
+stbsp__uint64	.\\dqn.h	/^#define stbsp__uint64 /;"	d
+stbsp__uint64	.\\dqn.h	/^#undef stbsp__uint64$/;"	d
+stbsp__uintptr	.\\dqn.h	/^#define stbsp__uintptr /;"	d
+str_trim_around	.\\Win32Dwcopy.cpp	/^FILE_SCOPE i32 str_trim_around(char *src, i32 srcLen, const char *charsToTrim,$/;"	f
+tempBufferCount	.\\dqn.h	/^	i32 tempBufferCount;$/;"	m	struct:DqnPushBuffer
+tmp	.\\dqn.h	/^  char tmp[ STB_SPRINTF_MIN ];$/;"	m	struct:stbsp__context
+u16	.\\dqn.h	/^typedef uint16_t u16;$/;"	t
+u32	.\\dqn.h	/^typedef uint32_t u32;$/;"	t
+u64	.\\dqn.h	/^typedef uint64_t u64;$/;"	t
+u8	.\\dqn.h	/^typedef uint8_t  u8;$/;"	t
+unit_test_internal	.\\Win32Dwcopy.cpp	/^FILE_SCOPE void unit_test_internal()$/;"	f
+used	.\\dqn.h	/^	size_t  used;$/;"	m	struct:DqnPushBufferBlock
+used	.\\dqn.h	/^	size_t used;$/;"	m	struct:DqnTempBuffer
+v2	.\\dqn.h	/^	DqnV2 v2[2];$/;"	m	union:DqnV4
+value	.\\dqn.h	/^	char value[64];$/;"	m	struct:dqn_ini_internal_property_t
+value_large	.\\dqn.h	/^	char *value_large;$/;"	m	struct:dqn_ini_internal_property_t
+vsnprintf	.\\dqn.h	/^STBSP__PUBLICDEF int STB_SPRINTF_DECORATE( vsnprintf )( char * buf, int count, char const * fmt,/;"	f
+vsprintf	.\\dqn.h	/^STBSP__PUBLICDEF int STB_SPRINTF_DECORATE( vsprintf )( char * buf, char const * fmt, va_list va /;"	f
+vsprintfcb	.\\dqn.h	/^STBSP__PUBLICDEF int STB_SPRINTF_DECORATE( vsprintfcb )( STBSP_SPRINTFCB * callback, void * user/;"	f
+w	.\\dqn.h	/^	struct { f32 w, h; };$/;"	m	struct:DqnV2::__anon2
+w	.\\dqn.h	/^	struct { f32 x, y, z, w; };$/;"	m	struct:DqnV4::__anon6
+wWinMain	.\\Win32Dwcopy.cpp	/^int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,$/;"	f
+waitHandle	.\\Dwcopy.h	/^	HANDLE waitHandle;$/;"	m	struct:DwcopyWatchPath
+watch	.\\Dwcopy.h	/^	DwcopyWatchPath *watch;$/;"	m	struct:DwcopyLocations
+win32_console_writew	.\\Win32Dwcopy.cpp	/^bool win32_console_writew(const wchar_t *const string, DWORD len,$/;"	f
+win32_create_unique_timestamp	.\\Win32Dwcopy.cpp	/^u32 win32_create_unique_timestamp(char *const buf, const i32 bufLen)$/;"	f
+win32_get_module_directory	.\\Win32Dwcopy.cpp	/^u32 win32_get_module_directory(wchar_t *const buf, const u32 bufLen)$/;"	f
+win32_main_callback	.\\Win32Dwcopy.cpp	/^FILE_SCOPE LRESULT CALLBACK win32_main_callback(HWND window, UINT msg,$/;"	f
+win32_make_path_to_directory	.\\Win32Dwcopy.cpp	/^u32 win32_make_path_to_directory(const wchar_t *const path,$/;"	f
+win32_monitor_files_callback	.\\Win32Dwcopy.cpp	/^VOID CALLBACK win32_monitor_files_callback(PVOID lpParameter,$/;"	f
+win32menu_exit	.\\Win32Dwcopy.cpp	/^	win32menu_exit = 82,$/;"	e	enum:Win32Menu	file:
+x	.\\dqn.h	/^	struct { f32 x, y, z, w; };$/;"	m	struct:DqnV4::__anon6
+x	.\\dqn.h	/^	struct { f32 x, y, z; };$/;"	m	struct:DqnV3::__anon4
+x	.\\dqn.h	/^	struct { f32 x, y; };$/;"	m	struct:DqnV2::__anon1
+y	.\\dqn.h	/^	struct { f32 x, y, z, w; };$/;"	m	struct:DqnV4::__anon6
+y	.\\dqn.h	/^	struct { f32 x, y, z; };$/;"	m	struct:DqnV3::__anon4
+y	.\\dqn.h	/^	struct { f32 x, y; };$/;"	m	struct:DqnV2::__anon1
+z	.\\dqn.h	/^	struct { f32 x, y, z, w; };$/;"	m	struct:DqnV4::__anon6
+z	.\\dqn.h	/^	struct { f32 x, y, z; };$/;"	m	struct:DqnV3::__anon4
